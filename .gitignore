@@ -6,6 +6,11 @@ __pycache__/
 .coverage
 htmlcov/
 
+.env
+.env.*
+!.env.example
+secrets/
+
 .hyperagent/
 experiments/
 reports/

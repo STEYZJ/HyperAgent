@@ -11,7 +11,8 @@ from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
-from hyperagent.runtime.llm import LLMProviderStore, LLMRequestBuilder
+from hyperagent.runtime.env import load_env_file
+from hyperagent.runtime.llm import LLMClient, LLMProviderStore, LLMRequestBuilder
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
@@ -139,6 +140,15 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_dry.add_argument("--temperature", type=float, default=0.2)
     llm_dry.add_argument("--max-tokens", type=int, default=None)
 
+    llm_send = subparsers.add_parser("llm-send", help="Send a prompt to a configured LLM provider")
+    llm_send.add_argument("--provider", required=True)
+    llm_send.add_argument("--model", default=None)
+    llm_send.add_argument("--system", default="You are HyperAgent.")
+    llm_send.add_argument("--user", required=True)
+    llm_send.add_argument("--temperature", type=float, default=0.2)
+    llm_send.add_argument("--max-tokens", type=int, default=None)
+    llm_send.add_argument("--output", default=None)
+
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
 
@@ -210,6 +220,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
+    load_env_file(Path(".env"), override=False)
     agent = CoordinatorAgent()
     workspace = HyperAgentWorkspace()
     llm_store = LLMProviderStore(workspace.workspace_dir)
@@ -383,10 +394,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "llm-providers":
         providers = llm_store.ensure_defaults()
         if args.json:
-            print_json({"providers": [provider.to_dict() for provider in providers]})
+            print_json(
+                {
+                    "providers": [
+                        {
+                            **provider.to_dict(),
+                            "api_key_configured": bool(os.environ.get(provider.api_key_env)),
+                        }
+                        for provider in providers
+                    ]
+                }
+            )
         else:
             for provider in providers:
-                print(f"{provider.name}\t{provider.kind}\t{provider.default_model}\t{provider.api_key_env}")
+                configured = "configured" if os.environ.get(provider.api_key_env) else "missing"
+                print(
+                    f"{provider.name}\t{provider.kind}\t{provider.default_model}\t"
+                    f"{provider.api_key_env}\t{configured}"
+                )
         return 0
 
     if args.command == "llm-dry-run":
@@ -403,6 +428,28 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_tokens=args.max_tokens,
         )
         print_json(payload)
+        return 0
+
+    if args.command == "llm-send":
+        llm_store.ensure_defaults()
+        spec = llm_store.get(args.provider)
+        response = LLMClient().send(
+            spec,
+            [
+                LLMMessage(role="system", content=args.system),
+                LLMMessage(role="user", content=args.user),
+            ],
+            model=args.model,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+        )
+        if args.output:
+            write_json(Path(args.output), response)
+        if response.warnings:
+            for warning in response.warnings:
+                print(f"warning: {warning}")
+        else:
+            print(response.content)
         return 0
 
     if args.command == "session-new":

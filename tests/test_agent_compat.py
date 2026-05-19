@@ -1,11 +1,28 @@
 import io
+import json
 import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from hyperagent.cli import main
+from hyperagent.runtime.llm import LLMClient
+from hyperagent.schemas import LLMMessage, LLMProviderSpec
+
+
+class _FakeHTTPResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self):
+        return json.dumps(
+            {"choices": [{"message": {"content": "mock response"}}]}
+        ).encode("utf-8")
 
 
 class AgentCompatCLITest(unittest.TestCase):
@@ -105,6 +122,30 @@ class AgentCompatCLITest(unittest.TestCase):
                 self.assertIn("Indian Pines", buffer.getvalue())
             finally:
                 os.chdir(old_cwd)
+
+    def test_llm_client_openai_compatible_send(self):
+        spec = LLMProviderSpec(
+            name="mock",
+            kind="openai_compatible",
+            base_url="https://example.invalid/chat/completions",
+            api_key_env="MOCK_API_KEY",
+            default_model="mock-model",
+        )
+        old_value = os.environ.get("MOCK_API_KEY")
+        os.environ["MOCK_API_KEY"] = "secret"
+        try:
+            with patch("hyperagent.runtime.llm.urlopen", return_value=_FakeHTTPResponse()):
+                response = LLMClient().send(
+                    spec,
+                    [LLMMessage(role="user", content="hello")],
+                )
+        finally:
+            if old_value is None:
+                os.environ.pop("MOCK_API_KEY", None)
+            else:
+                os.environ["MOCK_API_KEY"] = old_value
+        self.assertEqual(response.content, "mock response")
+        self.assertFalse(response.warnings)
 
 
 if __name__ == "__main__":

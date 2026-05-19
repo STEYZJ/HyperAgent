@@ -54,6 +54,7 @@ python -m hyperagent.cli tune-next --plan experiments/run/plan.yaml --result exp
 python -m hyperagent.cli propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
 python -m hyperagent.cli llm-providers
 python -m hyperagent.cli llm-dry-run --provider openai --user "Plan an HSI experiment"
+python -m hyperagent.cli llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
 python -m hyperagent.cli session-new --title "Indian Pines research"
 python -m hyperagent.cli session-add --session-id <session_id> --role user --content "Next experiment?"
 python -m hyperagent.cli session-compress --session-id <session_id> --keep-last 4

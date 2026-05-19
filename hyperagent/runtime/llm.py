@@ -1,10 +1,14 @@
-"""LLM provider configuration and request payload builders."""
+"""LLM provider configuration, request payload builders, and HTTP client."""
 
+import json
+import os
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from hyperagent.core.io import read_json, write_json
-from hyperagent.schemas import LLMMessage, LLMProviderSpec, LLMRequest
+from hyperagent.schemas import LLMMessage, LLMProviderSpec, LLMRequest, LLMResponse
 
 
 DEFAULT_PROVIDERS = [
@@ -105,7 +109,10 @@ class LLMRequestBuilder:
             return {
                 "url": spec.base_url,
                 "api_key_env": spec.api_key_env,
-                "headers": {"Authorization": "Bearer ${%s}" % spec.api_key_env},
+                "headers": {
+                    "Authorization": "Bearer ${%s}" % spec.api_key_env,
+                    "Content-Type": "application/json",
+                },
                 "json": {
                     "model": request.model,
                     "messages": [message.to_dict() for message in request.messages],
@@ -124,6 +131,7 @@ class LLMRequestBuilder:
                 "headers": {
                     "x-api-key": "${%s}" % spec.api_key_env,
                     "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
                 },
                 "json": {
                     "model": request.model,
@@ -168,3 +176,108 @@ class LLMRequestBuilder:
             }
         raise ValueError(f"Unsupported provider kind: {spec.kind}")
 
+
+class LLMClient:
+    """Minimal stdlib HTTP client for configured LLM providers."""
+
+    def __init__(self, timeout_sec: int = 60) -> None:
+        self.timeout_sec = timeout_sec
+        self.builder = LLMRequestBuilder()
+
+    def send(
+        self,
+        spec: LLMProviderSpec,
+        messages: Iterable[LLMMessage],
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = None,
+    ) -> LLMResponse:
+        payload = self.builder.build(
+            spec,
+            messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        api_key = os.environ.get(spec.api_key_env)
+        if not api_key:
+            return LLMResponse(
+                provider=spec.name,
+                model=model or spec.default_model,
+                content="",
+                warnings=[f"Missing required environment variable: {spec.api_key_env}"],
+            )
+
+        url = str(payload["url"]).replace("${" + spec.api_key_env + "}", api_key)
+        headers = {
+            str(key): str(value).replace("${" + spec.api_key_env + "}", api_key)
+            for key, value in dict(payload["headers"]).items()
+        }
+        body = json.dumps(payload["json"]).encode("utf-8")
+        request = Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urlopen(request, timeout=self.timeout_sec) as response:
+                raw = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            return LLMResponse(
+                provider=spec.name,
+                model=model or spec.default_model,
+                content="",
+                warnings=[f"HTTPError {exc.code}: {detail[:500]}"],
+            )
+        except URLError as exc:
+            return LLMResponse(
+                provider=spec.name,
+                model=model or spec.default_model,
+                content="",
+                warnings=[f"URLError: {exc}"],
+            )
+        except TimeoutError as exc:
+            return LLMResponse(
+                provider=spec.name,
+                model=model or spec.default_model,
+                content="",
+                warnings=[f"TimeoutError: {exc}"],
+            )
+
+        return LLMResponse(
+            provider=spec.name,
+            model=model or spec.default_model,
+            content=self._extract_content(spec, raw),
+            raw=raw,
+        )
+
+    def _extract_content(self, spec: LLMProviderSpec, raw: Dict[str, object]) -> str:
+        if spec.kind == "openai_compatible":
+            choices = raw.get("choices", [])
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    message = first.get("message", {})
+                    if isinstance(message, dict):
+                        content = message.get("content", "")
+                        return "" if content is None else str(content)
+        if spec.kind == "anthropic_messages":
+            blocks = raw.get("content", [])
+            if isinstance(blocks, list):
+                texts = []
+                for block in blocks:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        texts.append(str(block.get("text", "")))
+                return "\n".join(texts)
+        if spec.kind == "google_generate_content":
+            candidates = raw.get("candidates", [])
+            if isinstance(candidates, list) and candidates:
+                first = candidates[0]
+                if isinstance(first, dict):
+                    content = first.get("content", {})
+                    if isinstance(content, dict):
+                        parts = content.get("parts", [])
+                        if isinstance(parts, list):
+                            return "".join(
+                                str(part.get("text", ""))
+                                for part in parts
+                                if isinstance(part, dict)
+                            )
+        return ""
