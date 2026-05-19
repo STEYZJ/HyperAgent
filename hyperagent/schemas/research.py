@@ -132,6 +132,87 @@ class ParameterProposal:
 
 
 @dataclass
+class ExperimentDiagnosis:
+    experiment_name: str
+    objective: str
+    overall_accuracy: float
+    average_accuracy: float
+    kappa: float
+    weakest_classes: List[Dict[str, Any]] = field(default_factory=list)
+    findings: List[str] = field(default_factory=list)
+    recommendation: str = ""
+    should_continue: bool = True
+    evidence: List[EvidenceItem] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentDiagnosis":
+        return cls(
+            experiment_name=str(data["experiment_name"]),
+            objective=str(data["objective"]),
+            overall_accuracy=float(data.get("overall_accuracy", 0.0)),
+            average_accuracy=float(data.get("average_accuracy", 0.0)),
+            kappa=float(data.get("kappa", 0.0)),
+            weakest_classes=[
+                dict(item) for item in data.get("weakest_classes", [])
+            ],
+            findings=[str(v) for v in data.get("findings", [])],
+            recommendation=str(data.get("recommendation", "")),
+            should_continue=bool(data.get("should_continue", True)),
+            evidence=[
+                EvidenceItem.from_dict(item) for item in data.get("evidence", [])
+            ],
+        )
+
+
+@dataclass
+class ExperimentCycle:
+    cycle_id: str
+    created_at: str
+    status: str
+    previous_plan_path: str
+    previous_result_path: str
+    audit_path: str
+    cycle_dir: str
+    diagnosis_path: str
+    proposals_path: str
+    next_plan_path: str
+    selected_proposal: Optional[ParameterProposal] = None
+    next_result_path: Optional[str] = None
+    report_path: Optional[str] = None
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentCycle":
+        proposal = data.get("selected_proposal")
+        return cls(
+            cycle_id=str(data["cycle_id"]),
+            created_at=str(data["created_at"]),
+            status=str(data["status"]),
+            previous_plan_path=str(data["previous_plan_path"]),
+            previous_result_path=str(data["previous_result_path"]),
+            audit_path=str(data["audit_path"]),
+            cycle_dir=str(data["cycle_dir"]),
+            diagnosis_path=str(data["diagnosis_path"]),
+            proposals_path=str(data["proposals_path"]),
+            next_plan_path=str(data["next_plan_path"]),
+            selected_proposal=(
+                None
+                if proposal is None
+                else ParameterProposal.from_dict(dict(proposal))
+            ),
+            next_result_path=data.get("next_result_path"),
+            report_path=data.get("report_path"),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
 class ModuleProposal:
     name: str
     module_type: str

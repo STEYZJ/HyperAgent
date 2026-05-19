@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from hyperagent.agents import CoordinatorAgent
+from hyperagent.agents import CoordinatorAgent, ExperimentAutopilotAgent
 from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
@@ -122,6 +122,18 @@ def _build_parser() -> argparse.ArgumentParser:
     tune.add_argument("--result", required=True)
     tune.add_argument("--audit", required=True)
     tune.add_argument("--output", required=True)
+
+    experiment_cycle = subparsers.add_parser(
+        "experiment-cycle",
+        help="Analyze a completed experiment and build or run the next one",
+    )
+    experiment_cycle.add_argument("--plan", required=True)
+    experiment_cycle.add_argument("--result", required=True)
+    experiment_cycle.add_argument("--audit", required=True)
+    experiment_cycle.add_argument("--output-root", default="experiments/autopilot")
+    experiment_cycle.add_argument("--objective", default="maximize_oa_with_reproducible_baseline")
+    experiment_cycle.add_argument("--target-oa", type=float, default=0.9)
+    experiment_cycle.add_argument("--run-next", action="store_true")
 
     module = subparsers.add_parser(
         "propose-module",
@@ -1000,6 +1012,44 @@ def main(argv: Optional[List[str]] = None) -> int:
             "下一步可将建议应用到新的 ExperimentPlan。",
         )
         print(f"Wrote tuning proposals: {args.output}")
+        return 0
+
+    if args.command == "experiment-cycle":
+        plan = ExperimentPlan.from_dict(read_yaml(Path(args.plan)))
+        result = ExperimentResult.from_dict(read_json(Path(args.result)))
+        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        cycle = ExperimentAutopilotAgent().run_cycle(
+            plan,
+            result,
+            audit,
+            previous_plan_path=Path(args.plan),
+            previous_result_path=Path(args.result),
+            audit_path=Path(args.audit),
+            output_root=Path(args.output_root),
+            objective=args.objective,
+            target_oa=args.target_oa,
+            run_next=args.run_next,
+        )
+        append_worklog(
+            "执行自动实验闭环",
+            "已有上一轮实验计划、结果和数据审计。",
+            f"分析实验 {result.experiment_name} 并生成 cycle {cycle.cycle_id}。",
+            "实验闭环必须先诊断结果，再依据证据生成下一轮计划；只有显式 --run-next 才直接运行新实验。",
+            f"诊断={cycle.diagnosis_path}，下一轮计划={cycle.next_plan_path}，结果={cycle.next_result_path or 'not_run'}。",
+            f"cycle 状态为 {cycle.status}。",
+            "下一步可查看 cycle.json、运行 next_experiment.yaml，或继续开启下一轮 experiment-cycle。",
+        )
+        print(f"cycle_id: {cycle.cycle_id}")
+        print(f"status: {cycle.status}")
+        print(f"diagnosis: {cycle.diagnosis_path}")
+        print(f"proposals: {cycle.proposals_path}")
+        print(f"next_plan: {cycle.next_plan_path}")
+        if cycle.next_result_path:
+            print(f"next_result: {cycle.next_result_path}")
+        if cycle.report_path:
+            print(f"report: {cycle.report_path}")
+        for warning in cycle.warnings:
+            print(f"warning: {warning}")
         return 0
 
     if args.command == "propose-module":

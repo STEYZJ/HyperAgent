@@ -44,6 +44,8 @@ from hyperagent.schemas.research import (
     DecisionRecord,
     EvidenceItem,
     ExperimentCandidate,
+    ExperimentCycle,
+    ExperimentDiagnosis,
     ModuleProposal,
     ParameterProposal,
 )
@@ -66,6 +68,8 @@ __all__ = [
     "EvaluationReport",
     "EvidenceItem",
     "ExperimentCandidate",
+    "ExperimentCycle",
+    "ExperimentDiagnosis",
     "ExperimentPlan",
     "ExperimentResult",
     "LiteraturePaper",

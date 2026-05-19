@@ -17,6 +17,25 @@ class ParameterTuner:
     ) -> List[ParameterProposal]:
         proposals: List[ParameterProposal] = []
         oa = result.evaluation.overall_accuracy
+        if oa >= 0.9:
+            return [
+                ParameterProposal(
+                    parameter="seed",
+                    old_value=plan.seed,
+                    new_value=plan.seed + 1,
+                    rationale="Current result meets the target threshold; next check should estimate seed stability.",
+                    expected_effect="Measure variance before changing data split, model parameters, or architecture.",
+                    evidence=[
+                        EvidenceItem(
+                            source_type="experiment_result",
+                            source_id=result.experiment_name,
+                            claim="Current run met the baseline target.",
+                            support=f"OA={oa:.4f}",
+                            confidence=0.8,
+                        )
+                    ],
+                )
+            ]
         if audit.labeled_pixel_count < 2000 and plan.split.train_ratio < 0.2:
             proposals.append(
                 ParameterProposal(
