@@ -134,6 +134,7 @@ def _build_parser() -> argparse.ArgumentParser:
     experiment_cycle.add_argument("--objective", default="maximize_oa_with_reproducible_baseline")
     experiment_cycle.add_argument("--target-oa", type=float, default=0.9)
     experiment_cycle.add_argument("--run-next", action="store_true")
+    experiment_cycle.add_argument("--max-repeated-parameter", type=int, default=2)
 
     module = subparsers.add_parser(
         "propose-module",
@@ -1029,13 +1030,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             objective=args.objective,
             target_oa=args.target_oa,
             run_next=args.run_next,
+            max_repeated_parameter=args.max_repeated_parameter,
         )
         append_worklog(
             "执行自动实验闭环",
             "已有上一轮实验计划、结果和数据审计。",
             f"分析实验 {result.experiment_name} 并生成 cycle {cycle.cycle_id}。",
             "实验闭环必须先诊断结果，再依据证据生成下一轮计划；只有显式 --run-next 才直接运行新实验。",
-            f"诊断={cycle.diagnosis_path}，下一轮计划={cycle.next_plan_path}，结果={cycle.next_result_path or 'not_run'}。",
+            f"诊断={cycle.diagnosis_path}，council={cycle.council_path}，下一轮计划={cycle.next_plan_path}，结果={cycle.next_result_path or 'not_run'}。",
             f"cycle 状态为 {cycle.status}。",
             "下一步可查看 cycle.json、运行 next_experiment.yaml，或继续开启下一轮 experiment-cycle。",
         )
@@ -1043,6 +1045,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"status: {cycle.status}")
         print(f"diagnosis: {cycle.diagnosis_path}")
         print(f"proposals: {cycle.proposals_path}")
+        print(f"council: {cycle.council_path}")
         print(f"next_plan: {cycle.next_plan_path}")
         if cycle.next_result_path:
             print(f"next_result: {cycle.next_result_path}")

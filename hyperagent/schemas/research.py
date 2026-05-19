@@ -168,6 +168,63 @@ class ExperimentDiagnosis:
 
 
 @dataclass
+class ExperimentCouncilVote:
+    agent_name: str
+    role: str
+    decision: str
+    rationale: str
+    confidence: float = 0.5
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentCouncilVote":
+        return cls(
+            agent_name=str(data["agent_name"]),
+            role=str(data["role"]),
+            decision=str(data["decision"]),
+            rationale=str(data["rationale"]),
+            confidence=float(data.get("confidence", 0.5)),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
+class ExperimentCouncilDecision:
+    action: str
+    selected_parameter: Optional[str]
+    rationale: str
+    votes: List[ExperimentCouncilVote] = field(default_factory=list)
+    rejected_parameters: List[str] = field(default_factory=list)
+    anti_tunnel_checks: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentCouncilDecision":
+        return cls(
+            action=str(data["action"]),
+            selected_parameter=(
+                None
+                if data.get("selected_parameter") is None
+                else str(data.get("selected_parameter"))
+            ),
+            rationale=str(data["rationale"]),
+            votes=[
+                ExperimentCouncilVote.from_dict(item)
+                for item in data.get("votes", [])
+            ],
+            rejected_parameters=[str(v) for v in data.get("rejected_parameters", [])],
+            anti_tunnel_checks=[str(v) for v in data.get("anti_tunnel_checks", [])],
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
 class ExperimentCycle:
     cycle_id: str
     created_at: str
@@ -179,6 +236,7 @@ class ExperimentCycle:
     diagnosis_path: str
     proposals_path: str
     next_plan_path: str
+    council_path: Optional[str] = None
     selected_proposal: Optional[ParameterProposal] = None
     next_result_path: Optional[str] = None
     report_path: Optional[str] = None
@@ -201,6 +259,7 @@ class ExperimentCycle:
             diagnosis_path=str(data["diagnosis_path"]),
             proposals_path=str(data["proposals_path"]),
             next_plan_path=str(data["next_plan_path"]),
+            council_path=data.get("council_path"),
             selected_proposal=(
                 None
                 if proposal is None

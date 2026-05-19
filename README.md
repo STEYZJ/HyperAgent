@@ -51,7 +51,7 @@ python -m hyperagent.cli demo --synthetic
 python -m hyperagent.cli literature --query "hyperspectral image classification mamba" --output reports/literature.json
 python -m hyperagent.cli auto-experiment --audit reports/audit.json --spectral reports/spectral_report.json --recommendation reports/model_recommendation.json --output reports/agenda.json
 python -m hyperagent.cli tune-next --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output reports/tuning.json
-python -m hyperagent.cli experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next
+python -m hyperagent.cli experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next --max-repeated-parameter 2
 python -m hyperagent.cli propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
 python -m hyperagent.cli llm-providers
 python -m hyperagent.cli llm-dry-run --provider openai --user "Plan an HSI experiment"

@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from hyperagent.core.bootstrap import bootstrap_default_components
-from hyperagent.core.io import write_json, write_yaml
+from hyperagent.core.io import read_json, write_json, write_yaml
+from hyperagent.agents.experiment_council import ExperimentCouncilAgent
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import (
     DatasetAudit,
@@ -30,6 +31,7 @@ class ExperimentAutopilotAgent:
         self.tuner = ParameterTuner()
         self.runner = BaselineRunner()
         self.report_builder = MarkdownReportBuilder()
+        self.council = ExperimentCouncilAgent()
 
     def diagnose(
         self,
@@ -114,6 +116,7 @@ class ExperimentAutopilotAgent:
         objective: str = "maximize_oa_with_reproducible_baseline",
         target_oa: float = 0.9,
         run_next: bool = False,
+        max_repeated_parameter: int = 2,
     ) -> ExperimentCycle:
         cycle_id = self._new_cycle_id()
         cycle_dir = output_root / cycle_id
@@ -126,7 +129,17 @@ class ExperimentAutopilotAgent:
             target_oa=target_oa,
         )
         proposals = self.tuner.propose(plan, result, audit)
-        selected = proposals[0] if proposals else None
+        history = self._load_history(output_root)
+        council_decision = self.council.review(
+            diagnosis,
+            proposals,
+            audit,
+            plan,
+            history,
+            target_oa=target_oa,
+            max_repeated_parameter=max_repeated_parameter,
+        )
+        selected = self._select_proposal(proposals, council_decision.selected_parameter)
         next_plan = self.build_next_plan(
             plan,
             selected,
@@ -136,16 +149,18 @@ class ExperimentAutopilotAgent:
 
         diagnosis_path = cycle_dir / "diagnosis.json"
         proposals_path = cycle_dir / "parameter_proposals.json"
+        council_path = cycle_dir / "council_decision.json"
         next_plan_path = cycle_dir / "next_experiment.yaml"
         write_json(diagnosis_path, diagnosis)
         write_json(proposals_path, {"proposals": [item.to_dict() for item in proposals]})
+        write_json(council_path, council_decision)
         write_yaml(next_plan_path, next_plan)
 
         next_result_path: Optional[str] = None
         report_path: Optional[str] = None
-        warnings: List[str] = []
-        status = "planned"
-        if run_next:
+        warnings: List[str] = list(council_decision.warnings)
+        status = "planned" if council_decision.action == "run" else "paused"
+        if run_next and council_decision.action == "run":
             next_result = self.runner.run(next_plan)
             report = self.report_builder.write(
                 next_result,
@@ -167,6 +182,7 @@ class ExperimentAutopilotAgent:
             diagnosis_path=str(diagnosis_path),
             proposals_path=str(proposals_path),
             next_plan_path=str(next_plan_path),
+            council_path=str(council_path),
             selected_proposal=selected,
             next_result_path=next_result_path,
             report_path=report_path,
@@ -199,6 +215,29 @@ class ExperimentAutopilotAgent:
         }
         data["metadata"] = metadata
         return ExperimentPlan.from_dict(data)
+
+    def _load_history(self, output_root: Path) -> List[ExperimentCycle]:
+        if not output_root.exists():
+            return []
+        cycles: List[ExperimentCycle] = []
+        for path in sorted(output_root.glob("*/cycle.json")):
+            try:
+                cycles.append(ExperimentCycle.from_dict(read_json(path)))
+            except (OSError, KeyError, ValueError, TypeError):
+                continue
+        return cycles
+
+    def _select_proposal(
+        self,
+        proposals: List[ParameterProposal],
+        selected_parameter: Optional[str],
+    ) -> Optional[ParameterProposal]:
+        if selected_parameter is None:
+            return None
+        for proposal in proposals:
+            if proposal.parameter == selected_parameter:
+                return proposal
+        return None
 
     def _set_plan_value(self, data: Dict[str, Any], path: str, value: Any) -> None:
         parts = path.split(".")
