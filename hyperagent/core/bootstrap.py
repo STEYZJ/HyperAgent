@@ -14,6 +14,7 @@ def bootstrap_default_components() -> None:
         return
 
     import hyperagent.data.mat_reader  # noqa: F401
+    import hyperagent.data.raster_readers  # noqa: F401
     import hyperagent.evaluation.metrics  # noqa: F401
     import hyperagent.literature.arxiv_provider  # noqa: F401
     import hyperagent.literature.semantic_scholar_provider  # noqa: F401

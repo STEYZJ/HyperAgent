@@ -85,6 +85,6 @@ The local dataset root used in this workspace is recorded in `configs/hyperagent
 
 ## MVP Limits
 
-- `.mat` is the default supported dataset format.
+- Dataset readers currently support `.mat`, basic TIFF `.tif/.tiff`, and lightweight ENVI `.hdr` plus raw binary files (`bsq`, `bil`, `bip`). `.mat` remains the most mature benchmark path.
 - Baselines are limited to SVM and a lightweight MLP.
 - Complex HSI models such as SSRN, SpectralFormer, Mamba, and GCN are reserved for later phases.

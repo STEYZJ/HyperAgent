@@ -18,8 +18,8 @@ dataset/*
 !dataset/README.md
 !dataset/datasets.yaml
 !dataset/.gitkeep
-data/
-datasets/
+/data/
+/datasets/
 outputs/
 checkpoints/
 runs/
