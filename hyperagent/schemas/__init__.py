@@ -15,7 +15,13 @@ from hyperagent.schemas.experiment import (
     SplitConfig,
 )
 from hyperagent.schemas.literature import LiteraturePaper, LiteratureSearchResult
-from hyperagent.schemas.llm import LLMMessage, LLMProviderSpec, LLMRequest, LLMResponse
+from hyperagent.schemas.llm import (
+    AgentTurnResult,
+    LLMMessage,
+    LLMProviderSpec,
+    LLMRequest,
+    LLMResponse,
+)
 from hyperagent.schemas.recommendation import ModelCandidate, ModelRecommendation
 from hyperagent.schemas.integrations import (
     MaterializationResult,
@@ -41,6 +47,7 @@ __all__ = [
     "DatasetAudit",
     "AblationStudy",
     "AblationVariant",
+    "AgentTurnResult",
     "AutoExperimentAgenda",
     "ConversationMessage",
     "ConversationSession",

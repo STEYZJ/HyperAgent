@@ -9,6 +9,7 @@ from hyperagent.agents import CoordinatorAgent
 from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
+from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
@@ -148,6 +149,27 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_send.add_argument("--temperature", type=float, default=0.2)
     llm_send.add_argument("--max-tokens", type=int, default=None)
     llm_send.add_argument("--output", default=None)
+
+    agent_chat = subparsers.add_parser(
+        "agent-chat",
+        help="Run one persistent conversation-backed LLM agent turn",
+    )
+    agent_chat.add_argument("--session-id", default=None)
+    agent_chat.add_argument("--new-title", default=None)
+    agent_chat.add_argument("--provider", default="deepseek")
+    agent_chat.add_argument("--model", default=None)
+    agent_chat.add_argument("--message", required=True)
+    agent_chat.add_argument(
+        "--mode",
+        choices=["research", "code", "algorithm"],
+        default="research",
+    )
+    agent_chat.add_argument("--task-id", default=None)
+    agent_chat.add_argument("--temperature", type=float, default=0.2)
+    agent_chat.add_argument("--max-tokens", type=int, default=None)
+    agent_chat.add_argument("--max-context-chars", type=int, default=12000)
+    agent_chat.add_argument("--no-auto-compress", action="store_true")
+    agent_chat.add_argument("--output", default=None)
 
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
@@ -450,6 +472,50 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"warning: {warning}")
         else:
             print(response.content)
+        return 0
+
+    if args.command == "agent-chat":
+        llm_store.ensure_defaults()
+        if args.session_id:
+            session_id = args.session_id
+            session_store.load(session_id)
+        else:
+            title = args.new_title or args.message.strip().splitlines()[0][:80]
+            session = session_store.new(title or "HyperAgent session")
+            session_id = session.session_id
+        result = AgentLoop(
+            session_store,
+            llm_store,
+            workspace,
+            prompt_library=prompt_library,
+        ).run(
+            session_id=session_id,
+            provider=args.provider,
+            user_message=args.message,
+            model=args.model,
+            mode=args.mode,
+            task_id=args.task_id,
+            auto_compress=not args.no_auto_compress,
+            max_context_chars=args.max_context_chars,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+            output_path=Path(args.output) if args.output else None,
+        )
+        append_worklog(
+            "运行持续对话 Agent Loop",
+            "会话、LLM provider、任务 artifact 和 prompt library 已具备。",
+            f"执行 session={result.session_id} provider={result.provider} mode={result.mode} 的一轮 agent-chat。",
+            "持续对话能力是后续自动写代码、做实验和设计算法的统一入口。",
+            f"上下文消息数 {result.context_message_count}，上下文字数 {result.context_chars}，输出文件 {result.output_path or 'none'}。",
+            "用户消息和模型回复已写回会话；LLM 调用结果已结构化返回。",
+            "下一步可在同一 session 继续对话，或绑定 task-id 让回答读取实验 artifact。",
+        )
+        print(f"session_id: {result.session_id}")
+        if result.warnings:
+            for warning in result.warnings:
+                print(f"warning: {warning}")
+        if result.response.content:
+            print(result.response.content)
         return 0
 
     if args.command == "session-new":

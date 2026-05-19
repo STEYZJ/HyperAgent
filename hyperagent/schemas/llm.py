@@ -1,4 +1,4 @@
-"""LLM provider schemas."""
+"""LLM provider and agent-turn schemas."""
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
@@ -67,3 +67,19 @@ class LLMResponse:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+
+@dataclass
+class AgentTurnResult:
+    session_id: str
+    provider: str
+    model: str
+    mode: str
+    task_id: Optional[str]
+    response: LLMResponse
+    context_message_count: int
+    context_chars: int
+    output_path: Optional[str] = None
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
