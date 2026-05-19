@@ -10,6 +10,8 @@ from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
+from hyperagent.runtime.coding_agent import CodingAgent
+from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
@@ -170,6 +172,37 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_chat.add_argument("--max-context-chars", type=int, default=12000)
     agent_chat.add_argument("--no-auto-compress", action="store_true")
     agent_chat.add_argument("--output", default=None)
+
+    agent_context = subparsers.add_parser(
+        "agent-context",
+        help="Build a compact repository context snapshot",
+    )
+    agent_context.add_argument("--query", default="")
+    agent_context.add_argument("--max-files", type=int, default=20)
+    agent_context.add_argument("--max-preview-chars", type=int, default=1200)
+    agent_context.add_argument("--output", default=None)
+    agent_context.add_argument("--format", choices=["markdown", "json"], default="markdown")
+
+    agent_plan = subparsers.add_parser(
+        "agent-plan",
+        help="Generate a saved Claude-Code-like coding/algorithm plan",
+    )
+    agent_plan.add_argument("--session-id", default=None)
+    agent_plan.add_argument("--new-title", default=None)
+    agent_plan.add_argument("--provider", default="deepseek")
+    agent_plan.add_argument("--model", default=None)
+    agent_plan.add_argument("--instruction", required=True)
+    agent_plan.add_argument(
+        "--mode",
+        choices=["research", "code", "algorithm"],
+        default="code",
+    )
+    agent_plan.add_argument("--task-id", default=None)
+    agent_plan.add_argument("--temperature", type=float, default=0.2)
+    agent_plan.add_argument("--max-tokens", type=int, default=None)
+    agent_plan.add_argument("--max-context-chars", type=int, default=18000)
+    agent_plan.add_argument("--max-files", type=int, default=20)
+    agent_plan.add_argument("--max-preview-chars", type=int, default=1200)
 
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
@@ -516,6 +549,73 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"warning: {warning}")
         if result.response.content:
             print(result.response.content)
+        return 0
+
+    if args.command == "agent-context":
+        builder = RepoContextBuilder(workspace.project_root)
+        snapshot = builder.build(
+            query=args.query,
+            max_files=args.max_files,
+            max_preview_chars=args.max_preview_chars,
+        )
+        if args.format == "json":
+            if args.output:
+                write_json(Path(args.output), snapshot)
+                print(f"Wrote repo context: {args.output}")
+            else:
+                print_json(snapshot.to_dict())
+        else:
+            markdown = builder.to_markdown(snapshot)
+            if args.output:
+                Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.output).write_text(markdown, encoding="utf-8")
+                print(f"Wrote repo context: {args.output}")
+            else:
+                print(markdown)
+        return 0
+
+    if args.command == "agent-plan":
+        llm_store.ensure_defaults()
+        if args.session_id:
+            session_id = args.session_id
+            session_store.load(session_id)
+        else:
+            title = args.new_title or args.instruction.strip().splitlines()[0][:80]
+            session = session_store.new(title or "HyperAgent coding run")
+            session_id = session.session_id
+        run = CodingAgent(
+            workspace,
+            session_store,
+            llm_store,
+            prompt_library=prompt_library,
+        ).plan(
+            session_id=session_id,
+            provider=args.provider,
+            instruction=args.instruction,
+            model=args.model,
+            mode=args.mode,
+            task_id=args.task_id,
+            max_files=args.max_files,
+            max_preview_chars=args.max_preview_chars,
+            max_context_chars=args.max_context_chars,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+        )
+        append_worklog(
+            "运行 Claude Code 式 Agent Plan",
+            "仓库上下文采集器和 coding-agent run 管理已实现。",
+            f"执行 run={run.run_id} session={run.session_id} mode={run.mode} 的 agent-plan。",
+            "agent-plan 将仓库快照、会话历史和任务 artifact 组合，生成可归档的代码/实验/算法计划。",
+            f"repo context={run.repo_context_markdown_path}，plan={run.plan_path}。",
+            f"run 状态为 {run.status}。",
+            "下一步可依据 plan 进入受控补丁生成、实验执行或继续同一 session 追问。",
+        )
+        print(f"run_id: {run.run_id}")
+        print(f"session_id: {run.session_id}")
+        print(f"plan: {run.plan_path}")
+        if run.warnings:
+            for warning in run.warnings:
+                print(f"warning: {warning}")
         return 0
 
     if args.command == "session-new":

@@ -55,6 +55,9 @@ python -m hyperagent.cli propose-module --audit reports/audit.json --spectral re
 python -m hyperagent.cli llm-providers
 python -m hyperagent.cli llm-dry-run --provider openai --user "Plan an HSI experiment"
 python -m hyperagent.cli llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
+python -m hyperagent.cli agent-chat --provider deepseek --new-title "HSI research" --mode research --message "Plan the next experiment"
+python -m hyperagent.cli agent-context --query "agent plan" --max-files 12
+python -m hyperagent.cli agent-plan --provider deepseek --mode code --instruction "Make HyperAgent more like Claude Code"
 python -m hyperagent.cli session-new --title "Indian Pines research"
 python -m hyperagent.cli session-add --session-id <session_id> --role user --content "Next experiment?"
 python -m hyperagent.cli session-compress --session-id <session_id> --keep-last 4
