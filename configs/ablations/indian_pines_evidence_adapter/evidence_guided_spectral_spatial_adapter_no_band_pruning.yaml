@@ -1,0 +1,518 @@
+experiment_name: Indian_pines_mlp_seed42_evidence_guided_spectral_spatial_adapter_no_band_pruning
+dataset_root: /data2/lzj/lab/Mamba_test/dataset/Indian_pines
+output_dir: configs/ablations/indian_pines_evidence_adapter/evidence_guided_spectral_spatial_adapter_no_band_pruning
+seed: 42
+reader_name: mat
+split:
+  method: stratified_random
+  train_ratio: 0.1
+  val_ratio: 0.0
+  test_ratio: 0.9
+preprocessing:
+  normalization: standard
+  remove_bands: []
+model:
+  name: evidence_guided_spectral_spatial_adapter
+  params:
+    hidden_dim: 64
+    epochs: 40
+    lr: 0.001
+    batch_size: 128
+    gate_l1: 0.0005
+metrics:
+- oa
+- aa
+- kappa
+metadata:
+  audit:
+    data_root: /data2/lzj/lab/Mamba_test/dataset/Indian_pines
+    dataset_name: Indian_pines
+    cube_path: /data2/lzj/lab/Mamba_test/dataset/Indian_pines/Indian_pines.mat
+    label_path: /data2/lzj/lab/Mamba_test/dataset/Indian_pines/Indian_pines_gt.mat
+    cube_shape:
+    - 145
+    - 145
+    - 220
+    label_shape:
+    - 145
+    - 145
+    band_count: 220
+    class_count: 16
+    labeled_pixel_count: 10249
+    unlabeled_pixel_count: 10776
+    class_distribution:
+      '1': 46
+      '2': 1428
+      '3': 830
+      '4': 237
+      '5': 483
+      '6': 730
+      '7': 28
+      '8': 478
+      '9': 20
+      '10': 972
+      '11': 2455
+      '12': 593
+      '13': 205
+      '14': 1265
+      '15': 386
+      '16': 93
+    has_nan: false
+    has_inf: false
+    dtype: float32
+    reader_name: mat
+    warnings: []
+    metadata:
+      cube_key: indian_pines
+      cube_path: /data2/lzj/lab/Mamba_test/dataset/Indian_pines/Indian_pines.mat
+      label_key: indian_pines_gt
+      label_path: /data2/lzj/lab/Mamba_test/dataset/Indian_pines/Indian_pines_gt.mat
+      warnings: []
+  spectral_report:
+    dataset_name: Indian_pines
+    band_count: 220
+    low_variance_bands:
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+    - 109
+    - 148
+    - 149
+    - 150
+    - 151
+    - 152
+    - 153
+    - 154
+    - 155
+    - 156
+    - 157
+    - 158
+    - 159
+    - 160
+    - 161
+    - 162
+    - 163
+    - 164
+    - 217
+    - 218
+    - 219
+    anomalous_bands: []
+    adjacent_correlation_mean: 0.846241607202247
+    highly_correlated_band_pairs:
+    - - 27
+      - 28
+    - - 40
+      - 41
+    - - 41
+      - 42
+    - - 42
+      - 43
+    - - 43
+      - 44
+    - - 46
+      - 47
+    - - 47
+      - 48
+    - - 48
+      - 49
+    - - 49
+      - 50
+    - - 50
+      - 51
+    - - 51
+      - 52
+    - - 64
+      - 65
+    - - 66
+      - 67
+    - - 67
+      - 68
+    - - 68
+      - 69
+    - - 112
+      - 113
+    - - 113
+      - 114
+    - - 114
+      - 115
+    - - 115
+      - 116
+    - - 116
+      - 117
+    - - 117
+      - 118
+    - - 118
+      - 119
+    - - 119
+      - 120
+    - - 120
+      - 121
+    - - 121
+      - 122
+    - - 122
+      - 123
+    - - 123
+      - 124
+    - - 124
+      - 125
+    - - 125
+      - 126
+    - - 126
+      - 127
+    - - 127
+      - 128
+    - - 128
+      - 129
+    - - 129
+      - 130
+    - - 130
+      - 131
+    - - 131
+      - 132
+    - - 132
+      - 133
+    - - 133
+      - 134
+    - - 134
+      - 135
+    - - 135
+      - 136
+    - - 136
+      - 137
+    - - 137
+      - 138
+    - - 138
+      - 139
+    - - 139
+      - 140
+    - - 140
+      - 141
+    - - 141
+      - 142
+    - - 142
+      - 143
+    - - 143
+      - 144
+    - - 144
+      - 145
+    - - 145
+      - 146
+    - - 166
+      - 167
+    - - 167
+      - 168
+    - - 171
+      - 172
+    - - 172
+      - 173
+    - - 173
+      - 174
+    - - 174
+      - 175
+    - - 175
+      - 176
+    - - 176
+      - 177
+    - - 177
+      - 178
+    - - 178
+      - 179
+    - - 179
+      - 180
+    - - 180
+      - 181
+    - - 181
+      - 182
+    - - 182
+      - 183
+    - - 183
+      - 184
+    - - 184
+      - 185
+    - - 185
+      - 186
+    - - 186
+      - 187
+    - - 187
+      - 188
+    - - 188
+      - 189
+    - - 189
+      - 190
+    - - 190
+      - 191
+    - - 191
+      - 192
+    - - 192
+      - 193
+    - - 193
+      - 194
+    - - 194
+      - 195
+    - - 195
+      - 196
+    - - 196
+      - 197
+    - - 197
+      - 198
+    - - 198
+      - 199
+    - - 199
+      - 200
+    - - 200
+      - 201
+    - - 201
+      - 202
+    - - 202
+      - 203
+    recommended_removed_bands:
+    - 28
+    - 41
+    - 42
+    - 43
+    - 44
+    - 47
+    - 48
+    - 49
+    - 50
+    - 51
+    - 52
+    - 65
+    - 67
+    - 68
+    - 69
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+    - 109
+    - 113
+    - 114
+    - 115
+    - 116
+    - 117
+    - 118
+    - 119
+    - 120
+    - 121
+    - 122
+    - 123
+    - 124
+    - 125
+    - 126
+    - 127
+    - 128
+    - 129
+    - 130
+    - 131
+    - 132
+    - 133
+    - 134
+    - 135
+    - 136
+    - 137
+    - 138
+    - 139
+    - 140
+    - 141
+    - 142
+    - 143
+    - 144
+    - 145
+    - 146
+    - 148
+    - 149
+    - 150
+    - 151
+    - 152
+    - 153
+    - 154
+    - 155
+    - 156
+    - 157
+    - 158
+    - 159
+    - 160
+    - 161
+    - 162
+    - 163
+    - 164
+    - 167
+    - 168
+    - 172
+    - 173
+    - 174
+    - 175
+    - 176
+    - 177
+    - 178
+    - 179
+    - 180
+    - 181
+    - 182
+    - 183
+    - 184
+    - 185
+    - 186
+    - 187
+    - 188
+    - 189
+    - 190
+    - 191
+    - 192
+    - 193
+    - 194
+    - 195
+    - 196
+    - 197
+    - 198
+    - 199
+    - 200
+    - 201
+    - 202
+    - 203
+    - 217
+    - 218
+    - 219
+    notes:
+    - Low-variance bands may contain little discriminative signal.
+    - Highly correlated adjacent bands suggest spectral redundancy.
+    metadata:
+      median_variance: 40262.1484375
+      low_variance_threshold: 402.621484375
+  recommendation:
+    recommended_model: mlp
+    candidates:
+    - name: mlp
+      score: 0.81
+      rationale: Lightweight neural baseline for larger labeled sets.
+      params:
+        hidden_dim: 64
+        epochs: 30
+        lr: 0.001
+        batch_size: 128
+    - name: svm
+      score: 0.72
+      rationale: Strong small-sample spectral baseline with low engineering risk.
+      params:
+        kernel: rbf
+        C: 10.0
+        gamma: scale
+    constraints: {}
+    notes:
+    - 'Recommendation is limited to MVP-supported models: svm and mlp.'
+    - 'Effective band count after recommended removal: 109.'
+  evidence:
+  - decision_type: dataset_split
+    target: Indian_pines
+    choice: stratified_random train_ratio=0.1
+    rationale: Use stratification to preserve class coverage while keeping a reproducible
+      seed.
+    evidence:
+    - source_type: dataset_audit
+      source_id: Indian_pines
+      claim: Dataset split should account for labeled sample availability.
+      support: Indian_pines has 10249 labeled pixels across 16 classes.
+      confidence: 0.85
+      url: null
+    expected_effect: Stable class coverage and reproducible train/test separation.
+    risk: Random split may overestimate performance if spatial autocorrelation is
+      strong.
+  - decision_type: preprocessing
+    target: spectral_bands
+    choice: remove_bands=[28, 41, 42, 43, 44, 47, 48, 49, 50, 51, 52, 65, 67, 68,
+      69, 102, 103, 104, 105, 106, 107, 108, 109, 113, 114, 115, 116, 117, 118, 119,
+      120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135,
+      136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 148, 149, 150, 151, 152,
+      153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 167, 168, 172, 173,
+      174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
+      190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 217, 218,
+      219]; normalization=standard
+    rationale: Remove obviously weak/noisy bands and standardize each spectral channel.
+    evidence:
+    - source_type: spectral_report
+      source_id: Indian_pines
+      claim: Band preprocessing should follow detected spectral quality issues.
+      support: 'Recommended removal bands: [28, 41, 42, 43, 44, 47, 48, 49, 50, 51,
+        52, 65, 67, 68, 69, 102, 103, 104, 105, 106, 107, 108, 109, 113, 114, 115,
+        116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130,
+        131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145,
+        146, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+        162, 163, 164, 167, 168, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181,
+        182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196,
+        197, 198, 199, 200, 201, 202, 203, 217, 218, 219]; mean adjacent correlation:
+        0.846241607202247.'
+      confidence: 0.75
+      url: null
+    expected_effect: Reduce noisy spectral dimensions and stabilize baseline optimization.
+    risk: Aggressive band removal may discard useful class-specific absorption signals.
+  - decision_type: model_selection
+    target: baseline_model
+    choice: mlp
+    rationale: Select the highest-scored MVP-supported model before testing larger
+      modules.
+    evidence:
+    - source_type: model_recommendation
+      source_id: mlp
+      claim: mlp is a candidate model.
+      support: score=0.81; rationale=Lightweight neural baseline for larger labeled
+        sets.
+      confidence: 0.81
+      url: null
+    - source_type: model_recommendation
+      source_id: svm
+      claim: svm is a candidate model.
+      support: score=0.72; rationale=Strong small-sample spectral baseline with low
+        engineering risk.
+      confidence: 0.72
+      url: null
+    expected_effect: Provide a stable baseline for later ablation and module additions.
+    risk: Baseline recommendation does not guarantee state-of-the-art accuracy.
+  module_proposal:
+    name: EvidenceGuidedSpectralSpatialAdapter
+    module_type: spectral_spatial_attention
+    insertion_point: 'models registry: add module-backed classifier factory'
+    design_summary: 'A compact adapter that combines spectral gating with shallow
+      spatial context before downstream classification. Objective: improve_spectral_spatial_modeling.'
+    expected_effect: Improve robustness to redundant/noisy bands while preserving
+      reproducible ablation.
+    implementation_steps:
+    - Create a new model factory under hyperagent/models without modifying training
+      runner.
+    - Expose module hyperparameters through ModelConfig.params.
+    - Add an ablation candidate that toggles the module on/off.
+    - Record module rationale in ExperimentPlan.metadata['evidence'].
+    required_interfaces:
+    - ClassifierFactory
+    - ExperimentPlan
+    - ModelConfig
+    evidence:
+    - source_type: dataset_audit
+      source_id: Indian_pines
+      claim: Module design should respect band count and labeled sample size.
+      support: band_count=220; labeled_pixel_count=10249; class_count=16
+      confidence: 0.8
+      url: null
+    - source_type: spectral_report
+      source_id: Indian_pines
+      claim: Spectral redundancy motivates a spectral gating or attention module.
+      support: recommended_removed_bands=[28, 41, 42, 43, 44, 47, 48, 49, 50, 51,
+        52, 65, 67, 68, 69, 102, 103, 104, 105, 106, 107, 108, 109, 113, 114, 115,
+        116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130,
+        131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145,
+        146, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+        162, 163, 164, 167, 168, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181,
+        182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196,
+        197, 198, 199, 200, 201, 202, 203, 217, 218, 219]; high_corr_pairs=83
+      confidence: 0.72
+      url: null
+    risks:
+    - Adds training complexity and needs ablation against spectral-only baselines.
+    - Do not claim improvement without fixed split and multi-seed comparison.

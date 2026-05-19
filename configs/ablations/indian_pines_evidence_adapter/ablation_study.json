@@ -1,0 +1,32 @@
+{
+  "name": "evidence_guided_spectral_spatial_adapter_ablation",
+  "base_plan": "reports/indian_pines/experiment.yaml",
+  "variants": [
+    {
+      "name": "baseline_control",
+      "config_path": "configs/ablations/indian_pines_evidence_adapter/baseline_control.yaml",
+      "purpose": "Original model and preprocessing protocol.",
+      "changed_fields": {}
+    },
+    {
+      "name": "evidence_guided_spectral_spatial_adapter",
+      "config_path": "configs/ablations/indian_pines_evidence_adapter/evidence_guided_spectral_spatial_adapter.yaml",
+      "purpose": "Evaluate the materialized evidence-guided adapter.",
+      "changed_fields": {
+        "model.name": "evidence_guided_spectral_spatial_adapter"
+      }
+    },
+    {
+      "name": "evidence_guided_spectral_spatial_adapter_no_band_pruning",
+      "config_path": "configs/ablations/indian_pines_evidence_adapter/evidence_guided_spectral_spatial_adapter_no_band_pruning.yaml",
+      "purpose": "Separate module contribution from spectral band pruning.",
+      "changed_fields": {
+        "preprocessing.remove_bands": []
+      }
+    }
+  ],
+  "notes": [
+    "Run variants with identical split seed before comparing OA/AA/Kappa.",
+    "Add multi-seed repeats before claiming module improvement."
+  ]
+}

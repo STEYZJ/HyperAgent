@@ -1,0 +1,20 @@
+remote:
+  name: origin
+  url: git@github.com:STEYZJ/HyperAgent.git
+default_branch: main
+commit_policy:
+  cadence: phase_or_task
+  when:
+    - after a coherent feature or task is implemented
+    - after tests pass for that task
+    - before switching to a new major stage
+  message_style: "stage/task: concise summary"
+push_policy:
+  cadence: after_stage_or_stable_task_batch
+  remote: origin
+  branch: main
+  require_tests_before_push: true
+notes:
+  - SSH remote is configured locally in .git/config.
+  - Runtime artifacts under .hyperagent, experiments, and reports are ignored by default.
+  - Commit source code, tests, configs, docs, and reproducible ablation YAMLs.

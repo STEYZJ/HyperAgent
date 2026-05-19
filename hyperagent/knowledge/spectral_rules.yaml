@@ -1,0 +1,8 @@
+water_absorption_ranges_nm:
+  - [930, 970]
+  - [1130, 1160]
+  - [1340, 1450]
+  - [1800, 1950]
+notes:
+  - MVP rules are intentionally conservative and only mark known noisy regions when wavelength metadata exists.
+

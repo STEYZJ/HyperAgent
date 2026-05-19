@@ -1,0 +1,7 @@
+dataset_root: /data2/lzj/lab/Mamba_test/dataset
+default_environment: /home/lzj/miniconda3/envs/HyperAgent/bin/python
+strategy:
+  literature_provider: arxiv
+  max_literature_results: 10
+  default_year_from: 2024
+  default_objective: maximize_oa_with_reproducible_baseline

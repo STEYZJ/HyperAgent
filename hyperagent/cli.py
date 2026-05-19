@@ -1,0 +1,752 @@
+"""Command line interface for HyperAgent."""
+
+import argparse
+import os
+from pathlib import Path
+from typing import List, Optional
+
+from hyperagent.agents import CoordinatorAgent
+from hyperagent.core.io import read_json, read_yaml, write_json
+from hyperagent.core.worklog import append_worklog
+from hyperagent.data.synthetic import write_synthetic_mat
+from hyperagent.runtime.workspace import HyperAgentWorkspace
+from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.llm import LLMProviderStore, LLMRequestBuilder
+from hyperagent.runtime.mcp import MCPServerStore
+from hyperagent.runtime.obsidian import ObsidianVaultIndex
+from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.skills import SkillStore
+from hyperagent.schemas import (
+    DatasetAudit,
+    ExperimentPlan,
+    ExperimentResult,
+    LLMMessage,
+    MCPServerSpec,
+    LiteratureSearchResult,
+    ModuleProposal,
+    ModelRecommendation,
+    SpectralReport,
+)
+from hyperagent.tools.module_materializer import ModuleMaterializer
+
+
+DEFAULT_DATASET_ROOT = "/data2/lzj/lab/Mamba_test/dataset"
+PACKAGE_ROOT = Path(__file__).resolve().parent
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="HyperAgent HSI research workflow")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    audit = subparsers.add_parser("audit", help="Inspect an HSI dataset")
+    audit.add_argument("--data-root", required=True)
+    audit.add_argument("--output", required=True)
+    audit.add_argument("--reader", default=None)
+
+    plan = subparsers.add_parser("plan", help="Build an experiment plan from an audit")
+    plan.add_argument("--audit", required=True)
+    plan.add_argument("--output", required=True)
+    plan.add_argument("--output-dir", default=None)
+    plan.add_argument("--seed", type=int, default=42)
+
+    run = subparsers.add_parser("run-baseline", help="Run a baseline experiment")
+    run.add_argument("--config", required=True)
+
+    report = subparsers.add_parser("report", help="Build a Markdown report")
+    report.add_argument("--experiment", required=True)
+    report.add_argument("--output", default=None)
+
+    demo = subparsers.add_parser("demo", help="Run a synthetic end-to-end demo")
+    demo.add_argument("--synthetic", action="store_true", required=True)
+    demo.add_argument("--root", default="experiments/synthetic_demo")
+    demo.add_argument("--seed", type=int, default=42)
+
+    init = subparsers.add_parser("init", help="Initialize a HyperAgent CLI workspace")
+    init.add_argument("--dataset-root", default=DEFAULT_DATASET_ROOT)
+    init.add_argument("--output-root", default="experiments")
+    init.add_argument("--reports-root", default="reports")
+    init.add_argument("--literature-root", default="literature/papers")
+    init.add_argument("--default-provider", default="arxiv")
+    init.add_argument("--default-year-from", type=int, default=2024)
+
+    status = subparsers.add_parser("status", help="Show HyperAgent workspace status")
+    status.add_argument("--json", action="store_true")
+
+    task_create = subparsers.add_parser("task-create", help="Create a research task")
+    task_create.add_argument("--goal", required=True)
+    task_create.add_argument("--dataset", required=True)
+    task_create.add_argument("--objective", default="maximize_oa_with_reproducible_baseline")
+    task_create.add_argument("--keywords", default="")
+
+    task_list = subparsers.add_parser("task-list", help="List research tasks")
+    task_list.add_argument("--json", action="store_true")
+
+    task_show = subparsers.add_parser("task-show", help="Show a research task")
+    task_show.add_argument("--task-id", required=True)
+    task_show.add_argument("--json", action="store_true")
+
+    task_run = subparsers.add_parser("task-run", help="Run task planning workflow")
+    task_run.add_argument("--task-id", required=True)
+    task_run.add_argument("--with-literature", action="store_true")
+    task_run.add_argument("--run-baseline", action="store_true")
+    task_run.add_argument("--provider", default=None)
+    task_run.add_argument("--max-literature-results", type=int, default=5)
+    task_run.add_argument("--seed", type=int, default=42)
+
+    literature = subparsers.add_parser("literature", help="Search latest related literature")
+    literature.add_argument("--query", required=True)
+    literature.add_argument("--output", required=True)
+    literature.add_argument("--provider", default="arxiv")
+    literature.add_argument("--max-results", type=int, default=10)
+    literature.add_argument("--year-from", type=int, default=None)
+    literature.add_argument("--sort-by", default="latest")
+
+    auto = subparsers.add_parser(
+        "auto-experiment",
+        help="Build an evidence-backed experiment agenda",
+    )
+    auto.add_argument("--audit", required=True)
+    auto.add_argument("--spectral", required=True)
+    auto.add_argument("--recommendation", required=True)
+    auto.add_argument("--output", required=True)
+    auto.add_argument("--objective", default="maximize_oa_with_reproducible_baseline")
+    auto.add_argument("--max-candidates", type=int, default=4)
+
+    tune = subparsers.add_parser("tune-next", help="Suggest purposeful parameter changes")
+    tune.add_argument("--plan", required=True)
+    tune.add_argument("--result", required=True)
+    tune.add_argument("--audit", required=True)
+    tune.add_argument("--output", required=True)
+
+    module = subparsers.add_parser(
+        "propose-module",
+        help="Suggest an evidence-backed module addition",
+    )
+    module.add_argument("--audit", required=True)
+    module.add_argument("--spectral", required=True)
+    module.add_argument("--literature", required=True)
+    module.add_argument("--output", required=True)
+    module.add_argument("--objective", default="improve_spectral_spatial_modeling")
+
+    llm_list = subparsers.add_parser("llm-providers", help="List configured LLM providers")
+    llm_list.add_argument("--json", action="store_true")
+
+    llm_dry = subparsers.add_parser("llm-dry-run", help="Build a vendor request payload without sending it")
+    llm_dry.add_argument("--provider", required=True)
+    llm_dry.add_argument("--model", default=None)
+    llm_dry.add_argument("--system", default="You are HyperAgent.")
+    llm_dry.add_argument("--user", required=True)
+    llm_dry.add_argument("--temperature", type=float, default=0.2)
+    llm_dry.add_argument("--max-tokens", type=int, default=None)
+
+    session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
+    session_new.add_argument("--title", required=True)
+
+    session_add = subparsers.add_parser("session-add", help="Append a message to a conversation")
+    session_add.add_argument("--session-id", required=True)
+    session_add.add_argument("--role", required=True, choices=["system", "user", "assistant", "tool"])
+    session_add.add_argument("--content", required=True)
+
+    session_list = subparsers.add_parser("session-list", help="List conversation sessions")
+    session_list.add_argument("--include-archived", action="store_true")
+    session_list.add_argument("--json", action="store_true")
+
+    session_show = subparsers.add_parser("session-show", help="Show a conversation session")
+    session_show.add_argument("--session-id", required=True)
+    session_show.add_argument("--json", action="store_true")
+
+    session_archive = subparsers.add_parser("session-archive", help="Archive a conversation")
+    session_archive.add_argument("--session-id", required=True)
+
+    session_delete = subparsers.add_parser("session-delete", help="Delete a conversation")
+    session_delete.add_argument("--session-id", required=True)
+    session_delete.add_argument("--hard", action="store_true")
+
+    session_compress = subparsers.add_parser("session-compress", help="Compress conversation context")
+    session_compress.add_argument("--session-id", required=True)
+    session_compress.add_argument("--keep-last", type=int, default=4)
+    session_compress.add_argument("--max-chars", type=int, default=None)
+
+    skills = subparsers.add_parser("skill-list", help="List compatible SKILL.md skills")
+    skills.add_argument("--json", action="store_true")
+
+    mcp_add = subparsers.add_parser("mcp-add", help="Register an MCP server launch spec")
+    mcp_add.add_argument("--name", required=True)
+    mcp_add.add_argument("--command", dest="server_command", required=True)
+    mcp_add.add_argument("--arg", action="append", default=[])
+    mcp_add.add_argument("--env", action="append", default=[])
+    mcp_add.add_argument("--description", default="")
+
+    mcp_list = subparsers.add_parser("mcp-list", help="List MCP server specs")
+    mcp_list.add_argument("--json", action="store_true")
+
+    mcp_export = subparsers.add_parser("mcp-export", help="Export MCP client-style config")
+    mcp_export.add_argument("--output", default=None)
+
+    obsidian_index = subparsers.add_parser("obsidian-index", help="Index an Obsidian vault")
+    obsidian_index.add_argument("--vault", required=True)
+
+    obsidian_search = subparsers.add_parser("obsidian-search", help="Search indexed Obsidian notes")
+    obsidian_search.add_argument("--query", required=True)
+    obsidian_search.add_argument("--limit", type=int, default=10)
+    obsidian_search.add_argument("--json", action="store_true")
+
+    prompt_list = subparsers.add_parser("prompt-list", help="List prebuilt prompt templates")
+    prompt_list.add_argument("--json", action="store_true")
+
+    prompt_render = subparsers.add_parser("prompt-render", help="Render a prompt template")
+    prompt_render.add_argument("--name", required=True)
+    prompt_render.add_argument("--var", action="append", default=[])
+
+    materialize = subparsers.add_parser("materialize-module", help="Materialize module proposal into model code")
+    materialize.add_argument("--proposal", required=True)
+    materialize.add_argument("--output-dir", default="hyperagent/models/generated")
+    materialize.add_argument("--base-plan", default=None)
+    materialize.add_argument("--ablation-output", default=None)
+    materialize.add_argument("--force", action="store_true")
+
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = _build_parser().parse_args(argv)
+    agent = CoordinatorAgent()
+    workspace = HyperAgentWorkspace()
+    llm_store = LLMProviderStore(workspace.workspace_dir)
+    session_store = ConversationStore(workspace.workspace_dir)
+    mcp_store = MCPServerStore(workspace.workspace_dir)
+    obsidian_store = ObsidianVaultIndex(workspace.workspace_dir)
+    prompt_library = PromptLibrary([PACKAGE_ROOT / "prompts", workspace.workspace_dir / "prompts"])
+
+    if args.command == "init":
+        config = workspace.init(
+            Path(args.dataset_root),
+            output_root=args.output_root,
+            reports_root=args.reports_root,
+            literature_root=args.literature_root,
+            default_provider=args.default_provider,
+            default_year_from=args.default_year_from,
+        )
+        append_worklog(
+            "初始化 HyperAgent 工作台",
+            "Agent CLI 工作台命令已实现。",
+            f"创建 `.hyperagent` 配置，数据集根目录为 {config.dataset_root}。",
+            "项目级配置可以让后续任务命令不重复传入数据集根路径。",
+            f"配置已写入 {workspace.config_path}。",
+            "HyperAgent 工作台已初始化。",
+            "下一步可用 task-create 创建科研任务。",
+        )
+        print(f"Initialized HyperAgent workspace: {workspace.workspace_dir}")
+        return 0
+
+    if args.command == "status":
+        status = workspace.status()
+        if args.json:
+            print_json(status.to_dict())
+        else:
+            print(f"initialized: {status.initialized}")
+            print(f"workspace: {status.workspace_dir}")
+            print(f"dataset_root: {status.dataset_root}")
+            print(f"tasks: {status.task_count}")
+            print(f"tasks_by_status: {status.tasks_by_status}")
+        return 0
+
+    if args.command == "task-create":
+        task = workspace.create_task(
+            goal=args.goal,
+            dataset=args.dataset,
+            objective=args.objective,
+            keywords=parse_keywords(args.keywords),
+        )
+        append_worklog(
+            "创建科研任务",
+            "HyperAgent 工作台已初始化。",
+            f"创建任务 {task.task_id}，数据集为 {task.dataset}。",
+            "任务记录把目标、数据集、关键词和 objective 固定下来，后续 artifact 可追踪。",
+            f"任务文件已写入 {workspace.task_path(task.task_id)}。",
+            "科研任务已创建。",
+            "下一步可用 task-run 生成实验计划和自动实验议程。",
+        )
+        print(task.task_id)
+        return 0
+
+    if args.command == "task-list":
+        tasks = workspace.list_tasks()
+        if args.json:
+            print_json({"tasks": [task.to_dict() for task in tasks]})
+        else:
+            for task in tasks:
+                print(f"{task.task_id}\t{task.status}\t{task.dataset}\t{task.goal}")
+        return 0
+
+    if args.command == "task-show":
+        task = workspace.load_task(args.task_id)
+        if args.json:
+            print_json(task.to_dict())
+        else:
+            print(f"task_id: {task.task_id}")
+            print(f"status: {task.status}")
+            print(f"dataset: {task.dataset}")
+            print(f"objective: {task.objective}")
+            print(f"goal: {task.goal}")
+            print(f"keywords: {', '.join(task.keywords)}")
+            print(f"artifacts: {task.artifacts}")
+        return 0
+
+    if args.command == "task-run":
+        task = workspace.load_task(args.task_id)
+        config = workspace.load_config()
+        artifact_dir = workspace.task_artifact_dir(task.task_id)
+        dataset_path = workspace.resolve_dataset_path(task.dataset)
+        audit = agent.audit(dataset_path, artifact_dir / "audit.json")
+        spectral_report = agent.analyze(audit, artifact_dir / "spectral_report.json")
+        recommendation = agent.recommend(
+            audit,
+            spectral_report,
+            artifact_dir / "model_recommendation.json",
+        )
+        plan = agent.plan(
+            audit,
+            spectral_report,
+            recommendation,
+            artifact_dir / "experiment.yaml",
+            Path(config.output_root) / task.task_id,
+            args.seed,
+        )
+        agenda = agent.design_auto_experiments(
+            audit,
+            spectral_report,
+            recommendation,
+            objective=task.objective,
+        )
+        write_json(artifact_dir / "auto_experiment_agenda.json", agenda)
+        task.artifacts.update(
+            {
+                "audit": str(artifact_dir / "audit.json"),
+                "spectral_report": str(artifact_dir / "spectral_report.json"),
+                "model_recommendation": str(artifact_dir / "model_recommendation.json"),
+                "experiment_plan": str(artifact_dir / "experiment.yaml"),
+                "auto_experiment_agenda": str(artifact_dir / "auto_experiment_agenda.json"),
+            }
+        )
+
+        if args.with_literature:
+            query = " ".join(task.keywords) if task.keywords else task.goal
+            literature = agent.search_literature(
+                query,
+                artifact_dir / "literature.json",
+                provider_name=args.provider or config.default_provider,
+                max_results=args.max_literature_results,
+                year_from=config.default_year_from,
+            )
+            task.artifacts["literature"] = str(artifact_dir / "literature.json")
+            if literature.warnings:
+                task.notes.extend(literature.warnings)
+
+        if args.run_baseline:
+            result = agent.run(plan)
+            report_path = agent.write_report(
+                result,
+                Path(result.experiment_dir) / "report.md",
+            )
+            task.artifacts["result"] = str(Path(result.experiment_dir) / "result.json")
+            task.artifacts["report"] = str(report_path)
+
+        task.status = "completed"
+        workspace.save_task(task)
+        append_worklog(
+            "执行科研任务工作流",
+            "科研任务已创建。",
+            f"执行任务 {task.task_id}，数据集路径为 {dataset_path}。",
+            "task-run 将目标转化为审计、光谱诊断、模型推荐、实验计划和自动实验议程，形成可追踪 artifact。",
+            f"任务 artifact 已写入 {artifact_dir}。",
+            "任务规划工作流已完成。",
+            "下一步可查看 task-show 或选择候选实验运行 baseline。",
+        )
+        print(f"Task run complete: {task.task_id}")
+        return 0
+
+    if args.command == "audit":
+        audit = agent.audit(Path(args.data_root), Path(args.output), args.reader)
+        append_worklog(
+            "执行数据审计命令",
+            "CLI 已初始化。",
+            f"审计数据集 {args.data_root} 并写入 {args.output}。",
+            "数据审计是后续光谱分析和实验规划的输入。",
+            f"调用 CoordinatorAgent.audit，得到 {audit.band_count} 个波段和 {audit.class_count} 个类别。",
+            "审计 JSON 已生成。",
+            "下一步可运行 plan 命令生成实验配置。",
+        )
+        print(f"Wrote audit: {args.output}")
+        return 0
+
+    if args.command == "llm-providers":
+        providers = llm_store.ensure_defaults()
+        if args.json:
+            print_json({"providers": [provider.to_dict() for provider in providers]})
+        else:
+            for provider in providers:
+                print(f"{provider.name}\t{provider.kind}\t{provider.default_model}\t{provider.api_key_env}")
+        return 0
+
+    if args.command == "llm-dry-run":
+        llm_store.ensure_defaults()
+        spec = llm_store.get(args.provider)
+        payload = LLMRequestBuilder().build(
+            spec,
+            [
+                LLMMessage(role="system", content=args.system),
+                LLMMessage(role="user", content=args.user),
+            ],
+            model=args.model,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+        )
+        print_json(payload)
+        return 0
+
+    if args.command == "session-new":
+        session = session_store.new(args.title)
+        print(session.session_id)
+        return 0
+
+    if args.command == "session-add":
+        session = session_store.add_message(args.session_id, args.role, args.content)
+        print(f"{session.session_id}\tmessages={len(session.messages)}")
+        return 0
+
+    if args.command == "session-list":
+        sessions = session_store.list(include_archived=args.include_archived)
+        if args.json:
+            print_json({"sessions": [session.to_dict() for session in sessions]})
+        else:
+            for session in sessions:
+                print(f"{session.session_id}\t{session.status}\t{len(session.messages)}\t{session.title}")
+        return 0
+
+    if args.command == "session-show":
+        session = session_store.load(args.session_id)
+        if args.json:
+            print_json(session.to_dict())
+        else:
+            print(f"session_id: {session.session_id}")
+            print(f"title: {session.title}")
+            print(f"status: {session.status}")
+            print(f"summaries: {len(session.summaries)}")
+            for message in session.messages:
+                print(f"{message.role}: {message.content}")
+        return 0
+
+    if args.command == "session-archive":
+        session = session_store.archive(args.session_id)
+        print(f"archived: {session.session_id}")
+        return 0
+
+    if args.command == "session-delete":
+        session_store.delete(args.session_id, hard=args.hard)
+        print(f"deleted: {args.session_id}")
+        return 0
+
+    if args.command == "session-compress":
+        session = session_store.compress(
+            args.session_id,
+            keep_last=args.keep_last,
+            max_chars=args.max_chars,
+        )
+        print(f"{session.session_id}\tmessages={len(session.messages)}\tsummaries={len(session.summaries)}")
+        return 0
+
+    if args.command == "skill-list":
+        roots = [
+            Path("skills"),
+            workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        if codex_home:
+            roots.append(Path(codex_home) / "skills")
+        skills = SkillStore(roots).list()
+        if args.json:
+            print_json({"skills": [skill.to_dict() for skill in skills]})
+        else:
+            for skill in skills:
+                print(f"{skill.name}\t{skill.path}\t{skill.description}")
+        return 0
+
+    if args.command == "mcp-add":
+        server = MCPServerSpec(
+            name=args.name,
+            command=args.server_command,
+            args=args.arg,
+            env=parse_env(args.env),
+            description=args.description,
+        )
+        mcp_store.upsert(server)
+        print(f"registered MCP server: {server.name}")
+        return 0
+
+    if args.command == "mcp-list":
+        servers = mcp_store.list()
+        if args.json:
+            print_json({"servers": [server.to_dict() for server in servers]})
+        else:
+            for server in servers:
+                print(f"{server.name}\t{server.command}\t{' '.join(server.args)}")
+        return 0
+
+    if args.command == "mcp-export":
+        payload = mcp_store.export_client_config()
+        if args.output:
+            write_json(Path(args.output), payload)
+            print(f"Wrote MCP config: {args.output}")
+        else:
+            print_json(payload)
+        return 0
+
+    if args.command == "obsidian-index":
+        notes = obsidian_store.index(Path(args.vault))
+        print(f"indexed notes: {len(notes)}")
+        return 0
+
+    if args.command == "obsidian-search":
+        notes = obsidian_store.search(args.query, limit=args.limit)
+        if args.json:
+            print_json({"notes": [note.to_dict() for note in notes]})
+        else:
+            for note in notes:
+                print(f"{note.title}\t{note.path}")
+        return 0
+
+    if args.command == "prompt-list":
+        templates = prompt_library.list()
+        if args.json:
+            print_json({"prompts": [template.to_dict() for template in templates]})
+        else:
+            for template in templates:
+                print(f"{template.name}\t{','.join(template.variables)}\t{template.description}")
+        return 0
+
+    if args.command == "prompt-render":
+        print(prompt_library.render(args.name, parse_vars(args.var)))
+        return 0
+
+    if args.command == "materialize-module":
+        proposal = ModuleProposal.from_dict(read_json(Path(args.proposal)))
+        result = ModuleMaterializer().materialize(
+            proposal,
+            output_dir=Path(args.output_dir),
+            base_plan_path=Path(args.base_plan) if args.base_plan else None,
+            ablation_output_dir=Path(args.ablation_output) if args.ablation_output else None,
+            force=args.force,
+        )
+        append_worklog(
+            "物化模块建议为模型代码",
+            "module_proposal JSON 已生成。",
+            f"将 {proposal.name} 物化为模型 factory {result.model_name}。",
+            "模块建议必须落到 registry-backed model factory，才能进入训练和消融流程。",
+            f"生成模型文件 {result.model_file}，消融配置数量 {len(result.generated_configs)}。",
+            "模块代码和消融配置已生成。",
+            "下一步可运行 ablation YAML 验证模块效果。",
+        )
+        print_json(result.to_dict())
+        return 0
+
+    if args.command == "plan":
+        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        base = Path(args.output).parent
+        spectral_path = base / "spectral_report.json"
+        recommendation_path = base / "model_recommendation.json"
+        spectral_report = agent.analyze(audit, spectral_path)
+        recommendation = agent.recommend(audit, spectral_report, recommendation_path)
+        plan = agent.plan(
+            audit,
+            spectral_report,
+            recommendation,
+            Path(args.output),
+            Path(args.output_dir) if args.output_dir else None,
+            args.seed,
+        )
+        append_worklog(
+            "生成实验计划",
+            "数据审计 JSON 已存在。",
+            f"生成光谱报告、模型推荐和实验计划 {args.output}。",
+            "计划文件统一固定 split、预处理、模型和输出目录，保证实验可复现。",
+            f"推荐模型为 {plan.model.name}，输出目录为 {plan.output_dir}。",
+            "实验 YAML、光谱报告和推荐报告已生成。",
+            "下一步可运行 run-baseline 命令执行训练。",
+        )
+        print(f"Wrote plan: {args.output}")
+        return 0
+
+    if args.command == "run-baseline":
+        plan = ExperimentPlan.from_dict(read_yaml(Path(args.config)))
+        result = agent.run(plan)
+        append_worklog(
+            "运行 baseline 实验",
+            "实验计划 YAML 已生成。",
+            f"执行 baseline runner，配置文件为 {args.config}。",
+            "训练与评估必须从同一份 ExperimentPlan 启动，避免隐藏参数。",
+            f"完成 {result.model_name} 训练，OA={result.evaluation.overall_accuracy:.4f}。",
+            f"结果已写入 {result.experiment_dir}/result.json。",
+            "下一步可运行 report 命令生成 Markdown 报告。",
+        )
+        print(f"Wrote result: {Path(result.experiment_dir) / 'result.json'}")
+        return 0
+
+    if args.command == "report":
+        result = ExperimentResult.from_dict(read_json(Path(args.experiment) / "result.json"))
+        output = Path(args.output) if args.output else Path(args.experiment) / "report.md"
+        report_path = agent.write_report(result, output)
+        append_worklog(
+            "生成实验报告",
+            "实验结果 JSON 已生成。",
+            f"根据 {args.experiment}/result.json 生成 Markdown 报告。",
+            "报告把指标、混淆矩阵和 artifact 汇总为论文实验可读格式。",
+            f"报告已写入 {report_path}。",
+            "端到端流程已形成可复现实验记录。",
+            "下一步可扩展真实数据集和更多模型。",
+        )
+        print(f"Wrote report: {report_path}")
+        return 0
+
+    if args.command == "demo":
+        root = Path(args.root)
+        data_root = root / "data"
+        write_synthetic_mat(data_root, args.seed)
+        audit_path = root / "audit.json"
+        spectral_path = root / "spectral_report.json"
+        recommendation_path = root / "model_recommendation.json"
+        plan_path = root / "experiment.yaml"
+        audit = agent.audit(data_root, audit_path)
+        spectral_report = agent.analyze(audit, spectral_path)
+        recommendation = agent.recommend(audit, spectral_report, recommendation_path)
+        plan = agent.plan(audit, spectral_report, recommendation, plan_path, root / "run", args.seed)
+        result = agent.run(plan)
+        report_path = agent.write_report(result, Path(result.experiment_dir) / "report.md")
+        write_json(root / "summary.json", result)
+        append_worklog(
+            "运行 synthetic demo",
+            "CLI、Agent、工具、训练和报告模块已经实现。",
+            f"在 {root} 下生成合成 HSI 数据并执行完整流程。",
+            "synthetic demo 不依赖外部数据，可以作为最小端到端验收。",
+            f"完成训练与报告生成，OA={result.evaluation.overall_accuracy:.4f}，报告为 {report_path}。",
+            "audit、spectral report、recommendation、experiment YAML、result 和 report 均已生成。",
+            "下一步运行单元测试与解耦性检查。",
+        )
+        print(f"Demo complete: {report_path}")
+        return 0
+
+    if args.command == "literature":
+        result = agent.search_literature(
+            args.query,
+            Path(args.output),
+            provider_name=args.provider,
+            max_results=args.max_results,
+            year_from=args.year_from,
+            sort_by=args.sort_by,
+        )
+        append_worklog(
+            "检索相关最新文献",
+            "第二阶段文献 provider 已接入。",
+            f"使用 {args.provider} 检索关键词 `{args.query}`，最多 {args.max_results} 篇。",
+            "文献检索结果将作为模块设计和实验依据来源之一。",
+            f"检索到 {len(result.papers)} 条记录并写入 {args.output}。",
+            "文献 JSON 已生成。",
+            "下一步可运行 propose-module 结合文献生成模块建议。",
+        )
+        print(f"Wrote literature results: {args.output}")
+        return 0
+
+    if args.command == "auto-experiment":
+        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        spectral = SpectralReport.from_dict(read_json(Path(args.spectral)))
+        recommendation = ModelRecommendation.from_dict(read_json(Path(args.recommendation)))
+        agenda = agent.design_auto_experiments(
+            audit,
+            spectral,
+            recommendation,
+            objective=args.objective,
+            max_candidates=args.max_candidates,
+        )
+        write_json(Path(args.output), agenda)
+        append_worklog(
+            "生成自动实验议程",
+            "审计、光谱报告和模型推荐已经存在。",
+            f"为 {audit.dataset_name} 生成 {len(agenda.candidates)} 个带依据的实验候选。",
+            "自动实验必须以 objective 和 evidence 为约束，避免盲目网格搜索。",
+            f"实验议程已写入 {args.output}。",
+            "自动实验候选已生成。",
+            "下一步可选择候选并 materialize 为具体 ExperimentPlan。",
+        )
+        print(f"Wrote auto-experiment agenda: {args.output}")
+        return 0
+
+    if args.command == "tune-next":
+        plan = ExperimentPlan.from_dict(read_yaml(Path(args.plan)))
+        result = ExperimentResult.from_dict(read_json(Path(args.result)))
+        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        proposals = agent.propose_parameter_updates(plan, result, audit)
+        write_json(Path(args.output), {"proposals": [item.to_dict() for item in proposals]})
+        append_worklog(
+            "生成目的性调参建议",
+            "已有实验计划和实验结果。",
+            f"根据 {result.experiment_name} 的结果生成 {len(proposals)} 个参数调整建议。",
+            "调参应由结果缺口和数据证据驱动，而不是无目的枚举。",
+            f"调参建议已写入 {args.output}。",
+            "下一轮实验参数依据已生成。",
+            "下一步可将建议应用到新的 ExperimentPlan。",
+        )
+        print(f"Wrote tuning proposals: {args.output}")
+        return 0
+
+    if args.command == "propose-module":
+        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        spectral = SpectralReport.from_dict(read_json(Path(args.spectral)))
+        literature = LiteratureSearchResult.from_dict(read_json(Path(args.literature)))
+        proposal = agent.propose_module(
+            audit,
+            spectral,
+            literature.papers,
+            objective=args.objective,
+        )
+        write_json(Path(args.output), proposal)
+        append_worklog(
+            "生成目的性模块建议",
+            "已有数据审计、光谱报告和文献检索结果。",
+            f"为 {audit.dataset_name} 生成模块建议 {proposal.name}。",
+            "模块添加必须说明插入点、预期效果、实现步骤、风险和证据。",
+            f"模块建议已写入 {args.output}。",
+            "模块设计依据已结构化保存。",
+            "下一步可按建议新增模型 factory 并做消融实验。",
+        )
+        print(f"Wrote module proposal: {args.output}")
+        return 0
+
+    raise ValueError(f"Unsupported command: {args.command}")
+
+
+def parse_keywords(value: str) -> List[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def parse_env(values: List[str]) -> dict:
+    parsed = {}
+    for item in values:
+        if "=" not in item:
+            raise ValueError(f"Expected KEY=VALUE env item, got {item}")
+        key, value = item.split("=", 1)
+        parsed[key] = value
+    return parsed
+
+
+def parse_vars(values: List[str]) -> dict:
+    return parse_env(values)
+
+
+def print_json(value) -> None:
+    import json
+
+    print(json.dumps(value, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

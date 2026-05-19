@@ -1,0 +1,16 @@
+{
+  "proposal_name": "EvidenceGuidedSpectralSpatialAdapter",
+  "model_name": "evidence_guided_spectral_spatial_adapter",
+  "model_file": "hyperagent/models/generated/evidence_guided_spectral_spatial_adapter.py",
+  "ablation_dir": "configs/ablations/indian_pines_evidence_adapter",
+  "generated_configs": [
+    "configs/ablations/indian_pines_evidence_adapter/baseline_control.yaml",
+    "configs/ablations/indian_pines_evidence_adapter/evidence_guided_spectral_spatial_adapter.yaml",
+    "configs/ablations/indian_pines_evidence_adapter/evidence_guided_spectral_spatial_adapter_no_band_pruning.yaml",
+    "configs/ablations/indian_pines_evidence_adapter/ablation_study.json"
+  ],
+  "notes": [
+    "Generated model uses the current pixel-spectral ClassifierFactory interface.",
+    "Spatial context is represented as a lightweight adapter placeholder until patch-based runners are added."
+  ]
+}
