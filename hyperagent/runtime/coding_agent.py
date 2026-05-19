@@ -120,9 +120,11 @@ class CodingAgent:
             f"{repo_context_markdown}\n"
             "Respond as a local coding agent. Produce a concrete plan with these "
             "sections: Understanding, Relevant Files, Proposed Changes, "
-            "Experiment/Test Commands, Risks, and Next Patch Step. If the request "
-            "needs paper content that is not present, ask for a link or downloaded "
-            "file instead of inventing details."
+            "Experiment/Test Commands, Risks, and Next Patch Step. The available "
+            "controlled local tools are agent-tool read-file, search-code, "
+            "run-command, check-patch, and apply-patch. If the request needs paper "
+            "content that is not present, ask for a link or downloaded file instead "
+            "of inventing details."
         )
 
     def _new_run_id(self) -> str:

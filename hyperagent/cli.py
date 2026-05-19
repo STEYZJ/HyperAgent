@@ -10,6 +10,7 @@ from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
+from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.workspace import HyperAgentWorkspace
@@ -203,6 +204,42 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_plan.add_argument("--max-context-chars", type=int, default=18000)
     agent_plan.add_argument("--max-files", type=int, default=20)
     agent_plan.add_argument("--max-preview-chars", type=int, default=1200)
+
+    agent_tool = subparsers.add_parser(
+        "agent-tool",
+        help="Run a controlled Claude-Code-like local tool",
+    )
+    agent_tool_sub = agent_tool.add_subparsers(dest="tool_command", required=True)
+
+    tool_read = agent_tool_sub.add_parser("read-file", help="Read a project text file")
+    tool_read.add_argument("--path", required=True)
+    tool_read.add_argument("--start-line", type=int, default=1)
+    tool_read.add_argument("--max-lines", type=int, default=200)
+    tool_read.add_argument("--run-id", default=None)
+    tool_read.add_argument("--json", action="store_true")
+
+    tool_search = agent_tool_sub.add_parser("search-code", help="Search text in project files")
+    tool_search.add_argument("--query", required=True)
+    tool_search.add_argument("--path", default=".")
+    tool_search.add_argument("--max-results", type=int, default=50)
+    tool_search.add_argument("--run-id", default=None)
+    tool_search.add_argument("--json", action="store_true")
+
+    tool_run = agent_tool_sub.add_parser("run-command", help="Run an allowlisted command")
+    tool_run.add_argument("--timeout-sec", type=int, default=60)
+    tool_run.add_argument("--run-id", default=None)
+    tool_run.add_argument("--json", action="store_true")
+    tool_run.add_argument("argv", nargs=argparse.REMAINDER)
+
+    tool_check_patch = agent_tool_sub.add_parser("check-patch", help="Validate a unified diff with git apply --check")
+    tool_check_patch.add_argument("--patch-file", required=True)
+    tool_check_patch.add_argument("--run-id", default=None)
+    tool_check_patch.add_argument("--json", action="store_true")
+
+    tool_apply_patch = agent_tool_sub.add_parser("apply-patch", help="Apply a unified diff through git apply")
+    tool_apply_patch.add_argument("--patch-file", required=True)
+    tool_apply_patch.add_argument("--run-id", default=None)
+    tool_apply_patch.add_argument("--json", action="store_true")
 
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
@@ -616,6 +653,60 @@ def main(argv: Optional[List[str]] = None) -> int:
         if run.warnings:
             for warning in run.warnings:
                 print(f"warning: {warning}")
+        return 0
+
+    if args.command == "agent-tool":
+        executor = SafeAgentToolExecutor(workspace.project_root, workspace.workspace_dir)
+        if args.tool_command == "read-file":
+            result = executor.read_file(
+                args.path,
+                start_line=args.start_line,
+                max_lines=args.max_lines,
+                run_id=args.run_id,
+            )
+        elif args.tool_command == "search-code":
+            result = executor.search_code(
+                args.query,
+                path=args.path,
+                max_results=args.max_results,
+                run_id=args.run_id,
+            )
+        elif args.tool_command == "run-command":
+            argv = [item for item in args.argv if item != "--"]
+            result = executor.run_command(
+                argv,
+                timeout_sec=args.timeout_sec,
+                run_id=args.run_id,
+            )
+        elif args.tool_command == "check-patch":
+            patch_text = Path(args.patch_file).read_text(encoding="utf-8")
+            result = executor.check_patch(patch_text, run_id=args.run_id)
+        elif args.tool_command == "apply-patch":
+            patch_text = Path(args.patch_file).read_text(encoding="utf-8")
+            result = executor.apply_patch(patch_text, run_id=args.run_id)
+        else:
+            raise ValueError(f"Unsupported agent tool: {args.tool_command}")
+        append_worklog(
+            "运行 Claude Code 式受控工具",
+            "受控工具执行器已实现。",
+            f"执行 tool={result.tool_name} status={result.status}。",
+            "工具调用必须有审计记录，方便后续 agent 回放和复现实验/代码修改过程。",
+            f"工具结果已写入 {result.artifact_path}。",
+            f"工具执行状态为 {result.status}。",
+            "下一步可由 agent 读取该工具结果，继续计划、补丁或测试流程。",
+        )
+        if args.json:
+            print_json(result.to_dict())
+        else:
+            print(f"tool: {result.tool_name}")
+            print(f"status: {result.status}")
+            print(f"artifact: {result.artifact_path}")
+            if result.exit_code is not None:
+                print(f"exit_code: {result.exit_code}")
+            for warning in result.warnings:
+                print(f"warning: {warning}")
+            if result.content:
+                print(result.content)
         return 0
 
     if args.command == "session-new":

@@ -1,6 +1,12 @@
 """Schema dataclasses exchanged between decoupled HyperAgent modules."""
 
-from hyperagent.schemas.agent import CodingAgentRun, RepoFileContext, RepoSnapshot
+from hyperagent.schemas.agent import (
+    AgentToolCall,
+    AgentToolResult,
+    CodingAgentRun,
+    RepoFileContext,
+    RepoSnapshot,
+)
 from hyperagent.schemas.dataset import DatasetAudit
 from hyperagent.schemas.conversation import (
     ConversationMessage,
@@ -49,6 +55,8 @@ __all__ = [
     "AblationStudy",
     "AblationVariant",
     "AgentTurnResult",
+    "AgentToolCall",
+    "AgentToolResult",
     "AutoExperimentAgenda",
     "CodingAgentRun",
     "ConversationMessage",

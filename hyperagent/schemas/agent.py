@@ -101,3 +101,55 @@ class CodingAgentRun:
             status=str(data.get("status", "planned")),
             warnings=[str(v) for v in data.get("warnings", [])],
         )
+
+
+@dataclass
+class AgentToolCall:
+    call_id: str
+    tool_name: str
+    args: Dict[str, Any] = field(default_factory=dict)
+    created_at: str = ""
+    run_id: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentToolCall":
+        return cls(
+            call_id=str(data["call_id"]),
+            tool_name=str(data["tool_name"]),
+            args=dict(data.get("args", {})),
+            created_at=str(data.get("created_at", "")),
+            run_id=None if data.get("run_id") is None else str(data.get("run_id")),
+        )
+
+
+@dataclass
+class AgentToolResult:
+    call_id: str
+    tool_name: str
+    status: str
+    created_at: str
+    content: str = ""
+    exit_code: Optional[int] = None
+    artifact_path: Optional[str] = None
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentToolResult":
+        return cls(
+            call_id=str(data["call_id"]),
+            tool_name=str(data["tool_name"]),
+            status=str(data["status"]),
+            created_at=str(data["created_at"]),
+            content=str(data.get("content", "")),
+            exit_code=(
+                None if data.get("exit_code") is None else int(data.get("exit_code"))
+            ),
+            artifact_path=data.get("artifact_path"),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
