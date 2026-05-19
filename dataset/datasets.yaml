@@ -1,0 +1,60 @@
+datasets:
+  Indian_pines:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/Indian_pines
+    files:
+      - Indian_pines_corrected.mat
+      - Indian_pines_gt.mat
+    source_url: "https://www.ehu.eus/ccwintco/index.php/Hyperspectral_Remote_Sensing_Scenes"
+    notes: "Common benchmark; use corrected cube plus ground-truth labels."
+  PaviaU:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/PaviaU
+    files:
+      - PaviaU.mat
+      - PaviaU_gt.mat
+    source_url: "https://www.ehu.eus/ccwintco/index.php/Hyperspectral_Remote_Sensing_Scenes"
+    notes: "University of Pavia benchmark."
+  Salinas:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/Salinas
+    files:
+      - Salinas_corrected.mat
+      - Salinas_gt.mat
+    source_url: "https://www.ehu.eus/ccwintco/index.php/Hyperspectral_Remote_Sensing_Scenes"
+    notes: "Use corrected cube plus ground-truth labels."
+  Houston:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/Houston
+    files:
+      - Houston.mat
+      - Houston_GT.mat
+    source_url: "https://hyperspectral.ee.uh.edu/?page_id=459"
+    notes: "IEEE GRSS Data Fusion Contest data; verify license and split protocol before redistribution."
+  WHU-Hi-HanChuan:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/WHU-Hi-HanChuan
+    files:
+      - WHU_Hi_HanChuan.mat
+      - WHU_Hi_HanChuan_gt.mat
+      - Training samples and test samples/
+    source_url: "http://rsidea.whu.edu.cn/resource_WHUHi_sharing.htm"
+    notes: "WHU-Hi benchmark with official train/test sample files."
+  WHU-Hi-HongHu:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/WHU-Hi-HongHu
+    files:
+      - WHU_Hi_HongHu.mat
+      - WHU_Hi_HongHu_gt.mat
+      - Training samples and test samples/
+    source_url: "http://rsidea.whu.edu.cn/resource_WHUHi_sharing.htm"
+    notes: "WHU-Hi benchmark with official train/test sample files."
+  WHU-Hi-LongKou:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/WHU-Hi-LongKou
+    files:
+      - WHU_Hi_LongKou.mat
+      - WHU_Hi_LongKou_gt.mat
+      - Training samples and test samples/
+    source_url: "http://rsidea.whu.edu.cn/resource_WHUHi_sharing.htm"
+    notes: "WHU-Hi benchmark with official train/test sample files."
+  Botswana:
+    local_example: /data2/lzj/lab/Mamba_test/dataset/Botswana
+    files:
+      - Botswana.mat
+      - Botswana_gt.mat
+    source_url: "https://www.ehu.eus/ccwintco/index.php/Hyperspectral_Remote_Sensing_Scenes"
+    notes: "Verify source mirror and citation before publication."

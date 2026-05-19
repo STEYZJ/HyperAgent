@@ -2,6 +2,16 @@ remote:
   name: origin
   url: git@github.com:STEYZJ/HyperAgent.git
 default_branch: main
+branch_policy:
+  protected_branch: main
+  task_branch_pattern: "task/<short-topic>"
+  stage_branch_pattern: "stage/<stage-name>"
+  experiment_branch_pattern: "experiment/<dataset-or-module>"
+  rules:
+    - keep main stable and pushable
+    - create a task branch before non-trivial implementation
+    - run tests before merging back to main
+    - delete merged short-lived branches after push/merge
 commit_policy:
   cadence: phase_or_task
   when:

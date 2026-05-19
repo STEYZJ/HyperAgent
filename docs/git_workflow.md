@@ -2,6 +2,46 @@
 
 HyperAgent uses Git by stage and task.
 
+## Branch Policy
+
+Keep `main` stable. Use short-lived branches for implementation:
+
+```text
+task/<short-topic>
+stage/<stage-name>
+experiment/<dataset-or-module>
+```
+
+Examples:
+
+```text
+task/mcp-client
+stage/hsi-agent-v2
+experiment/indian-pines-adapter
+```
+
+Default flow:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c task/<short-topic>
+# implement and test
+git add <files>
+git commit -m "task/<short-topic>: concise summary"
+git switch main
+git merge --ff-only task/<short-topic>
+git push origin main
+```
+
+For longer experimental work, push the branch first:
+
+```bash
+git push -u origin experiment/<dataset-or-module>
+```
+
+Do not develop directly on `main` for non-trivial changes unless the change is documentation-only or a small maintenance edit.
+
 ## Commit Cadence
 
 Commit after each coherent task or stage:
@@ -40,6 +80,12 @@ MPLCONFIGDIR=/tmp/matplotlib /home/lzj/miniconda3/envs/HyperAgent/bin/python -m 
 MPLCONFIGDIR=/tmp/matplotlib /home/lzj/miniconda3/envs/HyperAgent/bin/python -m unittest discover -s tests
 ```
 
+If dependencies changed, update the environment snapshot before committing:
+
+```bash
+bash scripts/update_environment_txt.sh HyperAgent environment.txt
+```
+
 ## What To Commit
 
 Commit:
@@ -48,7 +94,7 @@ Commit:
 - tests under `tests/`
 - stable configs under `configs/`
 - docs and prompt templates
-- `environment.yml`, `pyproject.toml`, `.gitignore`
+- `environment.yml`, `environment.txt`, `pyproject.toml`, `.gitignore`
 
 Do not commit:
 
@@ -57,4 +103,3 @@ Do not commit:
 - `reports/`
 - `__pycache__/`
 - temporary logs or cache files
-
