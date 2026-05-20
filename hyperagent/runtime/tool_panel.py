@@ -52,9 +52,9 @@ def render_action_run(run: AgentActionRun, max_chars: int = 1200) -> str:
     return "\n".join(lines)
 
 
-def render_tool_catalog(tool_names: Iterable[str]) -> str:
+def render_tool_catalog(tool_names: Iterable[str], title: str = "Available local tools") -> str:
     names: List[str] = list(tool_names)
-    lines = ["Available local tools:"]
+    lines = [title.rstrip(":") + ":"]
     lines.extend(f"- {name}" for name in names)
     return "\n".join(lines)
 

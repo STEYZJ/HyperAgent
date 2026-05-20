@@ -52,6 +52,10 @@ EXISTING_COMMANDS = {
     "prompt-list",
     "prompt-render",
     "materialize-module",
+    "language-list",
+    "language-set",
+    "language-install",
+    "language-export",
     "hyperagent-commands",
 }
 
@@ -72,70 +76,72 @@ BOOLEAN_FLAGS = {
 def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
     """Translate `HyperAgent ...` shorthand into the canonical CLI argv."""
 
-    args = list(argv)
+    global_options, args = _extract_global_options(list(argv))
     if not args:
-        return ["repl"]
+        return global_options + ["repl"]
 
     first = args[0]
     if first in {"-h", "--help", "help"}:
-        return ["hyperagent-commands"]
+        return global_options + ["hyperagent-commands"]
     if first == "plan" and not _contains_flag(args[1:], "--audit"):
-        return _prompt_command("agent-plan", "--instruction", args[1:])
+        return global_options + _prompt_command("agent-plan", "--instruction", args[1:])
     if first in EXISTING_COMMANDS:
-        return args
+        return global_options + args
     if first.startswith("/") and len(first) > 1:
-        return _normalize_slash_command(first[1:], args[1:])
+        return global_options + _normalize_slash_command(first[1:], args[1:])
 
     alias = first.lower()
     rest = args[1:]
     if alias in {"chat", "ask"}:
-        return _prompt_command("agent-chat", "--message", rest)
+        return global_options + _prompt_command("agent-chat", "--message", rest)
     if alias == "research":
-        return _prompt_command("agent-chat", "--message", rest, defaults=["--mode", "research"])
+        return global_options + _prompt_command("agent-chat", "--message", rest, defaults=["--mode", "research"])
     if alias == "algorithm":
-        return _prompt_command("agent-chat", "--message", rest, defaults=["--mode", "algorithm"])
+        return global_options + _prompt_command("agent-chat", "--message", rest, defaults=["--mode", "algorithm"])
     if alias in {"plan", "code"}:
-        return _prompt_command("agent-plan", "--instruction", rest)
+        return global_options + _prompt_command("agent-plan", "--instruction", rest)
     if alias in {"act", "do"}:
-        return _prompt_command("agent-act", "--message", rest)
+        return global_options + _prompt_command("agent-act", "--message", rest)
     if alias == "send":
-        return _prompt_command(
+        return global_options + _prompt_command(
             "llm-send",
             "--user",
             rest,
             defaults=_default_provider(rest),
         )
     if alias == "dry":
-        return _prompt_command(
+        return global_options + _prompt_command(
             "llm-dry-run",
             "--user",
             rest,
             defaults=_default_provider(rest),
         )
     if alias == "sessions":
-        return ["session-list"] + rest
+        return global_options + ["session-list"] + rest
     if alias == "resume":
-        return _resume_command(rest)
+        return global_options + _resume_command(rest)
     if alias == "compact":
-        return _compact_command(rest)
+        return global_options + _compact_command(rest)
     if alias == "mcp":
-        return ["mcp-list"] + rest
+        return global_options + ["mcp-list"] + rest
     if alias in {"skills", "skill"}:
-        return ["skill-list"] + rest
+        return global_options + ["skill-list"] + rest
     if alias in {"prompts", "prompt"}:
-        return ["prompt-list"] + rest
+        return global_options + ["prompt-list"] + rest
     if alias == "model":
-        return ["llm-providers"] + rest
+        return global_options + ["llm-providers"] + rest
     if alias in {"reasonix", "deepseek"}:
-        return ["llm-profile"] + rest
+        return global_options + ["llm-profile"] + rest
     if alias == "usage":
-        return ["llm-usage"] + rest
+        return global_options + ["llm-usage"] + rest
+    if alias == "language":
+        return global_options + ["language-list"] + rest
 
-    return _prompt_command("agent-chat", "--message", args)
+    return global_options + _prompt_command("agent-chat", "--message", args)
 
 
-def command_help_text() -> str:
-    return """HyperAgent command format
+def command_help_text(translator=None) -> str:
+    default = """HyperAgent command format
 
 Use the Claude-Code-like launcher:
   HyperAgent "analyze the latest HSI result and propose the next experiment"
@@ -170,6 +176,9 @@ Canonical commands remain available:
   HyperAgent demo --synthetic
   HyperAgent run-suite --config configs/experiment.yaml --seeds 42,43,44
 """
+    if translator is None:
+        return default
+    return translator.t("launcher.help", default=default)
 
 
 def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
@@ -200,6 +209,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["skill-list"] + list(rest)
     if alias in {"prompts", "prompt"}:
         return ["prompt-list"] + list(rest)
+    if alias == "language":
+        return ["language-list"] + list(rest)
     if alias in {"chat", "ask"}:
         return _prompt_command("agent-chat", "--message", rest)
     if alias == "plan":
@@ -207,6 +218,32 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias in {"act", "do"}:
         return _prompt_command("agent-act", "--message", rest)
     return _prompt_command("agent-chat", "--message", ["/" + command] + list(rest))
+
+
+def _extract_global_options(args: List[str]) -> Tuple[List[str], List[str]]:
+    global_options: List[str] = []
+    remaining: List[str] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            remaining.extend(args[index:])
+            break
+        if token == "--lang":
+            global_options.append(token)
+            if index + 1 < len(args):
+                global_options.append(args[index + 1])
+                index += 2
+            else:
+                index += 1
+            continue
+        if token.startswith("--lang="):
+            global_options.append(token)
+            index += 1
+            continue
+        remaining.append(token)
+        index += 1
+    return global_options, remaining
 
 
 def _prompt_command(

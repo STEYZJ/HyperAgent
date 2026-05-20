@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -26,6 +27,7 @@ from hyperagent.runtime.deepseek_reasonix import (
     list_reasonix_profiles,
     reasonix_cache_guidance,
 )
+from hyperagent.runtime.i18n import I18nStore, Translator
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore, LLMRequestBuilder
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.mcp import MCPServerStore
@@ -53,16 +55,45 @@ DEFAULT_DATASET_ROOT = "/data2/lzj/lab/Mamba_test/dataset"
 PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="HyperAgent HSI research workflow")
+def _txt(translator: Optional[Translator], key: str, default: str) -> str:
+    return translator.t(key, default=default) if translator is not None else default
+
+
+def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=_txt(
+            translator,
+            "cli.description",
+            "HyperAgent HSI research workflow",
+        )
+    )
+    parser.add_argument(
+        "--lang",
+        default=None,
+        help=_txt(
+            translator,
+            "cli.lang.help",
+            "Interface language, for example zh-CN or en.",
+        ),
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    audit = subparsers.add_parser("audit", help="Inspect an HSI dataset")
+    audit = subparsers.add_parser(
+        "audit",
+        help=_txt(translator, "cli.command.audit.help", "Inspect an HSI dataset"),
+    )
     audit.add_argument("--data-root", required=True)
     audit.add_argument("--output", required=True)
     audit.add_argument("--reader", default=None)
 
-    plan = subparsers.add_parser("plan", help="Build an experiment plan from an audit")
+    plan = subparsers.add_parser(
+        "plan",
+        help=_txt(
+            translator,
+            "cli.command.plan.help",
+            "Build an experiment plan from an audit",
+        ),
+    )
     plan.add_argument("--audit", required=True)
     plan.add_argument("--output", required=True)
     plan.add_argument("--output-dir", default=None)
@@ -115,8 +146,21 @@ def _build_parser() -> argparse.ArgumentParser:
     init.add_argument("--default-provider", default="arxiv")
     init.add_argument("--default-year-from", type=int, default=2024)
 
-    status = subparsers.add_parser("status", help="Show HyperAgent workspace status")
-    status.add_argument("--json", action="store_true")
+    status_help = _txt(
+        translator,
+        "cli.command.status.help",
+        "Show HyperAgent workspace status",
+    )
+    status = subparsers.add_parser(
+        "status",
+        help=status_help,
+        description=status_help,
+    )
+    status.add_argument(
+        "--json",
+        action="store_true",
+        help=_txt(translator, "cli.arg.status_json.help", "Print status as JSON."),
+    )
 
     task_create = subparsers.add_parser("task-create", help="Create a research task")
     task_create.add_argument("--goal", required=True)
@@ -222,7 +266,7 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_dry.add_argument("--user", required=True)
     llm_dry.add_argument("--temperature", type=float, default=0.2)
     llm_dry.add_argument("--max-tokens", type=int, default=None)
-    add_llm_runtime_args(llm_dry)
+    add_llm_runtime_args(llm_dry, translator)
 
     llm_send = subparsers.add_parser("llm-send", help="Send a prompt to a configured LLM provider")
     llm_send.add_argument("--provider", required=True)
@@ -231,7 +275,7 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_send.add_argument("--user", required=True)
     llm_send.add_argument("--temperature", type=float, default=0.2)
     llm_send.add_argument("--max-tokens", type=int, default=None)
-    add_llm_runtime_args(llm_send)
+    add_llm_runtime_args(llm_send, translator)
     llm_send.add_argument("--output", default=None)
 
     agent_chat = subparsers.add_parser(
@@ -251,56 +295,138 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_chat.add_argument("--task-id", default=None)
     agent_chat.add_argument("--temperature", type=float, default=0.2)
     agent_chat.add_argument("--max-tokens", type=int, default=None)
-    add_llm_runtime_args(agent_chat)
+    add_llm_runtime_args(agent_chat, translator)
     agent_chat.add_argument("--max-context-chars", type=int, default=12000)
     agent_chat.add_argument("--no-auto-compress", action="store_true")
     agent_chat.add_argument("--output", default=None)
 
     repl = subparsers.add_parser(
         "repl",
-        help="Start an interactive Claude-Code-like HyperAgent REPL",
+        help=_txt(
+            translator,
+            "cli.command.repl.help",
+            "Start an interactive Claude-Code-like HyperAgent REPL",
+        ),
+        description=_txt(
+            translator,
+            "cli.command.repl.help",
+            "Start an interactive Claude-Code-like HyperAgent REPL",
+        ),
     )
-    repl.add_argument("--session-id", default=None)
-    repl.add_argument("--new-title", default=None)
-    repl.add_argument("--provider", default="deepseek")
-    repl.add_argument("--model", default=None)
+    repl.add_argument(
+        "--session-id",
+        default=None,
+        help=_txt(translator, "cli.arg.session_id.help", "Conversation session id to resume."),
+    )
+    repl.add_argument(
+        "--new-title",
+        default=None,
+        help=_txt(translator, "cli.arg.new_title.help", "Title for a new conversation session."),
+    )
+    repl.add_argument(
+        "--provider",
+        default="deepseek",
+        help=_txt(translator, "cli.arg.provider.help", "LLM provider name."),
+    )
+    repl.add_argument(
+        "--model",
+        default=None,
+        help=_txt(translator, "cli.arg.model.help", "Provider model name."),
+    )
     repl.add_argument(
         "--mode",
         choices=["research", "code", "algorithm"],
         default="research",
+        help=_txt(translator, "cli.arg.mode.help", "Agent working mode."),
     )
-    repl.add_argument("--task-id", default=None)
+    repl.add_argument(
+        "--task-id",
+        default=None,
+        help=_txt(translator, "cli.arg.task_id.help", "Optional research task id."),
+    )
     repl.add_argument(
         "--permission",
         choices=["auto", "ask", "session-ask", "deny-write", "deny"],
         default="ask",
+        help=_txt(translator, "cli.arg.permission.help", "Tool permission policy."),
     )
-    repl.add_argument("--max-context-chars", type=int, default=12000)
-    repl.add_argument("--keep-last", type=int, default=6)
-    add_llm_runtime_args(repl)
+    repl.add_argument(
+        "--max-context-chars",
+        type=int,
+        default=12000,
+        help=_txt(translator, "cli.arg.max_context_chars.help", "Maximum context characters before compression."),
+    )
+    repl.add_argument(
+        "--keep-last",
+        type=int,
+        default=6,
+        help=_txt(translator, "cli.arg.keep_last.help", "Messages kept verbatim during context compression."),
+    )
+    add_llm_runtime_args(repl, translator)
 
     tui = subparsers.add_parser(
         "tui",
-        help="Start the fullscreen curses HyperAgent interface",
+        help=_txt(
+            translator,
+            "cli.command.tui.help",
+            "Start the fullscreen curses HyperAgent interface",
+        ),
+        description=_txt(
+            translator,
+            "cli.command.tui.help",
+            "Start the fullscreen curses HyperAgent interface",
+        ),
     )
-    tui.add_argument("--session-id", default=None)
-    tui.add_argument("--new-title", default=None)
-    tui.add_argument("--provider", default="deepseek")
-    tui.add_argument("--model", default=None)
+    tui.add_argument(
+        "--session-id",
+        default=None,
+        help=_txt(translator, "cli.arg.session_id.help", "Conversation session id to resume."),
+    )
+    tui.add_argument(
+        "--new-title",
+        default=None,
+        help=_txt(translator, "cli.arg.new_title.help", "Title for a new conversation session."),
+    )
+    tui.add_argument(
+        "--provider",
+        default="deepseek",
+        help=_txt(translator, "cli.arg.provider.help", "LLM provider name."),
+    )
+    tui.add_argument(
+        "--model",
+        default=None,
+        help=_txt(translator, "cli.arg.model.help", "Provider model name."),
+    )
     tui.add_argument(
         "--mode",
         choices=["research", "code", "algorithm"],
         default="research",
+        help=_txt(translator, "cli.arg.mode.help", "Agent working mode."),
     )
-    tui.add_argument("--task-id", default=None)
+    tui.add_argument(
+        "--task-id",
+        default=None,
+        help=_txt(translator, "cli.arg.task_id.help", "Optional research task id."),
+    )
     tui.add_argument(
         "--permission",
         choices=["auto", "ask", "session-ask", "deny-write", "deny"],
         default="session-ask",
+        help=_txt(translator, "cli.arg.permission.help", "Tool permission policy."),
     )
-    tui.add_argument("--max-context-chars", type=int, default=12000)
-    tui.add_argument("--keep-last", type=int, default=6)
-    add_llm_runtime_args(tui)
+    tui.add_argument(
+        "--max-context-chars",
+        type=int,
+        default=12000,
+        help=_txt(translator, "cli.arg.max_context_chars.help", "Maximum context characters before compression."),
+    )
+    tui.add_argument(
+        "--keep-last",
+        type=int,
+        default=6,
+        help=_txt(translator, "cli.arg.keep_last.help", "Messages kept verbatim during context compression."),
+    )
+    add_llm_runtime_args(tui, translator)
 
     agent_context = subparsers.add_parser(
         "agent-context",
@@ -329,7 +455,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_plan.add_argument("--task-id", default=None)
     agent_plan.add_argument("--temperature", type=float, default=0.2)
     agent_plan.add_argument("--max-tokens", type=int, default=None)
-    add_llm_runtime_args(agent_plan)
+    add_llm_runtime_args(agent_plan, translator)
     agent_plan.add_argument("--max-context-chars", type=int, default=18000)
     agent_plan.add_argument("--max-files", type=int, default=20)
     agent_plan.add_argument("--max-preview-chars", type=int, default=1200)
@@ -347,7 +473,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_act.add_argument("--max-steps", type=int, default=3)
     agent_act.add_argument("--temperature", type=float, default=0.2)
     agent_act.add_argument("--max-tokens", type=int, default=None)
-    add_llm_runtime_args(agent_act)
+    add_llm_runtime_args(agent_act, translator)
     agent_act.add_argument("--max-files", type=int, default=12)
     agent_act.add_argument("--max-preview-chars", type=int, default=1000)
     agent_act.add_argument(
@@ -377,7 +503,7 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["ask", "session-ask", "deny-write", "deny"],
         default="session-ask",
     )
-    add_llm_runtime_args(agent_run)
+    add_llm_runtime_args(agent_run, translator)
 
     agent_tool = subparsers.add_parser(
         "agent-tool",
@@ -497,6 +623,66 @@ def _build_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--ablation-output", default=None)
     materialize.add_argument("--force", action="store_true")
 
+    language_list = subparsers.add_parser(
+        "language-list",
+        help=_txt(
+            translator,
+            "cli.command.language_list.help",
+            "List installed HyperAgent language packs",
+        ),
+    )
+    language_list.add_argument(
+        "--json",
+        action="store_true",
+        help=_txt(translator, "cli.arg.language_json.help", "Print language information as JSON."),
+    )
+
+    language_set = subparsers.add_parser(
+        "language-set",
+        help=_txt(
+            translator,
+            "cli.command.language_set.help",
+            "Set the workspace default interface language",
+        ),
+    )
+    language_set.add_argument(
+        "locale",
+        help=_txt(translator, "cli.arg.language_locale.help", "Locale code such as zh-CN or en."),
+    )
+
+    language_install = subparsers.add_parser(
+        "language-install",
+        help=_txt(
+            translator,
+            "cli.command.language_install.help",
+            "Install a local JSON language pack",
+        ),
+    )
+    language_install.add_argument(
+        "--path",
+        required=True,
+        help=_txt(translator, "cli.arg.language_path.help", "Path to a JSON language pack."),
+    )
+
+    language_export = subparsers.add_parser(
+        "language-export",
+        help=_txt(
+            translator,
+            "cli.command.language_export.help",
+            "Export a language pack template",
+        ),
+    )
+    language_export.add_argument(
+        "--locale",
+        required=True,
+        help=_txt(translator, "cli.arg.language_locale.help", "Locale code such as zh-CN or en."),
+    )
+    language_export.add_argument(
+        "--output",
+        required=True,
+        help=_txt(translator, "cli.arg.language_output.help", "Output path."),
+    )
+
     subparsers.add_parser(
         "hyperagent-commands",
         help="Show Claude-Code-like HyperAgent command aliases",
@@ -506,10 +692,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args = _build_parser().parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
     load_env_file(Path(".env"), override=False)
-    agent = CoordinatorAgent()
     workspace = HyperAgentWorkspace()
+    i18n_store = I18nStore(workspace.project_root, workspace.workspace_dir)
+    translator = i18n_store.translator(i18n_store.resolve_locale(raw_argv))
+    args = _build_parser(translator).parse_args(raw_argv)
+    translator = i18n_store.translator(args.lang or translator.locale)
+    agent = CoordinatorAgent()
     llm_store = LLMProviderStore(workspace.workspace_dir)
     session_store = ConversationStore(workspace.workspace_dir)
     mcp_store = MCPServerStore(workspace.workspace_dir)
@@ -538,7 +728,58 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "hyperagent-commands":
-        print(command_help_text())
+        print(command_help_text(translator))
+        return 0
+
+    if args.command == "language-list":
+        packs = i18n_store.list_packs()
+        current = i18n_store.resolve_locale(raw_argv)
+        if args.json:
+            print_json(
+                {
+                    "current_locale": current,
+                    "languages": [
+                        {
+                            "locale": pack.locale,
+                            "source": pack.source,
+                            "path": pack.path,
+                            "key_count": len(pack.translations),
+                        }
+                        for pack in packs
+                    ],
+                }
+            )
+        else:
+            print(f"{translator.t('cli.output.current_locale', default='current_locale')}: {current}")
+            for pack in packs:
+                marker = "*" if pack.locale == current else " "
+                print(f"{marker} {pack.locale}\t{pack.source}\t{pack.path}")
+        return 0
+
+    if args.command == "language-set":
+        path = i18n_store.set_workspace_locale(args.locale)
+        print(
+            f"{translator.t('cli.output.language_set', default='language set')}: "
+            f"{args.locale}"
+        )
+        print(f"config: {path}")
+        return 0
+
+    if args.command == "language-install":
+        pack = i18n_store.install(Path(args.path))
+        print(
+            f"{translator.t('cli.output.language_installed', default='language installed')}: "
+            f"{pack.locale}"
+        )
+        print(f"path: {pack.path}")
+        return 0
+
+    if args.command == "language-export":
+        path = i18n_store.export(args.locale, Path(args.output))
+        print(
+            f"{translator.t('cli.output.language_exported', default='language exported')}: "
+            f"{path}"
+        )
         return 0
 
     if args.command == "status":
@@ -546,11 +787,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(status.to_dict())
         else:
-            print(f"initialized: {status.initialized}")
-            print(f"workspace: {status.workspace_dir}")
-            print(f"dataset_root: {status.dataset_root}")
-            print(f"tasks: {status.task_count}")
-            print(f"tasks_by_status: {status.tasks_by_status}")
+            print(f"{translator.t('cli.output.initialized', default='initialized')}: {status.initialized}")
+            print(f"{translator.t('cli.output.workspace', default='workspace')}: {status.workspace_dir}")
+            print(f"{translator.t('cli.output.dataset_root', default='dataset_root')}: {status.dataset_root}")
+            print(f"{translator.t('cli.output.tasks', default='tasks')}: {status.task_count}")
+            print(f"{translator.t('cli.output.tasks_by_status', default='tasks_by_status')}: {status.tasks_by_status}")
         return 0
 
     if args.command == "task-create":
@@ -915,6 +1156,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             conversations=session_store,
             providers=llm_store,
             prompt_library=prompt_library,
+            translator=translator,
             provider=args.provider,
             model=resolve_llm_model(args),
             mode=args.mode,
@@ -944,6 +1186,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             conversations=session_store,
             providers=llm_store,
             prompt_library=prompt_library,
+            translator=translator,
             provider=args.provider,
             model=resolve_llm_model(args),
             mode=args.mode,
@@ -1624,40 +1867,72 @@ def parse_int_list(value: str) -> List[int]:
     return [int(part.strip()) for part in value.split(",") if part.strip()]
 
 
-def add_llm_runtime_args(parser: argparse.ArgumentParser) -> None:
+def add_llm_runtime_args(
+    parser: argparse.ArgumentParser,
+    translator: Optional[Translator] = None,
+) -> None:
     parser.add_argument(
         "--reasonix-profile",
         choices=["reasonix-cheap", "reasonix-balanced", "reasonix-deep"],
         default=None,
-        help="DeepSeek Reasonix-inspired runtime preset.",
+        help=_txt(
+            translator,
+            "cli.arg.reasonix_profile.help",
+            "DeepSeek Reasonix-inspired runtime preset.",
+        ),
     )
-    parser.add_argument("--top-p", type=float, default=None)
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=None,
+        help=_txt(translator, "cli.arg.top_p.help", "Nucleus sampling top-p value."),
+    )
     parser.add_argument(
         "--thinking",
         choices=["enabled", "disabled"],
         default=None,
-        help="DeepSeek thinking mode switch for supported models.",
+        help=_txt(
+            translator,
+            "cli.arg.thinking.help",
+            "DeepSeek thinking mode switch for supported models.",
+        ),
     )
     parser.add_argument(
         "--reasoning-effort",
         choices=["low", "medium", "high", "xhigh", "max"],
         default=None,
-        help="Reasoning strength for providers that support it.",
+        help=_txt(
+            translator,
+            "cli.arg.reasoning_effort.help",
+            "Reasoning strength for providers that support it.",
+        ),
     )
     parser.add_argument(
         "--json-output",
         action="store_true",
-        help="Request JSON-object output when the provider supports response_format.",
+        help=_txt(
+            translator,
+            "cli.arg.json_output.help",
+            "Request JSON-object output when the provider supports response_format.",
+        ),
     )
     parser.add_argument(
         "--extra-body-json",
         default=None,
-        help="Raw JSON object merged into the provider request body.",
+        help=_txt(
+            translator,
+            "cli.arg.extra_body_json.help",
+            "Raw JSON object merged into the provider request body.",
+        ),
     )
     parser.add_argument(
         "--user-id",
         default=None,
-        help="Optional provider-side user identifier, separate from the prompt text.",
+        help=_txt(
+            translator,
+            "cli.arg.user_id.help",
+            "Optional provider-side user identifier, separate from the prompt text.",
+        ),
     )
 
 

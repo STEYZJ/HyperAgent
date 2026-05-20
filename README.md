@@ -1,5 +1,7 @@
 # HyperAgent
 
+[中文文档](README.zh-CN.md)
+
 HyperAgent is a decoupled MVP framework for hyperspectral image classification research workflows.
 
 The first version focuses on a reproducible loop:

@@ -10,6 +10,7 @@ from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.general_agent import GeneralAgentRunner
+from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
@@ -60,6 +61,7 @@ class HyperAgentRepl:
         max_context_chars: int = 12000,
         keep_last: int = 6,
         llm_kwargs: Optional[Dict[str, object]] = None,
+        translator: Optional[Translator] = None,
         input_func: InputFunc = input,
         output_func: OutputFunc = print,
         wait_indicator_factory: Optional[WaitIndicatorFactory] = None,
@@ -76,6 +78,7 @@ class HyperAgentRepl:
         self.max_context_chars = max_context_chars
         self.keep_last = keep_last
         self.llm_kwargs = dict(llm_kwargs or {})
+        self.translator = translator
         self.input = input_func
         self.output = output_func
         self.wait_indicator_factory = wait_indicator_factory
@@ -102,14 +105,14 @@ class HyperAgentRepl:
 
     def handle_line(self, line: str) -> bool:
         if line in {"/exit", "/quit", "exit", "quit"}:
-            self.output("bye")
+            self.output(self._t("repl.bye", "bye"))
             return False
         try:
             if line.startswith("/"):
                 return self._handle_command(line)
             self._chat(line)
         except Exception as exc:
-            self.output(f"error: {exc}")
+            self.output(self._t("repl.error", "error: {error}", error=exc))
         return True
 
     def _ensure_session(
@@ -124,11 +127,16 @@ class HyperAgentRepl:
         return self.conversations.new(title).session_id
 
     def _banner(self) -> str:
-        return (
-            "HyperAgent interactive mode\n"
-            f"session: {self.session_id}\n"
-            f"provider: {self.provider}\n"
-            "type /help for commands, /exit to quit"
+        return self._t(
+            "repl.banner",
+            (
+                "HyperAgent interactive mode\n"
+                "session: {session_id}\n"
+                "provider: {provider}\n"
+                "type /help for commands, /exit to quit"
+            ),
+            session_id=self.session_id,
+            provider=self.provider,
         )
 
     def _handle_command(self, line: str) -> bool:
@@ -184,7 +192,12 @@ class HyperAgentRepl:
         elif command in {"/skills", "/skill"}:
             self._skills()
         elif command == "/tools":
-            self.output(render_tool_catalog(self._tool_names()))
+            self.output(
+                render_tool_catalog(
+                    self._tool_names(),
+                    title=self._t("tool.catalog.title", "Available local tools"),
+                )
+            )
         elif command == "/tool":
             self._manual_tool(args)
         elif command == "/act":
@@ -194,7 +207,13 @@ class HyperAgentRepl:
         elif command in {"/exit", "/quit"}:
             return False
         else:
-            self.output(f"unknown command: {command}")
+            self.output(
+                self._t(
+                    "repl.unknown_command",
+                    "unknown command: {command}",
+                    command=command,
+                )
+            )
         return True
 
     def _chat(self, message: str) -> None:
@@ -669,10 +688,15 @@ class HyperAgentRepl:
         if self.permission_policy not in {"ask", "session-ask"}:
             return True
         self.output(
-            f"permission requested: {request.tool_name} "
-            f"risk={request.risk_level} reason={request.reason}"
+            self._t(
+                "repl.permission_requested",
+                "permission requested: {tool_name} risk={risk_level} reason={reason}",
+                tool_name=request.tool_name,
+                risk_level=request.risk_level,
+                reason=request.reason,
+            )
         )
-        answer = self.input("allow? [y/N] ").strip().lower()
+        answer = self.input(self._t("repl.allow_prompt", "allow? [y/N] ")).strip().lower()
         return answer in {"y", "yes"}
 
     def _tool_names(self) -> List[str]:
@@ -690,7 +714,9 @@ class HyperAgentRepl:
         )
 
     def _help(self) -> str:
-        return (
+        return self._t(
+            "repl.help",
+            (
             "HyperAgent REPL commands:\n"
             "/help                 show commands\n"
             "/status               show workspace status\n"
@@ -721,4 +747,13 @@ class HyperAgentRepl:
             "/act <instruction>    run controlled LLM tool loop\n"
             "/exit                 quit\n"
             "Plain text sends a persistent agent-chat turn."
+            ),
         )
+
+    def _t(self, key: str, default: str, **kwargs) -> str:
+        if self.translator is None:
+            try:
+                return default.format(**kwargs)
+            except (KeyError, ValueError):
+                return default
+        return self.translator.t(key, default=default, **kwargs)

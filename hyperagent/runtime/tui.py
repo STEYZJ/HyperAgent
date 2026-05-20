@@ -6,6 +6,7 @@ import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
@@ -55,6 +56,7 @@ class HyperAgentTui:
         max_context_chars: int = 12000,
         keep_last: int = 6,
         llm_kwargs: Optional[Dict[str, object]] = None,
+        translator: Optional[Translator] = None,
     ) -> None:
         self.workspace = workspace
         self.conversations = conversations
@@ -70,6 +72,7 @@ class HyperAgentTui:
         self.max_context_chars = max_context_chars
         self.keep_last = keep_last
         self.llm_kwargs = dict(llm_kwargs or {})
+        self.translator = translator
         self.lines: List[str] = []
         self.stdscr = None
         self.repl: Optional[HyperAgentRepl] = None
@@ -84,7 +87,12 @@ class HyperAgentTui:
 
     def run(self) -> int:
         if curses is None:
-            print("error: Python curses module is not available on this platform.")
+            print(
+                self._t(
+                    "tui.curses_missing",
+                    "error: Python curses module is not available on this platform.",
+                )
+            )
             return 2
         return curses.wrapper(self._run)
 
@@ -116,6 +124,7 @@ class HyperAgentTui:
             max_context_chars=self.max_context_chars,
             keep_last=self.keep_last,
             llm_kwargs=self.llm_kwargs,
+            translator=self.translator,
             input_func=self._prompt_dialog,
             output_func=self._append_output,
             wait_indicator_factory=lambda: TuiWaitIndicator(self),
@@ -259,7 +268,10 @@ class HyperAgentTui:
             self._addstr(
                 1,
                 panel_x,
-                self._clip_to_width("Agent/Tool Panel", panel_width),
+                self._clip_to_width(
+                    self._t("tui.panel.title", "Agent/Tool Panel"),
+                    panel_width,
+                ),
                 curses.A_BOLD,
             )
             panel_lines = self._wrap_lines(self._panel_lines(), panel_width)
@@ -296,14 +308,14 @@ class HyperAgentTui:
             f"model: {self.model or 'profile/default'}",
             f"reasoning: {reasoning}",
             "",
-            "recent artifacts:",
+            self._t("tui.panel.recent_artifacts", "recent artifacts:"),
         ]
         artifact_lines = [
             line
             for line in self.lines[-80:]
             if "artifact:" in line or "agent_run:" in line or "action_run:" in line
         ]
-        lines.extend(artifact_lines[-10:] or ["none"])
+        lines.extend(artifact_lines[-10:] or [self._t("tui.panel.none", "none")])
         return lines
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
@@ -596,3 +608,11 @@ class HyperAgentTui:
         self.wait_status = text
         if self.stdscr is not None:
             self._draw()
+
+    def _t(self, key: str, default: str, **kwargs) -> str:
+        if self.translator is None:
+            try:
+                return default.format(**kwargs)
+            except (KeyError, ValueError):
+                return default
+        return self.translator.t(key, default=default, **kwargs)

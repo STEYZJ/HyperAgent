@@ -43,6 +43,16 @@ class HyperAgentLauncherTest(unittest.TestCase):
             ],
         )
 
+    def test_global_lang_option_is_preserved_before_normalized_command(self):
+        self.assertEqual(
+            normalize_hyperagent_args(["--lang", "en", "/status"]),
+            ["--lang", "en", "status"],
+        )
+        self.assertEqual(
+            normalize_hyperagent_args(["--lang=zh-CN", "hello"]),
+            ["--lang=zh-CN", "agent-chat", "--message", "hello"],
+        )
+
     def test_plan_alias_does_not_break_canonical_experiment_plan(self):
         self.assertEqual(
             normalize_hyperagent_args(["plan", "implement", "module"]),
@@ -58,6 +68,7 @@ class HyperAgentLauncherTest(unittest.TestCase):
         self.assertEqual(normalize_hyperagent_args(["/model"]), ["llm-providers"])
         self.assertEqual(normalize_hyperagent_args(["/reasonix"]), ["llm-profile"])
         self.assertEqual(normalize_hyperagent_args(["/usage"]), ["llm-usage"])
+        self.assertEqual(normalize_hyperagent_args(["/language"]), ["language-list"])
         self.assertEqual(normalize_hyperagent_args(["/repl"]), ["repl"])
         self.assertEqual(normalize_hyperagent_args(["/tui"]), ["tui"])
         self.assertEqual(
@@ -80,8 +91,8 @@ class HyperAgentLauncherTest(unittest.TestCase):
             finally:
                 os.chdir(old_cwd)
         output = buffer.getvalue()
-        self.assertIn("HyperAgent command format", output)
-        self.assertIn('HyperAgent "analyze the latest HSI result', output)
+        self.assertIn("HyperAgent 命令格式", output)
+        self.assertIn('HyperAgent "分析最新 HSI 实验结果', output)
 
 
 if __name__ == "__main__":
