@@ -45,6 +45,17 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertEqual(tui._clamp_scroll_offset(100, line_count=10, viewport_height=3), 7)
         self.assertEqual(tui._clamp_scroll_offset(-5, line_count=10, viewport_height=3), 0)
 
+    def test_mouse_scroll_delta_supports_wheel_down_fallback(self):
+        tui = self._tui()
+        button4_pressed = 2 << 15
+        button5_pressed = 2 << 20
+        button5_clicked = 4 << 20
+
+        self.assertEqual(tui._mouse_scroll_delta(button4_pressed), 3)
+        self.assertEqual(tui._mouse_scroll_delta(button5_pressed), -3)
+        self.assertEqual(tui._mouse_scroll_delta(button5_clicked), -3)
+        self.assertEqual(tui._mouse_scroll_delta(0), 0)
+
     def test_tui_history_persists_only_main_commands(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

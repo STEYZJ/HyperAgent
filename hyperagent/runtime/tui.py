@@ -93,7 +93,12 @@ class HyperAgentTui:
         curses.curs_set(1)
         stdscr.keypad(True)
         try:
-            curses.mousemask(curses.ALL_MOUSE_EVENTS)
+            mouse_mask = curses.ALL_MOUSE_EVENTS | getattr(
+                curses,
+                "REPORT_MOUSE_POSITION",
+                0,
+            )
+            curses.mousemask(mouse_mask)
         except curses.error:
             pass
         self.repl = HyperAgentRepl(
@@ -364,13 +369,7 @@ class HyperAgentTui:
             _, x, _, _, state = curses.getmouse()
         except curses.error:
             return
-        button4 = getattr(curses, "BUTTON4_PRESSED", 0)
-        button5 = getattr(curses, "BUTTON5_PRESSED", 0)
-        delta = 0
-        if state & button4:
-            delta = 3
-        elif state & button5:
-            delta = -3
+        delta = self._mouse_scroll_delta(state)
         if delta == 0:
             return
         _, width = self.stdscr.getmaxyx()
@@ -380,6 +379,24 @@ class HyperAgentTui:
             self.panel_scroll_offset += delta
         else:
             self.main_scroll_offset += delta
+
+    def _mouse_scroll_delta(self, state: int) -> int:
+        if state & self._mouse_button_event_mask(4):
+            return 3
+        if state & self._mouse_button_event_mask(5):
+            return -3
+        return 0
+
+    def _mouse_button_event_mask(self, button: int) -> int:
+        # ncurses stores five event bits per button. Python builds may omit
+        # BUTTON5_* constants even though terminals still report wheel-down.
+        event_bits_without_release = 0b11110
+        mask = event_bits_without_release << ((button - 1) * 5)
+        if curses is not None:
+            pressed = getattr(curses, f"BUTTON{button}_PRESSED", None)
+            if pressed:
+                mask |= int(pressed)
+        return mask
 
     def _history_path(self) -> Optional[Path]:
         workspace_dir = getattr(self.workspace, "workspace_dir", None)
