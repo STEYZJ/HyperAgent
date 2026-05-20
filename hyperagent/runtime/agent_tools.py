@@ -1,8 +1,9 @@
 """Controlled local tools for Claude-Code-like agent workflows."""
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence
 from uuid import uuid4
 
 from hyperagent.core.io import write_json
@@ -28,13 +29,30 @@ ALLOWED_PYTHON_MODULES = {
 }
 
 
+@dataclass
+class ToolPermissionRequest:
+    tool_name: str
+    args: dict
+    risk_level: str
+    reason: str
+    run_id: Optional[str] = None
+
+
 class SafeAgentToolExecutor:
     """Executes a small set of auditable local tools."""
 
-    def __init__(self, project_root: Path, workspace_dir: Path) -> None:
+    def __init__(
+        self,
+        project_root: Path,
+        workspace_dir: Path,
+        permission_policy: str = "auto",
+        permission_callback: Optional[Callable[[ToolPermissionRequest], bool]] = None,
+    ) -> None:
         self.project_root = project_root.resolve()
         self.workspace_dir = workspace_dir.resolve()
         self.tool_runs_dir = self.workspace_dir / "tool_runs"
+        self.permission_policy = permission_policy
+        self.permission_callback = permission_callback
 
     def read_file(
         self,
@@ -158,6 +176,13 @@ class SafeAgentToolExecutor:
                 reason,
                 warnings=["command is outside the HyperAgent agent-tool allowlist"],
             )
+        permission = self._check_permission(
+            call,
+            risk_level="execute",
+            reason="run a local allowlisted command",
+        )
+        if permission is not None:
+            return permission
         try:
             completed = subprocess.run(
                 list(argv),
@@ -221,6 +246,14 @@ class SafeAgentToolExecutor:
                 "Empty patch",
                 warnings=[f"{tool_name} requires a non-empty unified diff"],
             )
+        if apply:
+            permission = self._check_permission(
+                call,
+                risk_level="write",
+                reason="apply a patch to project files",
+            )
+            if permission is not None:
+                return permission
         argv = ["git", "apply"] if apply else ["git", "apply", "--check"]
         try:
             completed = subprocess.run(
@@ -261,6 +294,54 @@ class SafeAgentToolExecutor:
             args=args,
             created_at=utc_now(),
             run_id=run_id,
+        )
+
+    def _check_permission(
+        self,
+        call: AgentToolCall,
+        risk_level: str,
+        reason: str,
+    ) -> Optional[AgentToolResult]:
+        if self.permission_policy == "auto" or risk_level == "read":
+            return None
+        request = ToolPermissionRequest(
+            tool_name=call.tool_name,
+            args=call.args,
+            risk_level=risk_level,
+            reason=reason,
+            run_id=call.run_id,
+        )
+        if self.permission_policy == "deny" or (
+            self.permission_policy == "deny-write" and risk_level == "write"
+        ):
+            return self._record(
+                call,
+                "blocked",
+                f"Permission policy blocked {call.tool_name}: {reason}",
+                warnings=[f"permission policy: {self.permission_policy}"],
+            )
+        if self.permission_policy == "ask":
+            if self.permission_callback is None:
+                return self._record(
+                    call,
+                    "blocked",
+                    f"Permission required for {call.tool_name}, but no confirmation callback is configured.",
+                    warnings=["permission confirmation is required"],
+                )
+            approved = bool(self.permission_callback(request))
+            if not approved:
+                return self._record(
+                    call,
+                    "blocked",
+                    f"User denied permission for {call.tool_name}: {reason}",
+                    warnings=["permission denied by user"],
+                )
+            return None
+        return self._record(
+            call,
+            "blocked",
+            f"Unknown permission policy: {self.permission_policy}",
+            warnings=["invalid permission policy"],
         )
 
     def _record(

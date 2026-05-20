@@ -49,6 +49,8 @@ class AgentActionLoop:
         *,
         llm_client: Optional[LLMClient] = None,
         tool_executor: Optional[SafeAgentToolExecutor] = None,
+        permission_policy: str = "auto",
+        permission_callback: Optional[Any] = None,
     ) -> None:
         self.session_store = session_store
         self.llm_store = llm_store
@@ -57,6 +59,8 @@ class AgentActionLoop:
         self.tool_executor = tool_executor or SafeAgentToolExecutor(
             workspace.project_root,
             workspace.workspace_dir,
+            permission_policy=permission_policy,
+            permission_callback=permission_callback,
         )
 
     def run(

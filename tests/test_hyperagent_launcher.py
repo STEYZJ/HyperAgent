@@ -10,6 +10,9 @@ from hyperagent.runtime.command_aliases import normalize_hyperagent_args
 
 
 class HyperAgentLauncherTest(unittest.TestCase):
+    def test_empty_args_start_repl(self):
+        self.assertEqual(normalize_hyperagent_args([]), ["repl"])
+
     def test_plain_prompt_maps_to_agent_chat(self):
         self.assertEqual(
             normalize_hyperagent_args(["analyze", "the", "latest", "result"]),
@@ -53,6 +56,7 @@ class HyperAgentLauncherTest(unittest.TestCase):
     def test_slash_aliases(self):
         self.assertEqual(normalize_hyperagent_args(["/status"]), ["status"])
         self.assertEqual(normalize_hyperagent_args(["/model"]), ["llm-providers"])
+        self.assertEqual(normalize_hyperagent_args(["/repl"]), ["repl"])
         self.assertEqual(
             normalize_hyperagent_args(["/resume", "sid-1", "continue", "work"]),
             ["agent-chat", "--session-id", "sid-1", "--message", "continue work"],

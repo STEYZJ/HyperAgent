@@ -27,6 +27,7 @@ EXISTING_COMMANDS = {
     "llm-dry-run",
     "llm-send",
     "agent-chat",
+    "repl",
     "agent-context",
     "agent-plan",
     "agent-act",
@@ -69,7 +70,7 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
 
     args = list(argv)
     if not args:
-        return ["hyperagent-commands"]
+        return ["repl"]
 
     first = args[0]
     if first in {"-h", "--help", "help"}:
@@ -130,6 +131,7 @@ def command_help_text() -> str:
 
 Use the Claude-Code-like launcher:
   HyperAgent "analyze the latest HSI result and propose the next experiment"
+  HyperAgent
   HyperAgent chat "continue this research session"
   HyperAgent plan "implement an ablation config generator"
   HyperAgent act "inspect reports and choose the next safe command"
@@ -143,6 +145,7 @@ Slash-style aliases:
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
+  HyperAgent /repl
 
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
@@ -158,6 +161,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     alias = command.lower()
     if alias in {"help", "commands"}:
         return ["hyperagent-commands"]
+    if alias == "repl":
+        return ["repl"] + list(rest)
     if alias == "status":
         return ["status"] + list(rest)
     if alias == "sessions":

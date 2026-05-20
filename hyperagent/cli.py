@@ -24,6 +24,7 @@ from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skills import SkillStore
+from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.schemas import (
     DatasetAudit,
     ExperimentPlan,
@@ -221,6 +222,25 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_chat.add_argument("--no-auto-compress", action="store_true")
     agent_chat.add_argument("--output", default=None)
 
+    repl = subparsers.add_parser(
+        "repl",
+        help="Start an interactive Claude-Code-like HyperAgent REPL",
+    )
+    repl.add_argument("--session-id", default=None)
+    repl.add_argument("--new-title", default=None)
+    repl.add_argument("--provider", default="deepseek")
+    repl.add_argument("--model", default=None)
+    repl.add_argument(
+        "--mode",
+        choices=["research", "code", "algorithm"],
+        default="research",
+    )
+    repl.add_argument("--task-id", default=None)
+    repl.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="ask")
+    repl.add_argument("--max-context-chars", type=int, default=12000)
+    repl.add_argument("--keep-last", type=int, default=6)
+    add_llm_runtime_args(repl)
+
     agent_context = subparsers.add_parser(
         "agent-context",
         help="Build a compact repository context snapshot",
@@ -269,11 +289,13 @@ def _build_parser() -> argparse.ArgumentParser:
     add_llm_runtime_args(agent_act)
     agent_act.add_argument("--max-files", type=int, default=12)
     agent_act.add_argument("--max-preview-chars", type=int, default=1000)
+    agent_act.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="auto")
 
     agent_tool = subparsers.add_parser(
         "agent-tool",
         help="Run a controlled Claude-Code-like local tool",
     )
+    agent_tool.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="auto")
     agent_tool_sub = agent_tool.add_subparsers(dest="tool_command", required=True)
 
     tool_read = agent_tool_sub.add_parser("read-file", help="Read a project text file")
@@ -740,6 +762,35 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(markdown)
         return 0
 
+    if args.command == "repl":
+        llm_store.ensure_defaults()
+        HyperAgentRepl(
+            workspace=workspace,
+            conversations=session_store,
+            providers=llm_store,
+            prompt_library=prompt_library,
+            provider=args.provider,
+            model=args.model,
+            mode=args.mode,
+            task_id=args.task_id,
+            session_id=args.session_id,
+            new_title=args.new_title,
+            permission_policy=args.permission,
+            max_context_chars=args.max_context_chars,
+            keep_last=args.keep_last,
+            llm_kwargs=build_llm_runtime_kwargs(args),
+        ).run()
+        append_worklog(
+            "运行交互式 HyperAgent REPL",
+            "HyperAgent launcher 已实现。",
+            f"启动 provider={args.provider} mode={args.mode} permission={args.permission} 的 REPL。",
+            "交互式 REPL 是持续对话、工具确认、上下文压缩和本地行动闭环的统一入口。",
+            "REPL 已退出。",
+            "交互式会话已保存到 .hyperagent/sessions。",
+            "下一步可继续同一 session，或使用 /context 与 /compact 管理上下文。",
+        )
+        return 0
+
     if args.command == "agent-plan":
         llm_store.ensure_defaults()
         if args.session_id:
@@ -798,6 +849,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             session_store,
             llm_store,
             workspace,
+            permission_policy=args.permission,
         ).run(
             session_id=session_id,
             provider=args.provider,
@@ -831,7 +883,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "agent-tool":
-        executor = SafeAgentToolExecutor(workspace.project_root, workspace.workspace_dir)
+        executor = SafeAgentToolExecutor(
+            workspace.project_root,
+            workspace.workspace_dir,
+            permission_policy=args.permission,
+            permission_callback=confirm_tool_permission if args.permission == "ask" else None,
+        )
         if args.tool_command == "read-file":
             result = executor.read_file(
                 args.path,
@@ -1342,6 +1399,15 @@ def parse_json_object(value: Optional[str], flag_name: str) -> dict:
     if not isinstance(parsed, dict):
         raise ValueError(f"{flag_name} must be a JSON object")
     return parsed
+
+
+def confirm_tool_permission(request) -> bool:
+    print(
+        f"permission requested: {request.tool_name} "
+        f"risk={request.risk_level} reason={request.reason}"
+    )
+    answer = input("allow? [y/N] ").strip().lower()
+    return answer in {"y", "yes"}
 
 
 def print_json(value) -> None:

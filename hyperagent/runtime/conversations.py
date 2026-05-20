@@ -1,5 +1,6 @@
 """Conversation persistence, archive, delete, and compression."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 from uuid import uuid4
@@ -7,6 +8,18 @@ from uuid import uuid4
 from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import ConversationMessage, ConversationSession, ConversationSummary
+
+
+@dataclass
+class ContextCompressionStatus:
+    session_id: str
+    message_count: int
+    summary_count: int
+    current_chars: int
+    max_chars: int
+    trigger_chars: int
+    should_compress: bool
+    keep_last: int
 
 
 class ConversationStore:
@@ -105,8 +118,51 @@ class ConversationStore:
         self.save(session)
         return session
 
-    def auto_compress(self, session_id: str, max_chars: int = 12000, keep_last: int = 6) -> ConversationSession:
-        return self.compress(session_id, keep_last=keep_last, max_chars=max_chars)
+    def auto_compress(
+        self,
+        session_id: str,
+        max_chars: int = 12000,
+        keep_last: int = 6,
+        trigger_ratio: float = 1.0,
+        min_messages: int = 8,
+    ) -> ConversationSession:
+        status = self.context_status(
+            session_id,
+            max_chars=max_chars,
+            keep_last=keep_last,
+            trigger_ratio=trigger_ratio,
+            min_messages=min_messages,
+        )
+        if not status.should_compress:
+            return self.load(session_id)
+        return self.compress(session_id, keep_last=keep_last)
+
+    def context_status(
+        self,
+        session_id: str,
+        max_chars: int = 12000,
+        keep_last: int = 6,
+        trigger_ratio: float = 1.0,
+        min_messages: int = 8,
+    ) -> ContextCompressionStatus:
+        session = self.load(session_id)
+        current_chars = self._message_chars(session)
+        trigger_chars = max(int(max_chars * trigger_ratio), 1)
+        should_compress = (
+            current_chars > trigger_chars
+            and len(session.messages) > keep_last
+            and len(session.messages) >= min_messages
+        )
+        return ContextCompressionStatus(
+            session_id=session.session_id,
+            message_count=len(session.messages),
+            summary_count=len(session.summaries),
+            current_chars=current_chars,
+            max_chars=max_chars,
+            trigger_chars=trigger_chars,
+            should_compress=should_compress,
+            keep_last=keep_last,
+        )
 
     def _dir_for_status(self, status: str) -> Path:
         if status == "archived":
@@ -132,4 +188,3 @@ class ConversationStore:
                 content = content[:217] + "..."
             lines.append(f"- {message.role}: {content}")
         return "\n".join(lines)
-

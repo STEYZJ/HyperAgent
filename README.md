@@ -121,19 +121,23 @@ Useful flags:
 
 ## Claude-Code-Like Launcher
 
-HyperAgent now has a Claude-Code-like launcher. The command format starts with `HyperAgent`:
+HyperAgent now has a Claude-Code-like launcher and an interactive REPL. The command format starts with `HyperAgent`:
 
 ```bash
+HyperAgent
 HyperAgent "analyze the last report and propose the next experiment"
 HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design an evidence-backed ablation"
 HyperAgent plan "materialize module_proposal.json into a model factory"
 HyperAgent act "inspect reports and choose the next safe local tool"
+HyperAgent repl --permission ask
 HyperAgent /resume <session_id> "continue from the last result"
 HyperAgent /status
 HyperAgent /sessions
 HyperAgent /model
 HyperAgent /help
 ```
+
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 

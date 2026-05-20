@@ -56,6 +56,60 @@ class AgentToolsTest(unittest.TestCase):
             self.assertEqual(blocked.status, "blocked")
             self.assertIn("allowlist", blocked.warnings[0])
 
+    def test_run_command_permission_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            package = root / "hyperagent"
+            package.mkdir()
+            (package / "__init__.py").write_text("", encoding="utf-8")
+
+            denied = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: False,
+            ).run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+            self.assertEqual(denied.status, "blocked")
+            self.assertIn("permission denied", denied.warnings[0])
+
+            allowed = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: True,
+            ).run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+            self.assertEqual(allowed.status, "ok")
+
+    def test_deny_write_blocks_apply_patch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            target = root / "demo.txt"
+            target.write_text("old\n", encoding="utf-8")
+            patch = (
+                "diff --git a/demo.txt b/demo.txt\n"
+                "--- a/demo.txt\n"
+                "+++ b/demo.txt\n"
+                "@@ -1 +1 @@\n"
+                "-old\n"
+                "+new\n"
+            )
+
+            executor = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="deny-write",
+            )
+            checked = executor.check_patch(patch)
+            self.assertEqual(checked.status, "ok")
+
+            applied = executor.apply_patch(patch)
+            self.assertEqual(applied.status, "blocked")
+            self.assertEqual(target.read_text(encoding="utf-8"), "old\n")
+
     def test_check_and_apply_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
