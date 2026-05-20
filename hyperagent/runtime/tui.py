@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 import unicodedata
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMProviderStore
@@ -146,10 +146,18 @@ class HyperAgentTui:
     def _read_line(self, prompt: str) -> str:
         assert self.stdscr is not None
         buffer = ""
+        cursor_index = 0
         self.history_cursor = None
         self.history_draft = ""
         while True:
-            self._draw(prompt + buffer)
+            _, width = self.stdscr.getmaxyx()
+            prompt_line, cursor_x, view_start = self._input_prompt_view(
+                prompt,
+                buffer,
+                cursor_index,
+                max(width - 1, 1),
+            )
+            self._draw(prompt_line, cursor_x=cursor_x)
             key = self.stdscr.get_wch()
             if key in ("\n", "\r"):
                 self._append_output(prompt + buffer)
@@ -158,24 +166,54 @@ class HyperAgentTui:
             if key in ("\x1b",):
                 return "/exit"
             if key in ("\b", "\x7f") or key == curses.KEY_BACKSPACE:
-                buffer = buffer[:-1]
+                buffer, cursor_index = self._backspace_text(buffer, cursor_index)
+                self._reset_history_browse()
+                continue
+            if key == curses.KEY_DC:
+                buffer, cursor_index = self._delete_text(buffer, cursor_index)
+                self._reset_history_browse()
+                continue
+            if key == curses.KEY_LEFT:
+                cursor_index = max(0, cursor_index - 1)
+                continue
+            if key == curses.KEY_RIGHT:
+                cursor_index = min(len(buffer), cursor_index + 1)
                 continue
             if key == curses.KEY_UP:
                 buffer = self._history_previous(buffer)
+                cursor_index = len(buffer)
                 continue
             if key == curses.KEY_DOWN:
                 buffer = self._history_next(buffer)
+                cursor_index = len(buffer)
                 continue
             if key in {curses.KEY_PPAGE, curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END}:
                 self._handle_scroll_key(key)
                 continue
             if key == curses.KEY_MOUSE:
-                self._handle_mouse()
+                event = self._read_mouse_event()
+                if event is None:
+                    continue
+                x, y, state = event
+                if self._mouse_scroll_delta(state):
+                    self._handle_mouse_event(x, y, state)
+                    continue
+                if self._mouse_targets_input(y, state):
+                    cursor_index = self._cursor_index_from_input_x(
+                        prompt,
+                        buffer,
+                        view_start,
+                        x,
+                    )
+                    self._reset_history_browse()
+                    continue
+                self._handle_mouse_event(x, y, state)
                 continue
             if isinstance(key, str) and key.isprintable():
-                buffer += key
+                buffer, cursor_index = self._insert_text(buffer, cursor_index, key)
+                self._reset_history_browse()
 
-    def _draw(self, prompt_line: str = "HyperAgent> ") -> None:
+    def _draw(self, prompt_line: str = "HyperAgent> ", cursor_x: Optional[int] = None) -> None:
         assert self.stdscr is not None
         self.stdscr.erase()
         height, width = self.stdscr.getmaxyx()
@@ -240,6 +278,11 @@ class HyperAgentTui:
                 self._addstr(offset, panel_x, self._clip_to_width(line, panel_width))
         self._addstr(height - 2, 0, "-" * max(width - 1, 0))
         self._addstr(height - 1, 0, self._clip_to_width(prompt_line, max(width - 1, 1)))
+        if cursor_x is not None:
+            try:
+                self.stdscr.move(height - 1, max(0, min(int(cursor_x), max(width - 1, 0))))
+            except curses.error:
+                pass
         self.stdscr.refresh()
 
     def _panel_lines(self) -> List[str]:
@@ -325,6 +368,75 @@ class HyperAgentTui:
             return 0
         return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
 
+    def _input_prompt_view(
+        self,
+        prompt: str,
+        buffer: str,
+        cursor_index: int,
+        width: int,
+    ) -> Tuple[str, int, int]:
+        width = max(int(width), 1)
+        cursor_index = max(0, min(int(cursor_index), len(buffer)))
+        prompt_width = self._display_width(prompt)
+        input_width = max(width - prompt_width, 1)
+        view_start = 0
+        while (
+            view_start < cursor_index
+            and self._display_width(buffer[view_start:cursor_index]) > input_width
+        ):
+            view_start += 1
+        visible_buffer = buffer[view_start:]
+        cursor_x = prompt_width + self._display_width(buffer[view_start:cursor_index])
+        return self._clip_to_width(prompt + visible_buffer, width), cursor_x, view_start
+
+    def _cursor_index_from_input_x(
+        self,
+        prompt: str,
+        buffer: str,
+        view_start: int,
+        x: int,
+    ) -> int:
+        prompt_width = self._display_width(prompt)
+        target = int(x) - prompt_width
+        if target <= 0:
+            return max(0, min(view_start, len(buffer)))
+        return self._buffer_index_from_display_col(buffer, view_start, target)
+
+    def _buffer_index_from_display_col(
+        self,
+        buffer: str,
+        view_start: int,
+        display_col: int,
+    ) -> int:
+        current = 0
+        start = max(0, min(int(view_start), len(buffer)))
+        target = max(int(display_col), 0)
+        for index in range(start, len(buffer)):
+            char_width = max(self._char_width(buffer[index]), 1)
+            if target <= current:
+                return index
+            if target < current + char_width:
+                halfway = current + (char_width / 2.0)
+                return index if target < halfway else index + 1
+            current += char_width
+        return len(buffer)
+
+    def _insert_text(self, buffer: str, cursor_index: int, text: str) -> Tuple[str, int]:
+        cursor = max(0, min(int(cursor_index), len(buffer)))
+        return buffer[:cursor] + text + buffer[cursor:], cursor + len(text)
+
+    def _backspace_text(self, buffer: str, cursor_index: int) -> Tuple[str, int]:
+        cursor = max(0, min(int(cursor_index), len(buffer)))
+        if cursor <= 0:
+            return buffer, cursor
+        return buffer[: cursor - 1] + buffer[cursor:], cursor - 1
+
+    def _delete_text(self, buffer: str, cursor_index: int) -> Tuple[str, int]:
+        cursor = max(0, min(int(cursor_index), len(buffer)))
+        if cursor >= len(buffer):
+            return buffer, cursor
+        return buffer[:cursor] + buffer[cursor + 1 :], cursor
+
     def _visible_lines(
         self,
         lines: List[str],
@@ -363,12 +475,22 @@ class HyperAgentTui:
             self.main_scroll_offset = 0
 
     def _handle_mouse(self) -> None:
+        event = self._read_mouse_event()
+        if event is None:
+            return
+        x, y, state = event
+        self._handle_mouse_event(x, y, state)
+
+    def _read_mouse_event(self) -> Optional[Tuple[int, int, int]]:
         if curses is None:
-            return
+            return None
         try:
-            _, x, _, _, state = curses.getmouse()
+            _, x, y, _, state = curses.getmouse()
         except curses.error:
-            return
+            return None
+        return int(x), int(y), int(state)
+
+    def _handle_mouse_event(self, x: int, y: int, state: int) -> None:
         delta = self._mouse_scroll_delta(state)
         if delta == 0:
             return
@@ -379,6 +501,12 @@ class HyperAgentTui:
             self.panel_scroll_offset += delta
         else:
             self.main_scroll_offset += delta
+
+    def _mouse_targets_input(self, y: int, state: int) -> bool:
+        if self.stdscr is None:
+            return False
+        height, _ = self.stdscr.getmaxyx()
+        return y == height - 1 and bool(state & self._mouse_button_event_mask(1))
 
     def _mouse_scroll_delta(self, state: int) -> int:
         if state & self._mouse_button_event_mask(4):
@@ -459,6 +587,10 @@ class HyperAgentTui:
             return self.history_draft
         self.history_cursor += 1
         return self.command_history[self.history_cursor]
+
+    def _reset_history_browse(self) -> None:
+        self.history_cursor = None
+        self.history_draft = ""
 
     def _set_wait_status(self, text: str) -> None:
         self.wait_status = text

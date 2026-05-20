@@ -68,6 +68,54 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertIn("reasoning: expanded", lines)
         self.assertNotIn("thinking: on", "\n".join(lines))
 
+    def test_input_edit_helpers_preserve_cursor_position(self):
+        tui = self._tui()
+
+        buffer, cursor = tui._insert_text("abcd", 2, "X")
+        self.assertEqual((buffer, cursor), ("abXcd", 3))
+
+        buffer, cursor = tui._backspace_text(buffer, cursor)
+        self.assertEqual((buffer, cursor), ("abcd", 2))
+
+        buffer, cursor = tui._delete_text(buffer, cursor)
+        self.assertEqual((buffer, cursor), ("abd", 2))
+
+    def test_input_click_maps_wide_char_columns_to_cursor_index(self):
+        tui = self._tui()
+        prompt = "P> "
+        buffer = "a中b"
+        prompt_width = tui._display_width(prompt)
+
+        self.assertEqual(
+            tui._cursor_index_from_input_x(prompt, buffer, 0, prompt_width),
+            0,
+        )
+        self.assertEqual(
+            tui._cursor_index_from_input_x(prompt, buffer, 0, prompt_width + 1),
+            1,
+        )
+        self.assertEqual(
+            tui._cursor_index_from_input_x(prompt, buffer, 0, prompt_width + 2),
+            2,
+        )
+        self.assertEqual(
+            tui._cursor_index_from_input_x(prompt, buffer, 0, prompt_width + 4),
+            3,
+        )
+
+    def test_input_prompt_view_keeps_cursor_visible_for_long_input(self):
+        tui = self._tui()
+        line, cursor_x, view_start = tui._input_prompt_view(
+            "> ",
+            "abcdef",
+            cursor_index=6,
+            width=5,
+        )
+
+        self.assertEqual(line, "> def")
+        self.assertEqual(cursor_x, 5)
+        self.assertEqual(view_start, 3)
+
     def test_tui_history_persists_only_main_commands(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
