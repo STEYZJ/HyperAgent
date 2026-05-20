@@ -45,6 +45,8 @@ HyperAgent /help
 | `HyperAgent /resume <id> "prompt"` | `agent-chat --session-id <id> --message "prompt"` |
 | `HyperAgent /compact <id>` | `session-compress --session-id <id>` |
 | `HyperAgent /model` | `llm-providers` |
+| `HyperAgent /reasonix` | `llm-profile` |
+| `HyperAgent /usage` | `llm-usage` |
 | `HyperAgent /mcp` | `mcp-list` |
 | `HyperAgent /skills` | `skill-list` |
 | `HyperAgent /prompts` | `prompt-list` |
@@ -70,6 +72,7 @@ agent-chat turns. Slash commands handle local operations:
 /new [title]          create a new session
 /resume <session_id>  switch session
 /context              show context compression status
+/usage [limit]        summarize LLM usage and cache-hit ledger
 /compact [keep_last]  compress current session
 /clear                clear context after saving a rewind snapshot
 /init                 create project HyperAgent.md memory
@@ -78,6 +81,7 @@ agent-chat turns. Slash commands handle local operations:
 /hooks ...            list/add project hooks
 /plugin ...           list/add project plugins
 /rewind [save]        list or save rewind snapshots
+/reasonix [profile]   show DeepSeek Reasonix-inspired profiles
 /btw <question>       ask an isolated temporary question
 /simplify             show the three-agent simplification council
 /model                list LLM providers
@@ -99,6 +103,23 @@ Permission modes:
 
 Tool result panels show status, exit code, artifact path, warnings, and output
 preview so experiment and code actions remain auditable.
+
+## DeepSeek Reasonix Notes
+
+HyperAgent now exposes Reasonix-inspired DeepSeek presets without coupling the
+core agent loop to one vendor:
+
+```bash
+HyperAgent /reasonix
+HyperAgent --reasonix-profile reasonix-balanced "analyze the failed run"
+HyperAgent --reasonix-profile reasonix-deep "design the next HSI module"
+HyperAgent /usage
+```
+
+The runtime also records an append-only LLM usage ledger under
+`.hyperagent/usage/llm_usage.jsonl`, including provider usage fields such as
+`prompt_cache_hit_tokens` and `prompt_cache_miss_tokens` when the provider
+returns them.
 
 ## Boundary
 

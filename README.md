@@ -63,9 +63,12 @@ HyperAgent tune-next --plan experiments/run/plan.yaml --result experiments/run/r
 HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next --max-repeated-parameter 2
 HyperAgent propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
 HyperAgent llm-providers
+HyperAgent llm-profile
+HyperAgent llm-usage
 HyperAgent llm-dry-run --provider openai --user "Plan an HSI experiment"
 HyperAgent llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
 HyperAgent llm-dry-run --provider deepseek --model deepseek-v4-pro --thinking enabled --reasoning-effort max --json-output --user "Return a JSON experiment plan"
+HyperAgent llm-dry-run --provider deepseek --reasonix-profile reasonix-deep --user "Diagnose the failed experiment"
 HyperAgent llm-send --provider deepseek --model deepseek-v4-flash --thinking disabled --top-p 0.9 --user "Plan the next HSI baseline"
 HyperAgent "Plan the next experiment"
 HyperAgent chat --provider deepseek --new-title "HSI research" --mode research "Plan the next experiment"
@@ -113,11 +116,17 @@ HyperAgent llm-send \
 Useful flags:
 
 - `--model`: choose a provider model such as `deepseek-v4-flash` or `deepseek-v4-pro`.
+- `--reasonix-profile reasonix-cheap|reasonix-balanced|reasonix-deep`: choose a DeepSeek Reasonix-inspired preset for model, thinking, and reasoning strength.
 - `--thinking enabled|disabled`: switch DeepSeek thinking mode for supported models.
 - `--reasoning-effort high|max`: choose thinking strength. Compatibility aliases `low`, `medium`, and `xhigh` are accepted by the CLI.
 - `--json-output`: sends `response_format={"type":"json_object"}`.
 - `--extra-body-json`: merges raw JSON into the request body, so provider features such as `tools` and `tool_choice` can be used without changing the core agent code.
 - `--top-p` and `--user-id`: pass common provider options when supported.
+
+The Reasonix-inspired path keeps long stable context before volatile user/tool
+output and records LLM usage in `.hyperagent/usage/llm_usage.jsonl`. Use
+`HyperAgent llm-usage` or REPL `/usage` to inspect token counts and provider
+cache-hit fields when available.
 
 ## Claude-Code-Like Launcher
 
@@ -134,10 +143,12 @@ HyperAgent /resume <session_id> "continue from the last result"
 HyperAgent /status
 HyperAgent /sessions
 HyperAgent /model
+HyperAgent /reasonix
+HyperAgent /usage
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/init`, `/memory`, `/agents`, `/hooks`, `/plugin`, `/rewind`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/hooks`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 

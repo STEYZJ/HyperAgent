@@ -19,7 +19,13 @@ from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
 from hyperagent.runtime.command_aliases import command_help_text
+from hyperagent.runtime.deepseek_reasonix import (
+    get_reasonix_profile,
+    list_reasonix_profiles,
+    reasonix_cache_guidance,
+)
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore, LLMRequestBuilder
+from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
@@ -180,6 +186,20 @@ def _build_parser() -> argparse.ArgumentParser:
 
     llm_list = subparsers.add_parser("llm-providers", help="List configured LLM providers")
     llm_list.add_argument("--json", action="store_true")
+
+    llm_profile = subparsers.add_parser(
+        "llm-profile",
+        help="List DeepSeek Reasonix-inspired model/runtime profiles",
+    )
+    llm_profile.add_argument("--profile", default=None)
+    llm_profile.add_argument("--json", action="store_true")
+
+    llm_usage = subparsers.add_parser(
+        "llm-usage",
+        help="Summarize LLM token usage, cache hits, and optional cost estimates",
+    )
+    llm_usage.add_argument("--limit", type=int, default=None)
+    llm_usage.add_argument("--json", action="store_true")
 
     llm_dry = subparsers.add_parser("llm-dry-run", help="Build a vendor request payload without sending it")
     llm_dry.add_argument("--provider", required=True)
@@ -648,6 +668,42 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
         return 0
 
+    if args.command == "llm-profile":
+        if args.profile:
+            profile = get_reasonix_profile(args.profile)
+            data = profile.to_dict() if profile else {}
+        else:
+            data = {
+                "profiles": [profile.to_dict() for profile in list_reasonix_profiles()],
+                "cache_guidance": reasonix_cache_guidance(),
+            }
+        if args.json:
+            print_json(data)
+        else:
+            if args.profile:
+                print_profile(data)
+            else:
+                for profile in data["profiles"]:
+                    print_profile(profile)
+                print("cache rule: " + data["cache_guidance"]["rule"])
+        return 0
+
+    if args.command == "llm-usage":
+        summary = LLMUsageLedger(workspace.workspace_dir).summarize(limit=args.limit)
+        if args.json:
+            print_json(summary)
+        else:
+            print(f"requests: {summary['request_count']}")
+            print(f"total_tokens: {summary['total_tokens']}")
+            print(f"prompt_tokens: {summary['prompt_tokens']}")
+            print(f"completion_tokens: {summary['completion_tokens']}")
+            print(f"prompt_cache_hit_tokens: {summary['prompt_cache_hit_tokens']}")
+            print(f"prompt_cache_miss_tokens: {summary['prompt_cache_miss_tokens']}")
+            print(f"cache_hit_ratio: {summary['cache_hit_ratio']}")
+            print(f"cost_estimate_usd: {summary['cost_estimate_usd']}")
+            print(f"ledger: {summary['ledger_path']}")
+        return 0
+
     if args.command == "llm-dry-run":
         llm_store.ensure_defaults()
         spec = llm_store.get(args.provider)
@@ -657,7 +713,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 LLMMessage(role="system", content=args.system),
                 LLMMessage(role="user", content=args.user),
             ],
-            model=args.model,
+            model=resolve_llm_model(args),
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             **build_llm_runtime_kwargs(args),
@@ -674,10 +730,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                 LLMMessage(role="system", content=args.system),
                 LLMMessage(role="user", content=args.user),
             ],
-            model=args.model,
+            model=resolve_llm_model(args),
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             **build_llm_runtime_kwargs(args),
+        )
+        LLMUsageLedger(workspace.workspace_dir).record_response(
+            response,
+            spec=spec,
+            event_type="llm_send.response",
+            context_chars=len(args.system) + len(args.user),
+            metadata={"command": "llm-send"},
         )
         if args.output:
             write_json(Path(args.output), response)
@@ -712,7 +775,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             session_id=session_id,
             provider=args.provider,
             user_message=args.message,
-            model=args.model,
+            model=resolve_llm_model(args),
             mode=args.mode,
             task_id=args.task_id,
             auto_compress=not args.no_auto_compress,
@@ -770,7 +833,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             providers=llm_store,
             prompt_library=prompt_library,
             provider=args.provider,
-            model=args.model,
+            model=resolve_llm_model(args),
             mode=args.mode,
             task_id=args.task_id,
             session_id=args.session_id,
@@ -809,7 +872,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             session_id=session_id,
             provider=args.provider,
             instruction=args.instruction,
-            model=args.model,
+            model=resolve_llm_model(args),
             mode=args.mode,
             task_id=args.task_id,
             max_files=args.max_files,
@@ -854,7 +917,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             session_id=session_id,
             provider=args.provider,
             instruction=args.message,
-            model=args.model,
+            model=resolve_llm_model(args),
             task_id=args.task_id,
             max_steps=args.max_steps,
             max_files=args.max_files,
@@ -1348,6 +1411,12 @@ def parse_int_list(value: str) -> List[int]:
 
 
 def add_llm_runtime_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--reasonix-profile",
+        choices=["reasonix-cheap", "reasonix-balanced", "reasonix-deep"],
+        default=None,
+        help="DeepSeek Reasonix-inspired runtime preset.",
+    )
     parser.add_argument("--top-p", type=float, default=None)
     parser.add_argument(
         "--thinking",
@@ -1380,16 +1449,43 @@ def add_llm_runtime_args(parser: argparse.ArgumentParser) -> None:
 
 def build_llm_runtime_kwargs(args: argparse.Namespace) -> dict:
     extra_body = parse_json_object(args.extra_body_json, "--extra-body-json")
-    thinking = {"type": args.thinking} if args.thinking else None
+    profile = get_reasonix_profile(getattr(args, "reasonix_profile", None))
+    if profile and getattr(args, "provider", "deepseek") != "deepseek":
+        raise ValueError("--reasonix-profile can only be used with provider=deepseek")
+    thinking_type = args.thinking or (profile.thinking if profile else None)
+    reasoning_effort = args.reasoning_effort or (
+        profile.reasoning_effort if profile else None
+    )
+    top_p = args.top_p if args.top_p is not None else (profile.top_p if profile else None)
+    thinking = {"type": thinking_type} if thinking_type else None
     response_format = {"type": "json_object"} if args.json_output else None
     return {
-        "top_p": args.top_p,
+        "top_p": top_p,
         "response_format": response_format,
         "thinking": thinking,
-        "reasoning_effort": args.reasoning_effort,
+        "reasoning_effort": reasoning_effort,
         "user": args.user_id,
         "extra_body": extra_body,
     }
+
+
+def resolve_llm_model(args: argparse.Namespace) -> Optional[str]:
+    if getattr(args, "model", None):
+        return args.model
+    profile = get_reasonix_profile(getattr(args, "reasonix_profile", None))
+    return profile.model if profile else None
+
+
+def print_profile(profile: dict) -> None:
+    print(
+        f"{profile['name']}: model={profile['model']} "
+        f"thinking={profile['thinking']} effort={profile['reasoning_effort']}"
+    )
+    print(f"  intent: {profile['intent']}")
+    if profile.get("use_cases"):
+        print("  use_cases: " + ", ".join(profile["use_cases"]))
+    if profile.get("cache_policy"):
+        print("  cache_policy: " + " | ".join(profile["cache_policy"]))
 
 
 def parse_json_object(value: Optional[str], flag_name: str) -> dict:

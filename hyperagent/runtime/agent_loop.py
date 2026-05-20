@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from hyperagent.core.io import write_json
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
+from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.schemas import (
@@ -106,6 +107,14 @@ class AgentLoop:
             reasoning_effort=reasoning_effort,
             user=user,
             extra_body=extra_body,
+        )
+        LLMUsageLedger(self.workspace.workspace_dir).record_response(
+            response,
+            spec=spec,
+            session_id=session_id,
+            event_type="agent_loop.response",
+            context_chars=sum(len(message.content) for message in messages),
+            metadata={"mode": mode, "task_id": task_id},
         )
         assistant_content = response.content or "\n".join(response.warnings)
         self.conversations.add_message(session_id, "assistant", assistant_content)

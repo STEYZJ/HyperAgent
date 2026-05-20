@@ -56,6 +56,8 @@ class HyperAgentLauncherTest(unittest.TestCase):
     def test_slash_aliases(self):
         self.assertEqual(normalize_hyperagent_args(["/status"]), ["status"])
         self.assertEqual(normalize_hyperagent_args(["/model"]), ["llm-providers"])
+        self.assertEqual(normalize_hyperagent_args(["/reasonix"]), ["llm-profile"])
+        self.assertEqual(normalize_hyperagent_args(["/usage"]), ["llm-usage"])
         self.assertEqual(normalize_hyperagent_args(["/repl"]), ["repl"])
         self.assertEqual(
             normalize_hyperagent_args(["/resume", "sid-1", "continue", "work"]),

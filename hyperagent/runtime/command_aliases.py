@@ -24,6 +24,8 @@ EXISTING_COMMANDS = {
     "experiment-cycle",
     "propose-module",
     "llm-providers",
+    "llm-profile",
+    "llm-usage",
     "llm-dry-run",
     "llm-send",
     "agent-chat",
@@ -122,6 +124,10 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return ["prompt-list"] + rest
     if alias == "model":
         return ["llm-providers"] + rest
+    if alias in {"reasonix", "deepseek"}:
+        return ["llm-profile"] + rest
+    if alias == "usage":
+        return ["llm-usage"] + rest
 
     return _prompt_command("agent-chat", "--message", args)
 
@@ -142,16 +148,19 @@ Slash-style aliases:
   HyperAgent /resume <session_id> "continue from here"
   HyperAgent /compact <session_id> --keep-last 4
   HyperAgent /model
+  HyperAgent /reasonix
+  HyperAgent /usage
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
   HyperAgent /repl
 
 Inside REPL:
-  /context, /compact, /clear, /init, /memory, /agents, /hooks, /plugin, /rewind, /btw, /simplify
+  /context, /compact, /clear, /usage, /init, /memory, /agents, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
 
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
+  HyperAgent --reasonix-profile reasonix-deep "diagnose the failed experiment"
   HyperAgent send --model deepseek-v4-flash --json-output "return a JSON plan"
 
 Canonical commands remain available:
@@ -176,6 +185,10 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return _compact_command(rest)
     if alias == "model":
         return ["llm-providers"] + list(rest)
+    if alias in {"reasonix", "deepseek"}:
+        return ["llm-profile"] + list(rest)
+    if alias == "usage":
+        return ["llm-usage"] + list(rest)
     if alias == "mcp":
         return ["mcp-list"] + list(rest)
     if alias in {"skills", "skill"}:

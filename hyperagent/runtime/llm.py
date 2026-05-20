@@ -39,6 +39,21 @@ DEFAULT_PROVIDERS = [
             "reasoning_effort": ["high", "max"],
             "supports_response_format": True,
             "supports_tools": True,
+            "supports_prompt_cache_usage": True,
+            "prompt_cache_usage_fields": [
+                "prompt_cache_hit_tokens",
+                "prompt_cache_miss_tokens",
+            ],
+            "reasonix_profiles": [
+                "reasonix-cheap",
+                "reasonix-balanced",
+                "reasonix-deep",
+            ],
+            "cache_first_guidance": (
+                "Keep stable project memory, dataset cards, spectral rules, and "
+                "tool schemas before volatile user/tool output to improve prefix "
+                "cache reuse."
+            ),
         },
     ),
     LLMProviderSpec(
@@ -413,8 +428,35 @@ class LLMClient:
         tool_calls = message.get("tool_calls", [])
         if not isinstance(tool_calls, list):
             return []
-        return [dict(item) for item in tool_calls if isinstance(item, dict)]
+        return [
+            self._normalize_tool_call(item)
+            for item in tool_calls
+            if isinstance(item, dict)
+        ]
 
     def _extract_usage(self, raw: Dict[str, object]) -> Dict[str, Any]:
         usage = raw.get("usage", {})
         return dict(usage) if isinstance(usage, dict) else {}
+
+    def _normalize_tool_call(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize OpenAI-compatible tool calls across provider quirks."""
+
+        normalized = dict(item)
+        function = normalized.get("function")
+        if isinstance(function, dict):
+            function = dict(function)
+            arguments = function.get("arguments")
+            if isinstance(arguments, dict):
+                function["arguments"] = json.dumps(
+                    arguments,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            elif arguments is None:
+                function["arguments"] = "{}"
+            else:
+                function["arguments"] = str(arguments)
+            if function.get("name") is not None:
+                function["name"] = str(function.get("name"))
+            normalized["function"] = function
+        return normalized

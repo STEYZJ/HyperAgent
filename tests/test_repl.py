@@ -60,6 +60,9 @@ class HyperAgentReplTest(unittest.TestCase):
                     "/plugin",
                     "/rewind save",
                     "/rewind",
+                    "/usage",
+                    "/reasonix",
+                    "/reasonix reasonix-deep",
                     "/clear",
                     "/simplify",
                     "/exit",
@@ -87,6 +90,9 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertIn("hook added:", text)
             self.assertIn("plugin added:", text)
             self.assertIn("rewind snapshot:", text)
+            self.assertIn("llm usage:", text)
+            self.assertIn("reasonix profiles:", text)
+            self.assertIn("reasonix-deep", text)
             self.assertIn("cleared: messages=0 summaries=0", text)
             self.assertIn("simplify council", text)
 

@@ -10,9 +10,15 @@ from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.llm import LLMProviderStore
+from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.deepseek_reasonix import (
+    get_reasonix_profile,
+    list_reasonix_profiles,
+    reasonix_cache_guidance,
+)
 from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.tool_panel import (
     render_action_run,
@@ -66,6 +72,7 @@ class HyperAgentRepl:
         self.output = output_func
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
+        self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.session_id = self._ensure_session(session_id, new_title)
 
     def run(self) -> int:
@@ -136,6 +143,8 @@ class HyperAgentRepl:
             self._clear()
         elif command == "/context":
             self._context()
+        elif command == "/usage":
+            self._usage(args)
         elif command == "/init":
             self._init_memory()
         elif command == "/memory":
@@ -148,6 +157,8 @@ class HyperAgentRepl:
             self._plugins(args)
         elif command == "/rewind":
             self._rewind(args)
+        elif command in {"/reasonix", "/deepseek"}:
+            self._reasonix(args)
         elif command == "/simplify":
             self._simplify()
         elif command == "/model":
@@ -333,6 +344,21 @@ class HyperAgentRepl:
         self.output(f"trigger_chars: {status.trigger_chars}")
         self.output(f"should_compress: {status.should_compress}")
 
+    def _usage(self, args: List[str]) -> None:
+        limit = int(args[0]) if args else None
+        summary = self.usage.summarize(limit=limit)
+        self.output(
+            "llm usage:\n"
+            f"- requests: {summary['request_count']}\n"
+            f"- total_tokens: {summary['total_tokens']}\n"
+            f"- prompt_tokens: {summary['prompt_tokens']}\n"
+            f"- completion_tokens: {summary['completion_tokens']}\n"
+            f"- prompt_cache_hit_tokens: {summary['prompt_cache_hit_tokens']}\n"
+            f"- prompt_cache_miss_tokens: {summary['prompt_cache_miss_tokens']}\n"
+            f"- cache_hit_ratio: {summary['cache_hit_ratio']}\n"
+            f"- ledger: {summary['ledger_path']}"
+        )
+
     def _init_memory(self) -> None:
         path = self.memory.ensure_project_memory()
         self.output(f"initialized project memory: {path}")
@@ -434,6 +460,31 @@ class HyperAgentRepl:
             return
         for path in snapshots[-20:]:
             self.output(str(path))
+
+    def _reasonix(self, args: List[str]) -> None:
+        if args:
+            profile = get_reasonix_profile(args[0])
+            if profile is None:
+                self.output("usage: /reasonix [profile]")
+                return
+            self.output(
+                f"{profile.name}\n"
+                f"- model: {profile.model}\n"
+                f"- thinking: {profile.thinking}\n"
+                f"- reasoning_effort: {profile.reasoning_effort}\n"
+                f"- intent: {profile.intent}\n"
+                f"- use_cases: {', '.join(profile.use_cases)}"
+            )
+            return
+        lines = ["reasonix profiles:"]
+        for profile in list_reasonix_profiles():
+            lines.append(
+                f"- {profile.name}: {profile.model}, thinking={profile.thinking}, "
+                f"effort={profile.reasoning_effort}"
+            )
+        guidance = reasonix_cache_guidance()
+        lines.append("cache rule: " + str(guidance["rule"]))
+        self.output("\n".join(lines))
 
     def _simplify(self) -> None:
         self.output(
@@ -542,6 +593,7 @@ class HyperAgentRepl:
             "/new [title]          create a new session\n"
             "/resume <session_id>  switch session\n"
             "/context              show context compression status\n"
+            "/usage [limit]        summarize LLM usage and cache-hit ledger\n"
             "/compact [keep_last]  compress current session\n"
             "/clear                clear current context after saving a rewind snapshot\n"
             "/init                 create project HyperAgent.md memory\n"
@@ -550,6 +602,7 @@ class HyperAgentRepl:
             "/hooks ...            list/add project hooks\n"
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"
+            "/reasonix [profile]   show DeepSeek Reasonix-inspired profiles\n"
             "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
             "/mcp                  list MCP servers\n"
