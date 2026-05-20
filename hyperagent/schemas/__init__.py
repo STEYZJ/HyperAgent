@@ -17,6 +17,7 @@ from hyperagent.schemas.evaluation import EvaluationReport
 from hyperagent.schemas.experiment import (
     ExperimentPlan,
     ExperimentResult,
+    ExperimentSuiteResult,
     ModelConfig,
     PreprocessingConfig,
     SplitConfig,
@@ -76,6 +77,7 @@ __all__ = [
     "ExperimentDiagnosis",
     "ExperimentPlan",
     "ExperimentResult",
+    "ExperimentSuiteResult",
     "LiteraturePaper",
     "LiteratureSearchResult",
     "LLMMessage",

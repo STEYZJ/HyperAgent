@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from hyperagent.agents import CoordinatorAgent, ExperimentAutopilotAgent
+from hyperagent.agents import BenchmarkAgent, CoordinatorAgent, ExperimentAutopilotAgent
 from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
@@ -33,6 +33,7 @@ from hyperagent.schemas import (
     SpectralReport,
 )
 from hyperagent.tools.module_materializer import ModuleMaterializer
+from hyperagent.training.experiment_suite import ExperimentSuiteRunner
 
 
 DEFAULT_DATASET_ROOT = "/data2/lzj/lab/Mamba_test/dataset"
@@ -56,6 +57,33 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run-baseline", help="Run a baseline experiment")
     run.add_argument("--config", required=True)
+
+    run_suite = subparsers.add_parser(
+        "run-suite",
+        help="Run one experiment plan across multiple seeds and summarize variance",
+    )
+    run_suite.add_argument("--config", required=True)
+    run_suite.add_argument("--seeds", default="42,43,44")
+    run_suite.add_argument("--output-dir", default=None)
+    run_suite.add_argument("--suite-name", default=None)
+
+    benchmark_list = subparsers.add_parser(
+        "benchmark-list",
+        help="List catalogued HSI benchmark datasets",
+    )
+    benchmark_list.add_argument("--catalog", default="dataset/datasets.yaml")
+    benchmark_list.add_argument("--json", action="store_true")
+
+    benchmark_matrix = subparsers.add_parser(
+        "benchmark-matrix",
+        help="Audit, plan, and optionally run multi-seed suites for catalogued benchmarks",
+    )
+    benchmark_matrix.add_argument("--catalog", default="dataset/datasets.yaml")
+    benchmark_matrix.add_argument("--datasets", default="")
+    benchmark_matrix.add_argument("--reports-root", default="reports/benchmark_matrix")
+    benchmark_matrix.add_argument("--experiments-root", default="experiments/benchmark_matrix")
+    benchmark_matrix.add_argument("--seeds", default="42,43")
+    benchmark_matrix.add_argument("--run-suite", action="store_true")
 
     report = subparsers.add_parser("report", help="Build a Markdown report")
     report.add_argument("--experiment", required=True)
@@ -384,6 +412,52 @@ def main(argv: Optional[List[str]] = None) -> int:
             "下一步可用 task-run 生成实验计划和自动实验议程。",
         )
         print(task.task_id)
+        return 0
+
+    if args.command == "benchmark-list":
+        datasets = BenchmarkAgent().list_catalog(Path(args.catalog))
+        if args.json:
+            print_json({"datasets": datasets})
+        else:
+            for name, spec in datasets.items():
+                print(
+                    f"{name}\t{spec.get('local_example', '')}\t"
+                    f"{spec.get('source_url', '')}"
+                )
+        return 0
+
+    if args.command == "benchmark-matrix":
+        seeds = parse_int_list(args.seeds)
+        dataset_names = parse_keywords(args.datasets) or None
+        matrix = BenchmarkAgent().run_matrix(
+            Path(args.catalog),
+            dataset_names=dataset_names,
+            reports_root=Path(args.reports_root),
+            experiments_root=Path(args.experiments_root),
+            seeds=seeds,
+            run_suite=args.run_suite,
+        )
+        completed = sum(1 for row in matrix["datasets"] if row["status"] == "completed")
+        planned = sum(1 for row in matrix["datasets"] if row["status"] == "planned")
+        failed = sum(
+            1
+            for row in matrix["datasets"]
+            if row["status"] not in {"completed", "planned"}
+        )
+        append_worklog(
+            "运行 Benchmark 矩阵",
+            "数据集目录和多 seed suite runner 已具备。",
+            f"基于 {args.catalog} 处理 {len(matrix['datasets'])} 个 benchmark，run_suite={args.run_suite}。",
+            "批量 benchmark 矩阵把数据审计、计划和可选多 seed 运行统一落盘，便于比较不同数据集和后续论文表格。",
+            f"completed={completed}, planned={planned}, failed={failed}, seeds={seeds}。",
+            f"矩阵已写入 {Path(args.reports_root) / 'benchmark_matrix.json'}。",
+            "下一步可打开 benchmark_matrix.md，选择低分或失败数据集进入自动实验闭环。",
+        )
+        print(f"Wrote matrix: {Path(args.reports_root) / 'benchmark_matrix.json'}")
+        print(f"report: {Path(args.reports_root) / 'benchmark_matrix.md'}")
+        print(f"completed: {completed}")
+        print(f"planned: {planned}")
+        print(f"failed: {failed}")
         return 0
 
     if args.command == "task-list":
@@ -909,6 +983,31 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Wrote result: {Path(result.experiment_dir) / 'result.json'}")
         return 0
 
+    if args.command == "run-suite":
+        plan = ExperimentPlan.from_dict(read_yaml(Path(args.config)))
+        seeds = parse_int_list(args.seeds)
+        suite = ExperimentSuiteRunner().run(
+            plan,
+            seeds=seeds,
+            output_dir=Path(args.output_dir) if args.output_dir else None,
+            suite_name=args.suite_name,
+        )
+        summary = suite.metrics_summary["overall_accuracy"]
+        append_worklog(
+            "运行多 Seed 实验套件",
+            "单次实验计划 YAML 已生成。",
+            f"基于 {args.config} 执行 seeds={seeds} 的实验套件。",
+            "多 seed 汇总能在换参数或加模块前估计随机性，避免 agent 依据单次结果钻牛角尖。",
+            f"完成 {suite.run_count} 次运行，OA mean={summary['mean']:.4f} std={summary['std']:.4f}。",
+            f"suite.json 已写入 {Path(suite.output_dir) / 'suite.json'}。",
+            "下一步可把 suite 结果交给 experiment-cycle 或模块消融流程作为稳定性依据。",
+        )
+        print(f"Wrote suite: {Path(suite.output_dir) / 'suite.json'}")
+        print(f"report: {Path(suite.output_dir) / 'suite_report.md'}")
+        print(f"oa_mean: {summary['mean']:.4f}")
+        print(f"oa_std: {summary['std']:.4f}")
+        return 0
+
     if args.command == "report":
         result = ExperimentResult.from_dict(read_json(Path(args.experiment) / "result.json"))
         output = Path(args.output) if args.output else Path(args.experiment) / "report.md"
@@ -1097,6 +1196,10 @@ def parse_env(values: List[str]) -> dict:
 
 def parse_vars(values: List[str]) -> dict:
     return parse_env(values)
+
+
+def parse_int_list(value: str) -> List[int]:
+    return [int(part.strip()) for part in value.split(",") if part.strip()]
 
 
 def print_json(value) -> None:

@@ -113,3 +113,44 @@ class ExperimentResult:
             warnings=list(data.get("warnings", [])),
         )
 
+
+@dataclass
+class ExperimentSuiteResult:
+    suite_name: str
+    output_dir: str
+    base_plan_path: str
+    seeds: List[int]
+    run_count: int
+    results: List[ExperimentResult]
+    metrics_summary: Dict[str, Dict[str, Any]]
+    best_seed: int
+    best_result_path: str
+    artifacts: List[str] = field(default_factory=list)
+    status: str = "completed"
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentSuiteResult":
+        return cls(
+            suite_name=str(data["suite_name"]),
+            output_dir=str(data["output_dir"]),
+            base_plan_path=str(data["base_plan_path"]),
+            seeds=[int(seed) for seed in data.get("seeds", [])],
+            run_count=int(data.get("run_count", 0)),
+            results=[
+                ExperimentResult.from_dict(dict(item))
+                for item in data.get("results", [])
+            ],
+            metrics_summary={
+                str(metric): dict(summary)
+                for metric, summary in data.get("metrics_summary", {}).items()
+            },
+            best_seed=int(data.get("best_seed", 0)),
+            best_result_path=str(data.get("best_result_path", "")),
+            artifacts=list(data.get("artifacts", [])),
+            status=str(data.get("status", "completed")),
+            warnings=list(data.get("warnings", [])),
+        )

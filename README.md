@@ -46,6 +46,9 @@ python -m hyperagent.cli task-show --task-id <task_id>
 python -m hyperagent.cli audit --data-root <path> --output reports/audit.json
 python -m hyperagent.cli plan --audit reports/audit.json --output configs/experiment.yaml
 python -m hyperagent.cli run-baseline --config configs/experiment.yaml
+python -m hyperagent.cli run-suite --config configs/experiment.yaml --seeds 42,43,44 --output-dir experiments/suite
+python -m hyperagent.cli benchmark-list --catalog dataset/datasets.yaml
+python -m hyperagent.cli benchmark-matrix --catalog dataset/datasets.yaml --datasets Indian_pines,PaviaU --run-suite --seeds 42,43
 python -m hyperagent.cli report --experiment <experiment_dir>
 python -m hyperagent.cli demo --synthetic
 python -m hyperagent.cli literature --query "hyperspectral image classification mamba" --output reports/literature.json
