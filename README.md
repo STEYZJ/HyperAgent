@@ -137,7 +137,7 @@ HyperAgent /model
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/init`, `/memory`, `/agents`, `/hooks`, `/plugin`, `/rewind`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 

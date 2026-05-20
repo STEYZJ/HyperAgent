@@ -147,6 +147,9 @@ Slash-style aliases:
   HyperAgent /prompts
   HyperAgent /repl
 
+Inside REPL:
+  /context, /compact, /clear, /init, /memory, /agents, /hooks, /plugin, /rewind, /btw, /simplify
+
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
   HyperAgent send --model deepseek-v4-flash --json-output "return a JSON plan"

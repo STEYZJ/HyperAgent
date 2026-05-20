@@ -8,7 +8,9 @@ from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermissionRequest
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.llm import LLMProviderStore
+from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skills import SkillStore
@@ -18,6 +20,7 @@ from hyperagent.runtime.tool_panel import (
     render_tool_result,
 )
 from hyperagent.runtime.workspace import HyperAgentWorkspace
+from hyperagent.schemas import LLMMessage
 
 
 InputFunc = Callable[[str], str]
@@ -61,6 +64,8 @@ class HyperAgentRepl:
         self.llm_kwargs = dict(llm_kwargs or {})
         self.input = input_func
         self.output = output_func
+        self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
+        self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
         self.session_id = self._ensure_session(session_id, new_title)
 
     def run(self) -> int:
@@ -115,6 +120,8 @@ class HyperAgentRepl:
             self._status()
         elif command == "/session":
             self.output(f"session: {self.session_id}")
+        elif command == "/btw":
+            self._btw(args)
         elif command == "/sessions":
             self._sessions()
         elif command == "/new":
@@ -125,8 +132,24 @@ class HyperAgentRepl:
             self._resume(args)
         elif command in {"/compact", "/compress"}:
             self._compact(args)
+        elif command == "/clear":
+            self._clear()
         elif command == "/context":
             self._context()
+        elif command == "/init":
+            self._init_memory()
+        elif command == "/memory":
+            self._memory(args)
+        elif command == "/agents":
+            self._agents(args)
+        elif command == "/hooks":
+            self._hooks(args)
+        elif command in {"/plugin", "/plugins"}:
+            self._plugins(args)
+        elif command == "/rewind":
+            self._rewind(args)
+        elif command == "/simplify":
+            self._simplify()
         elif command == "/model":
             self._models()
         elif command == "/mcp":
@@ -242,12 +265,60 @@ class HyperAgentRepl:
         self.session_id = session.session_id
         self.output(f"resumed: {self.session_id}")
 
+    def _btw(self, args: List[str]) -> None:
+        text = " ".join(args).strip()
+        if not text:
+            self.output("usage: /btw <temporary question>")
+            return
+        self.output("[btw] temporary isolated answer")
+        messages = AgentLoop(
+            self.conversations,
+            self.providers,
+            self.workspace,
+            prompt_library=self.prompt_library,
+        ).build_messages(
+            self.conversations.load(self.session_id),
+            mode=self.mode,
+            task_id=self.task_id,
+            max_context_chars=min(self.max_context_chars, 4000),
+        )
+        messages.append(
+            LLMMessage(
+                role="user",
+                content="[temporary /btw question, do not treat as project state]\n" + text,
+            )
+        )
+        spec = self.providers.get(self.provider)
+        response = AgentLoop(
+            self.conversations,
+            self.providers,
+            self.workspace,
+            prompt_library=self.prompt_library,
+        ).llm_client.send(
+            spec,
+            messages,
+            model=self.model,
+            **self.llm_kwargs,
+        )
+        for warning in response.warnings:
+            self.output(f"warning: {warning}")
+        if response.content:
+            self.output(response.content)
+
     def _compact(self, args: List[str]) -> None:
         keep_last = int(args[0]) if args else self.keep_last
         session = self.conversations.compress(self.session_id, keep_last=keep_last)
         self.output(
             f"compacted: messages={len(session.messages)} summaries={len(session.summaries)}"
         )
+
+    def _clear(self) -> None:
+        self.extensions.create_rewind_snapshot(
+            self.session_id,
+            self.conversations.load(self.session_id).to_dict(),
+        )
+        session = self.conversations.clear(self.session_id)
+        self.output(f"cleared: messages={len(session.messages)} summaries={len(session.summaries)}")
 
     def _context(self) -> None:
         status = self.conversations.context_status(
@@ -261,6 +332,117 @@ class HyperAgentRepl:
         self.output(f"chars: {status.current_chars}/{status.max_chars}")
         self.output(f"trigger_chars: {status.trigger_chars}")
         self.output(f"should_compress: {status.should_compress}")
+
+    def _init_memory(self) -> None:
+        path = self.memory.ensure_project_memory()
+        self.output(f"initialized project memory: {path}")
+
+    def _memory(self, args: List[str]) -> None:
+        if not args or args[0] == "list":
+            self.output("\n".join(self.memory.list()))
+            return
+        action = args[0]
+        scope = args[1] if len(args) > 1 else "project"
+        if action == "show":
+            self.output(self.memory.read(scope) or f"{scope} memory is empty")
+            return
+        if action == "add":
+            text = " ".join(args[2:]).strip()
+            if not text:
+                self.output("usage: /memory add <project|user|auto> <text>")
+                return
+            path = self.memory.append(scope, text)
+            self.output(f"memory updated: {path}")
+            return
+        self.output("usage: /memory [list|show <scope>|add <scope> <text>]")
+
+    def _agents(self, args: List[str]) -> None:
+        if not args or args[0] == "list":
+            agents = self.extensions.list_subagents()
+            if not agents:
+                self.output("no subagents")
+                return
+            for agent in agents:
+                self.output(
+                    f"{agent.get('id')}\t{agent.get('name')}\t"
+                    f"{agent.get('role')}\ttools={','.join(agent.get('tools', []))}"
+                )
+            return
+        if args[0] == "add":
+            if len(args) < 3:
+                self.output("usage: /agents add <name> <role> [tool1,tool2]")
+                return
+            tools = args[3].split(",") if len(args) > 3 and args[3] else []
+            item = self.extensions.add_subagent(args[1], args[2], tools=tools)
+            self.output(f"subagent added: {item['id']}")
+            return
+        self.output("usage: /agents [list|add <name> <role> [tools]]")
+
+    def _hooks(self, args: List[str]) -> None:
+        if not args or args[0] == "list":
+            hooks = self.extensions.list_hooks()
+            if not hooks:
+                self.output("no hooks")
+                return
+            for hook in hooks:
+                self.output(
+                    f"{hook.get('id')}\t{hook.get('event')}\t"
+                    f"{hook.get('name')}\t{hook.get('command')}"
+                )
+            return
+        if args[0] == "add":
+            if len(args) < 4:
+                self.output("usage: /hooks add <name> <event> <command>")
+                return
+            item = self.extensions.add_hook(args[1], args[2], " ".join(args[3:]))
+            self.output(f"hook added: {item['id']}")
+            return
+        self.output("usage: /hooks [list|add <name> <event> <command>]")
+
+    def _plugins(self, args: List[str]) -> None:
+        if not args or args[0] == "list":
+            plugins = self.extensions.list_plugins()
+            if not plugins:
+                self.output("no plugins")
+                return
+            for plugin in plugins:
+                self.output(
+                    f"{plugin.get('id')}\t{plugin.get('name')}\t"
+                    f"{plugin.get('enabled')}\t{plugin.get('description')}"
+                )
+            return
+        if args[0] == "add":
+            if len(args) < 2:
+                self.output("usage: /plugin add <name> [description]")
+                return
+            item = self.extensions.add_plugin(args[1], description=" ".join(args[2:]))
+            self.output(f"plugin added: {item['id']}")
+            return
+        self.output("usage: /plugin [list|add <name> [description]]")
+
+    def _rewind(self, args: List[str]) -> None:
+        if args and args[0] == "save":
+            path = self.extensions.create_rewind_snapshot(
+                self.session_id,
+                self.conversations.load(self.session_id).to_dict(),
+            )
+            self.output(f"rewind snapshot: {path}")
+            return
+        snapshots = self.extensions.list_rewind_snapshots()
+        if not snapshots:
+            self.output("no rewind snapshots")
+            return
+        for path in snapshots[-20:]:
+            self.output(str(path))
+
+    def _simplify(self) -> None:
+        self.output(
+            "simplify council:\n"
+            "- code_quality: inspect duplication, naming, tests, and module boundaries\n"
+            "- runtime_efficiency: inspect slow paths, repeated IO, and avoidable work\n"
+            "- reuse: inspect abstractions, registry use, and extension points\n"
+            "Run `/plan simplify current changes from code quality, efficiency, and reuse perspectives` to generate a saved plan."
+        )
 
     def _models(self) -> None:
         for provider in self.providers.ensure_defaults():
@@ -355,11 +537,20 @@ class HyperAgentRepl:
             "/help                 show commands\n"
             "/status               show workspace status\n"
             "/session              show current session\n"
+            "/btw <question>       ask an isolated temporary question\n"
             "/sessions             list sessions\n"
             "/new [title]          create a new session\n"
             "/resume <session_id>  switch session\n"
             "/context              show context compression status\n"
             "/compact [keep_last]  compress current session\n"
+            "/clear                clear current context after saving a rewind snapshot\n"
+            "/init                 create project HyperAgent.md memory\n"
+            "/memory ...           list/show/add memory entries\n"
+            "/agents ...           list/add project subagents\n"
+            "/hooks ...            list/add project hooks\n"
+            "/plugin ...           list/add project plugins\n"
+            "/rewind [save]        list or save rewind snapshots\n"
+            "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
             "/mcp                  list MCP servers\n"
             "/skills               list skills\n"

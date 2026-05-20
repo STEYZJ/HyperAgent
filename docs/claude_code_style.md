@@ -71,6 +71,15 @@ agent-chat turns. Slash commands handle local operations:
 /resume <session_id>  switch session
 /context              show context compression status
 /compact [keep_last]  compress current session
+/clear                clear context after saving a rewind snapshot
+/init                 create project HyperAgent.md memory
+/memory ...           list/show/add project, user, or auto memory
+/agents ...           list/add project subagents
+/hooks ...            list/add project hooks
+/plugin ...           list/add project plugins
+/rewind [save]        list or save rewind snapshots
+/btw <question>       ask an isolated temporary question
+/simplify             show the three-agent simplification council
 /model                list LLM providers
 /mcp                  list MCP servers
 /skills               list skills

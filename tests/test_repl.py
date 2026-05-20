@@ -40,6 +40,56 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertIn("should_compress:", text)
             self.assertIn("Available local tools", text)
 
+    def test_repl_memory_extensions_clear_and_rewind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            lines = iter(
+                [
+                    "/init",
+                    "/memory add project prefer Chinese responses",
+                    "/memory show project",
+                    "/agents add reviewer code_quality read_file,search_code",
+                    "/agents",
+                    "/hooks add precommit before_commit python -m unittest discover -s tests",
+                    "/hooks",
+                    "/plugin add commit-commands git workflow helper",
+                    "/plugin",
+                    "/rewind save",
+                    "/rewind",
+                    "/clear",
+                    "/simplify",
+                    "/exit",
+                ]
+            )
+            outputs = []
+            session = conversations.new("stateful")
+            conversations.add_message(session.session_id, "user", "old context")
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                session_id=session.session_id,
+                input_func=lambda prompt: next(lines),
+                output_func=outputs.append,
+            )
+
+            self.assertEqual(repl.run(), 0)
+            text = "\n".join(outputs)
+            self.assertTrue((root / "HyperAgent.md").exists())
+            self.assertIn("prefer Chinese responses", text)
+            self.assertIn("subagent added:", text)
+            self.assertIn("hook added:", text)
+            self.assertIn("plugin added:", text)
+            self.assertIn("rewind snapshot:", text)
+            self.assertIn("cleared: messages=0 summaries=0", text)
+            self.assertIn("simplify council", text)
+
     def test_repl_tool_permission_denial_panel(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -118,6 +118,13 @@ class ConversationStore:
         self.save(session)
         return session
 
+    def clear(self, session_id: str) -> ConversationSession:
+        session = self.load(session_id)
+        session.messages = []
+        session.summaries = []
+        self.save(session)
+        return session
+
     def auto_compress(
         self,
         session_id: str,
