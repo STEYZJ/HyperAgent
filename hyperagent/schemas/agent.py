@@ -153,3 +153,75 @@ class AgentToolResult:
             artifact_path=data.get("artifact_path"),
             warnings=[str(v) for v in data.get("warnings", [])],
         )
+
+
+@dataclass
+class AgentActionStep:
+    step_index: int
+    response_content: str
+    action: str
+    status: str
+    tool_name: Optional[str] = None
+    args: Dict[str, Any] = field(default_factory=dict)
+    tool_result: Optional[AgentToolResult] = None
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentActionStep":
+        raw_result = data.get("tool_result")
+        return cls(
+            step_index=int(data["step_index"]),
+            response_content=str(data.get("response_content", "")),
+            action=str(data.get("action", "")),
+            status=str(data.get("status", "")),
+            tool_name=None if data.get("tool_name") is None else str(data.get("tool_name")),
+            args=dict(data.get("args", {})),
+            tool_result=(
+                AgentToolResult.from_dict(dict(raw_result))
+                if isinstance(raw_result, dict)
+                else None
+            ),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
+class AgentActionRun:
+    run_id: str
+    session_id: str
+    provider: str
+    model: str
+    instruction: str
+    created_at: str
+    run_dir: str
+    status: str = "running"
+    task_id: Optional[str] = None
+    final_response: str = ""
+    steps: List[AgentActionStep] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentActionRun":
+        return cls(
+            run_id=str(data["run_id"]),
+            session_id=str(data["session_id"]),
+            provider=str(data["provider"]),
+            model=str(data["model"]),
+            instruction=str(data["instruction"]),
+            created_at=str(data["created_at"]),
+            run_dir=str(data["run_dir"]),
+            status=str(data.get("status", "running")),
+            task_id=None if data.get("task_id") is None else str(data.get("task_id")),
+            final_response=str(data.get("final_response", "")),
+            steps=[
+                AgentActionStep.from_dict(dict(item))
+                for item in data.get("steps", [])
+            ],
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )

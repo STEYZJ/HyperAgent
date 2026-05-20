@@ -62,6 +62,7 @@ python -m hyperagent.cli llm-send --provider deepseek --user "Plan a small HSI b
 python -m hyperagent.cli agent-chat --provider deepseek --new-title "HSI research" --mode research --message "Plan the next experiment"
 python -m hyperagent.cli agent-context --query "agent plan" --max-files 12
 python -m hyperagent.cli agent-plan --provider deepseek --mode code --instruction "Make HyperAgent more like Claude Code"
+python -m hyperagent.cli agent-act --provider deepseek --new-title "Action loop" --message "Inspect benchmark matrix and choose the next safe step" --max-steps 3
 python -m hyperagent.cli agent-tool read-file --path hyperagent/cli.py --max-lines 80
 python -m hyperagent.cli agent-tool search-code --query "AgentLoop" --path hyperagent
 python -m hyperagent.cli agent-tool run-command -- python -m unittest discover -s tests

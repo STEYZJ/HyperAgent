@@ -1,6 +1,8 @@
 """Schema dataclasses exchanged between decoupled HyperAgent modules."""
 
 from hyperagent.schemas.agent import (
+    AgentActionRun,
+    AgentActionStep,
     AgentToolCall,
     AgentToolResult,
     CodingAgentRun,
@@ -59,6 +61,8 @@ __all__ = [
     "DatasetAudit",
     "AblationStudy",
     "AblationVariant",
+    "AgentActionRun",
+    "AgentActionStep",
     "AgentTurnResult",
     "AgentToolCall",
     "AgentToolResult",

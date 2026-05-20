@@ -10,6 +10,7 @@ from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
+from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.repo_context import RepoContextBuilder
@@ -245,6 +246,22 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_plan.add_argument("--max-context-chars", type=int, default=18000)
     agent_plan.add_argument("--max-files", type=int, default=20)
     agent_plan.add_argument("--max-preview-chars", type=int, default=1200)
+
+    agent_act = subparsers.add_parser(
+        "agent-act",
+        help="Run a short LLM-controlled local tool-call loop",
+    )
+    agent_act.add_argument("--session-id", default=None)
+    agent_act.add_argument("--new-title", default=None)
+    agent_act.add_argument("--provider", default="deepseek")
+    agent_act.add_argument("--model", default=None)
+    agent_act.add_argument("--message", required=True)
+    agent_act.add_argument("--task-id", default=None)
+    agent_act.add_argument("--max-steps", type=int, default=3)
+    agent_act.add_argument("--temperature", type=float, default=0.2)
+    agent_act.add_argument("--max-tokens", type=int, default=None)
+    agent_act.add_argument("--max-files", type=int, default=12)
+    agent_act.add_argument("--max-preview-chars", type=int, default=1000)
 
     agent_tool = subparsers.add_parser(
         "agent-tool",
@@ -740,6 +757,50 @@ def main(argv: Optional[List[str]] = None) -> int:
         if run.warnings:
             for warning in run.warnings:
                 print(f"warning: {warning}")
+        return 0
+
+    if args.command == "agent-act":
+        llm_store.ensure_defaults()
+        if args.session_id:
+            session_id = args.session_id
+            session_store.load(session_id)
+        else:
+            title = args.new_title or args.message.strip().splitlines()[0][:80]
+            session = session_store.new(title or "HyperAgent action loop")
+            session_id = session.session_id
+        run = AgentActionLoop(
+            session_store,
+            llm_store,
+            workspace,
+        ).run(
+            session_id=session_id,
+            provider=args.provider,
+            instruction=args.message,
+            model=args.model,
+            task_id=args.task_id,
+            max_steps=args.max_steps,
+            max_files=args.max_files,
+            max_preview_chars=args.max_preview_chars,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+        )
+        append_worklog(
+            "运行 LLM 受控 Action Loop",
+            "会话、LLM provider、repo context 和受控工具执行器已具备。",
+            f"执行 run={run.run_id} session={run.session_id} provider={run.provider} steps={len(run.steps)}。",
+            "agent-act 让大模型用结构化 JSON 选择安全工具，并把工具结果写回会话，形成 Claude Code 式闭环。",
+            f"run 状态为 {run.status}，artifact={Path(run.run_dir) / 'action_run.json'}。",
+            "action loop 结果已归档，工具调用也有独立审计记录。",
+            "下一步可继续同一 session，或让 agent 读取 benchmark/suite 结果决定实验动作。",
+        )
+        print(f"run_id: {run.run_id}")
+        print(f"session_id: {run.session_id}")
+        print(f"status: {run.status}")
+        print(f"action_run: {Path(run.run_dir) / 'action_run.json'}")
+        if run.final_response:
+            print(run.final_response)
+        for warning in run.warnings:
+            print(f"warning: {warning}")
         return 0
 
     if args.command == "agent-tool":
