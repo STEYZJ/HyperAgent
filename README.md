@@ -23,7 +23,7 @@ Use the project Python environment:
 
 ```bash
 conda activate HyperAgent
-python -m hyperagent.cli demo --synthetic
+HyperAgent demo --synthetic
 ```
 
 The demo writes artifacts under `experiments/synthetic_demo/` and appends a worklog entry under `logs/worklog/`.
@@ -34,53 +34,60 @@ The verified environment path is:
 /home/lzj/miniconda3/envs/HyperAgent
 ```
 
+If the package is not installed as an editable project yet, use the repository-local launcher:
+
+```bash
+./HyperAgent demo --synthetic
+```
+
 ## CLI
 
 ```bash
-python -m hyperagent.cli init --dataset-root /data2/lzj/lab/Mamba_test/dataset
-python -m hyperagent.cli status
-python -m hyperagent.cli task-create --goal "build reproducible Indian Pines baseline" --dataset Indian_pines --keywords "hyperspectral image classification,mamba"
-python -m hyperagent.cli task-run --task-id <task_id>
-python -m hyperagent.cli task-list
-python -m hyperagent.cli task-show --task-id <task_id>
-python -m hyperagent.cli audit --data-root <path> --output reports/audit.json
-python -m hyperagent.cli plan --audit reports/audit.json --output configs/experiment.yaml
-python -m hyperagent.cli run-baseline --config configs/experiment.yaml
-python -m hyperagent.cli run-suite --config configs/experiment.yaml --seeds 42,43,44 --output-dir experiments/suite
-python -m hyperagent.cli benchmark-list --catalog dataset/datasets.yaml
-python -m hyperagent.cli benchmark-matrix --catalog dataset/datasets.yaml --datasets Indian_pines,PaviaU --run-suite --seeds 42,43
-python -m hyperagent.cli report --experiment <experiment_dir>
-python -m hyperagent.cli demo --synthetic
-python -m hyperagent.cli literature --query "hyperspectral image classification mamba" --output reports/literature.json
-python -m hyperagent.cli auto-experiment --audit reports/audit.json --spectral reports/spectral_report.json --recommendation reports/model_recommendation.json --output reports/agenda.json
-python -m hyperagent.cli tune-next --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output reports/tuning.json
-python -m hyperagent.cli experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next --max-repeated-parameter 2
-python -m hyperagent.cli propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
-python -m hyperagent.cli llm-providers
-python -m hyperagent.cli llm-dry-run --provider openai --user "Plan an HSI experiment"
-python -m hyperagent.cli llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
-python -m hyperagent.cli llm-dry-run --provider deepseek --model deepseek-v4-pro --thinking enabled --reasoning-effort max --json-output --user "Return a JSON experiment plan"
-python -m hyperagent.cli llm-send --provider deepseek --model deepseek-v4-flash --thinking disabled --top-p 0.9 --user "Plan the next HSI baseline"
-python -m hyperagent.cli agent-chat --provider deepseek --new-title "HSI research" --mode research --message "Plan the next experiment"
-python -m hyperagent.cli agent-context --query "agent plan" --max-files 12
-python -m hyperagent.cli agent-plan --provider deepseek --mode code --instruction "Make HyperAgent more like Claude Code"
-python -m hyperagent.cli agent-act --provider deepseek --new-title "Action loop" --message "Inspect benchmark matrix and choose the next safe step" --max-steps 3
-python -m hyperagent.cli agent-tool read-file --path hyperagent/cli.py --max-lines 80
-python -m hyperagent.cli agent-tool search-code --query "AgentLoop" --path hyperagent
-python -m hyperagent.cli agent-tool run-command -- python -m unittest discover -s tests
-python -m hyperagent.cli session-new --title "Indian Pines research"
-python -m hyperagent.cli session-add --session-id <session_id> --role user --content "Next experiment?"
-python -m hyperagent.cli session-compress --session-id <session_id> --keep-last 4
-python -m hyperagent.cli session-archive --session-id <session_id>
-python -m hyperagent.cli session-delete --session-id <session_id>
-python -m hyperagent.cli skill-list
-python -m hyperagent.cli mcp-add --name demo --command python --arg=-m --arg demo_server
-python -m hyperagent.cli mcp-export
-python -m hyperagent.cli obsidian-index --vault <obsidian_vault>
-python -m hyperagent.cli obsidian-search --query "spectral gate"
-python -m hyperagent.cli prompt-list
-python -m hyperagent.cli prompt-render --name hsi_research_copilot --var dataset=Indian_pines --var objective=OA
-python -m hyperagent.cli materialize-module --proposal reports/indian_pines/module_proposal.json --base-plan reports/indian_pines/experiment.yaml --ablation-output configs/ablations/indian_pines_evidence_adapter --force
+HyperAgent init --dataset-root /data2/lzj/lab/Mamba_test/dataset
+HyperAgent status
+HyperAgent task-create --goal "build reproducible Indian Pines baseline" --dataset Indian_pines --keywords "hyperspectral image classification,mamba"
+HyperAgent task-run --task-id <task_id>
+HyperAgent task-list
+HyperAgent task-show --task-id <task_id>
+HyperAgent audit --data-root <path> --output reports/audit.json
+HyperAgent plan --audit reports/audit.json --output configs/experiment.yaml
+HyperAgent run-baseline --config configs/experiment.yaml
+HyperAgent run-suite --config configs/experiment.yaml --seeds 42,43,44 --output-dir experiments/suite
+HyperAgent benchmark-list --catalog dataset/datasets.yaml
+HyperAgent benchmark-matrix --catalog dataset/datasets.yaml --datasets Indian_pines,PaviaU --run-suite --seeds 42,43
+HyperAgent report --experiment <experiment_dir>
+HyperAgent demo --synthetic
+HyperAgent literature --query "hyperspectral image classification mamba" --output reports/literature.json
+HyperAgent auto-experiment --audit reports/audit.json --spectral reports/spectral_report.json --recommendation reports/model_recommendation.json --output reports/agenda.json
+HyperAgent tune-next --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output reports/tuning.json
+HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next --max-repeated-parameter 2
+HyperAgent propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
+HyperAgent llm-providers
+HyperAgent llm-dry-run --provider openai --user "Plan an HSI experiment"
+HyperAgent llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
+HyperAgent llm-dry-run --provider deepseek --model deepseek-v4-pro --thinking enabled --reasoning-effort max --json-output --user "Return a JSON experiment plan"
+HyperAgent llm-send --provider deepseek --model deepseek-v4-flash --thinking disabled --top-p 0.9 --user "Plan the next HSI baseline"
+HyperAgent "Plan the next experiment"
+HyperAgent chat --provider deepseek --new-title "HSI research" --mode research "Plan the next experiment"
+HyperAgent agent-context --query "agent plan" --max-files 12
+HyperAgent plan --provider deepseek --mode code "Make HyperAgent more like Claude Code"
+HyperAgent act --provider deepseek --new-title "Action loop" --max-steps 3 "Inspect benchmark matrix and choose the next safe step"
+HyperAgent agent-tool read-file --path hyperagent/cli.py --max-lines 80
+HyperAgent agent-tool search-code --query "AgentLoop" --path hyperagent
+HyperAgent agent-tool run-command -- python -m unittest discover -s tests
+HyperAgent session-new --title "Indian Pines research"
+HyperAgent session-add --session-id <session_id> --role user --content "Next experiment?"
+HyperAgent /compact <session_id> --keep-last 4
+HyperAgent session-archive --session-id <session_id>
+HyperAgent session-delete --session-id <session_id>
+HyperAgent /skills
+HyperAgent mcp-add --name demo --command python --arg=-m --arg demo_server
+HyperAgent /mcp
+HyperAgent obsidian-index --vault <obsidian_vault>
+HyperAgent obsidian-search --query "spectral gate"
+HyperAgent /prompts
+HyperAgent prompt-render --name hsi_research_copilot --var dataset=Indian_pines --var objective=OA
+HyperAgent materialize-module --proposal reports/indian_pines/module_proposal.json --base-plan reports/indian_pines/experiment.yaml --ablation-output configs/ablations/indian_pines_evidence_adapter --force
 ```
 
 The local dataset root used in this workspace is recorded in `configs/hyperagent_local.yaml`:
@@ -94,7 +101,7 @@ The local dataset root used in this workspace is recorded in `configs/hyperagent
 OpenAI-compatible providers share one runtime path. DeepSeek currently supports explicit model selection, thinking mode, reasoning effort, JSON output, and raw request-body extensions:
 
 ```bash
-python -m hyperagent.cli llm-send \
+HyperAgent llm-send \
   --provider deepseek \
   --model deepseek-v4-pro \
   --thinking enabled \
@@ -111,6 +118,24 @@ Useful flags:
 - `--json-output`: sends `response_format={"type":"json_object"}`.
 - `--extra-body-json`: merges raw JSON into the request body, so provider features such as `tools` and `tool_choice` can be used without changing the core agent code.
 - `--top-p` and `--user-id`: pass common provider options when supported.
+
+## Claude-Code-Like Launcher
+
+HyperAgent now has a Claude-Code-like launcher. The command format starts with `HyperAgent`:
+
+```bash
+HyperAgent "analyze the last report and propose the next experiment"
+HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design an evidence-backed ablation"
+HyperAgent plan "materialize module_proposal.json into a model factory"
+HyperAgent act "inspect reports and choose the next safe local tool"
+HyperAgent /resume <session_id> "continue from the last result"
+HyperAgent /status
+HyperAgent /sessions
+HyperAgent /model
+HyperAgent /help
+```
+
+Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 
 ## MVP Limits
 

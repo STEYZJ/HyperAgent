@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HYPERAGENT_PYTHON="${HYPERAGENT_PYTHON:-/home/lzj/miniconda3/envs/HyperAgent/bin/python}"
+exec "$HYPERAGENT_PYTHON" -m hyperagent.launcher "$@"

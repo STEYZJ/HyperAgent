@@ -18,6 +18,7 @@ from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
+from hyperagent.runtime.command_aliases import command_help_text
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore, LLMRequestBuilder
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
@@ -371,6 +372,11 @@ def _build_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--ablation-output", default=None)
     materialize.add_argument("--force", action="store_true")
 
+    subparsers.add_parser(
+        "hyperagent-commands",
+        help="Show Claude-Code-like HyperAgent command aliases",
+    )
+
     return parser
 
 
@@ -404,6 +410,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             "下一步可用 task-create 创建科研任务。",
         )
         print(f"Initialized HyperAgent workspace: {workspace.workspace_dir}")
+        return 0
+
+    if args.command == "hyperagent-commands":
+        print(command_help_text())
         return 0
 
     if args.command == "status":
