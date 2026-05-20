@@ -312,6 +312,8 @@ class ExperimentCycle:
     selected_proposal: Optional[ParameterProposal] = None
     next_result_path: Optional[str] = None
     report_path: Optional[str] = None
+    pause_reason: Optional[str] = None
+    pause_details: Dict[str, Any] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -340,6 +342,8 @@ class ExperimentCycle:
             ),
             next_result_path=data.get("next_result_path"),
             report_path=data.get("report_path"),
+            pause_reason=data.get("pause_reason"),
+            pause_details=dict(data.get("pause_details", {})),
             warnings=[str(v) for v in data.get("warnings", [])],
         )
 

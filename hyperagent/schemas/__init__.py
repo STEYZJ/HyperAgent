@@ -6,6 +6,7 @@ from hyperagent.schemas.agent import (
     AgentToolCall,
     AgentToolResult,
     CodingAgentRun,
+    GeneralAgentRun,
     RepoFileContext,
     RepoSnapshot,
 )
@@ -70,6 +71,7 @@ __all__ = [
     "AgentToolResult",
     "AutoExperimentAgenda",
     "CodingAgentRun",
+    "GeneralAgentRun",
     "ConversationMessage",
     "ConversationSession",
     "ConversationSummary",

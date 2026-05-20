@@ -59,6 +59,7 @@ class HyperAgentLauncherTest(unittest.TestCase):
         self.assertEqual(normalize_hyperagent_args(["/reasonix"]), ["llm-profile"])
         self.assertEqual(normalize_hyperagent_args(["/usage"]), ["llm-usage"])
         self.assertEqual(normalize_hyperagent_args(["/repl"]), ["repl"])
+        self.assertEqual(normalize_hyperagent_args(["/tui"]), ["tui"])
         self.assertEqual(
             normalize_hyperagent_args(["/resume", "sid-1", "continue", "work"]),
             ["agent-chat", "--session-id", "sid-1", "--message", "continue work"],

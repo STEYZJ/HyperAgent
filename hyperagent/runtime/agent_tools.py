@@ -1,15 +1,16 @@
 """Controlled local tools for Claude-Code-like agent workflows."""
 
+import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
-from hyperagent.core.io import write_json
+from hyperagent.core.io import read_yaml, write_json
 from hyperagent.runtime.repo_context import SKIP_DIRS, TEXT_SUFFIXES
 from hyperagent.runtime.workspace import utc_now
-from hyperagent.schemas import AgentToolCall, AgentToolResult
+from hyperagent.schemas import AgentToolCall, AgentToolResult, ExperimentPlan
 
 
 ALLOWED_GIT_SUBCOMMANDS = {
@@ -47,12 +48,18 @@ class SafeAgentToolExecutor:
         workspace_dir: Path,
         permission_policy: str = "auto",
         permission_callback: Optional[Callable[[ToolPermissionRequest], bool]] = None,
+        session_permission_cache: Optional[Dict[str, bool]] = None,
+        allow_arbitrary_commands: bool = False,
     ) -> None:
         self.project_root = project_root.resolve()
         self.workspace_dir = workspace_dir.resolve()
         self.tool_runs_dir = self.workspace_dir / "tool_runs"
         self.permission_policy = permission_policy
         self.permission_callback = permission_callback
+        self.session_permission_cache = (
+            session_permission_cache if session_permission_cache is not None else {}
+        )
+        self.allow_arbitrary_commands = allow_arbitrary_commands
 
     def read_file(
         self,
@@ -176,10 +183,15 @@ class SafeAgentToolExecutor:
                 reason,
                 warnings=["command is outside the HyperAgent agent-tool allowlist"],
             )
+        permission_reason = (
+            "run a user-authorized arbitrary command"
+            if self.allow_arbitrary_commands
+            else "run a local allowlisted command"
+        )
         permission = self._check_permission(
             call,
             risk_level="execute",
-            reason="run a local allowlisted command",
+            reason=permission_reason,
         )
         if permission is not None:
             return permission
@@ -216,6 +228,110 @@ class SafeAgentToolExecutor:
             content,
             exit_code=completed.returncode,
         )
+
+    def run_experiment(
+        self,
+        plan_path: str,
+        seeds: Optional[Sequence[int]] = None,
+        output_dir: Optional[str] = None,
+        suite_name: Optional[str] = None,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "run_experiment",
+            {
+                "plan_path": plan_path,
+                "seeds": list(seeds or []),
+                "output_dir": output_dir,
+                "suite_name": suite_name,
+            },
+            run_id=run_id,
+        )
+        try:
+            target = self._resolve_safe_path(plan_path)
+        except ValueError as exc:
+            return self._record(
+                call,
+                "blocked",
+                str(exc),
+                warnings=["run_experiment plan path must stay inside project root"],
+            )
+        if not target.exists() or not target.is_file():
+            return self._record(
+                call,
+                "error",
+                f"Experiment plan not found: {plan_path}",
+                warnings=["run_experiment requires an existing YAML plan"],
+            )
+        permission = self._check_permission(
+            call,
+            risk_level="training",
+            reason="run a HyperAgent experiment plan",
+        )
+        if permission is not None:
+            return permission
+        try:
+            from hyperagent.tools.report_builder import MarkdownReportBuilder
+            from hyperagent.training.baseline_runner import BaselineRunner
+            from hyperagent.training.experiment_suite import ExperimentSuiteRunner
+
+            plan = ExperimentPlan.from_dict(read_yaml(target))
+            artifacts: List[str] = []
+            if seeds:
+                suite = ExperimentSuiteRunner().run(
+                    plan,
+                    seeds=[int(seed) for seed in seeds],
+                    output_dir=(
+                        self._resolve_safe_path(output_dir)
+                        if output_dir
+                        else None
+                    ),
+                    suite_name=suite_name,
+                )
+                artifacts = [str(Path(suite.output_dir) / "suite.json")] + list(
+                    suite.artifacts
+                )
+                content = {
+                    "mode": "suite",
+                    "suite_name": suite.suite_name,
+                    "output_dir": suite.output_dir,
+                    "suite_path": str(Path(suite.output_dir) / "suite.json"),
+                    "report_path": str(Path(suite.output_dir) / "suite_report.md"),
+                    "oa_mean": suite.metrics_summary["overall_accuracy"]["mean"],
+                    "oa_std": suite.metrics_summary["overall_accuracy"]["std"],
+                }
+            else:
+                result = BaselineRunner().run(plan)
+                report = MarkdownReportBuilder().write(
+                    result,
+                    Path(result.experiment_dir) / "report.md",
+                )
+                artifacts = [
+                    str(Path(result.experiment_dir) / "result.json"),
+                    str(report),
+                ] + list(result.artifacts)
+                content = {
+                    "mode": "single",
+                    "experiment_name": result.experiment_name,
+                    "result_path": str(Path(result.experiment_dir) / "result.json"),
+                    "report_path": str(report),
+                    "overall_accuracy": result.evaluation.overall_accuracy,
+                    "average_accuracy": result.evaluation.average_accuracy,
+                    "kappa": result.evaluation.kappa,
+                }
+            return self._record(
+                call,
+                "ok",
+                json.dumps(content, ensure_ascii=False, indent=2),
+                warnings=[f"artifact: {path}" for path in artifacts],
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["run_experiment failed"],
+            )
 
     def check_patch(
         self,
@@ -304,6 +420,11 @@ class SafeAgentToolExecutor:
     ) -> Optional[AgentToolResult]:
         if self.permission_policy == "auto" or risk_level == "read":
             return None
+        if self.permission_policy == "deny-write" and risk_level not in {
+            "write",
+            "training",
+        }:
+            return None
         request = ToolPermissionRequest(
             tool_name=call.tool_name,
             args=call.args,
@@ -312,7 +433,8 @@ class SafeAgentToolExecutor:
             run_id=call.run_id,
         )
         if self.permission_policy == "deny" or (
-            self.permission_policy == "deny-write" and risk_level == "write"
+            self.permission_policy == "deny-write"
+            and risk_level in {"write", "training"}
         ):
             return self._record(
                 call,
@@ -320,7 +442,13 @@ class SafeAgentToolExecutor:
                 f"Permission policy blocked {call.tool_name}: {reason}",
                 warnings=[f"permission policy: {self.permission_policy}"],
             )
-        if self.permission_policy == "ask":
+        if self.permission_policy in {"ask", "session-ask"}:
+            cache_key = self._permission_cache_key(request)
+            if (
+                self.permission_policy == "session-ask"
+                and self.session_permission_cache.get(cache_key)
+            ):
+                return None
             if self.permission_callback is None:
                 return self._record(
                     call,
@@ -336,6 +464,8 @@ class SafeAgentToolExecutor:
                     f"User denied permission for {call.tool_name}: {reason}",
                     warnings=["permission denied by user"],
                 )
+            if self.permission_policy == "session-ask":
+                self.session_permission_cache[cache_key] = True
             return None
         return self._record(
             call,
@@ -385,6 +515,8 @@ class SafeAgentToolExecutor:
     def _command_allowed(self, argv: Sequence[str]) -> tuple:
         if not argv:
             return False, "Empty command"
+        if self.allow_arbitrary_commands:
+            return True, ""
         executable = Path(argv[0]).name
         if executable == "git":
             if len(argv) >= 2 and argv[1] in ALLOWED_GIT_SUBCOMMANDS:
@@ -403,3 +535,6 @@ class SafeAgentToolExecutor:
         if stderr:
             parts.append("stderr:\n" + stderr.rstrip())
         return "\n\n".join(parts)
+
+    def _permission_cache_key(self, request: ToolPermissionRequest) -> str:
+        return f"{request.risk_level}:{request.tool_name}"

@@ -14,7 +14,9 @@ from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.coding_agent import CodingAgent
+from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.repo_context import RepoContextBuilder
+from hyperagent.runtime.tui import HyperAgentTui
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
@@ -33,6 +35,7 @@ from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.schemas import (
     DatasetAudit,
+    ExperimentCycle,
     ExperimentPlan,
     ExperimentResult,
     LLMMessage,
@@ -165,9 +168,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "experiment-cycle",
         help="Analyze a completed experiment and build or run the next one",
     )
-    experiment_cycle.add_argument("--plan", required=True)
-    experiment_cycle.add_argument("--result", required=True)
-    experiment_cycle.add_argument("--audit", required=True)
+    experiment_cycle.add_argument("--plan", default=None)
+    experiment_cycle.add_argument("--result", default=None)
+    experiment_cycle.add_argument("--audit", default=None)
+    experiment_cycle.add_argument("--resume-paused", default=None)
     experiment_cycle.add_argument("--output-root", default="experiments/autopilot")
     experiment_cycle.add_argument("--objective", default="maximize_oa_with_reproducible_baseline")
     experiment_cycle.add_argument("--target-oa", type=float, default=0.9)
@@ -181,6 +185,8 @@ def _build_parser() -> argparse.ArgumentParser:
     experiment_cycle.add_argument("--llm-council", action="store_true")
     experiment_cycle.add_argument("--council-profile", default="reasonix-balanced")
     experiment_cycle.add_argument("--council-llm-budget", type=int, default=3)
+    experiment_cycle.add_argument("--llm-gate-token-budget", type=int, default=4096)
+    experiment_cycle.add_argument("--llm-gate-retry-sec", type=int, default=30)
 
     module = subparsers.add_parser(
         "propose-module",
@@ -264,10 +270,37 @@ def _build_parser() -> argparse.ArgumentParser:
         default="research",
     )
     repl.add_argument("--task-id", default=None)
-    repl.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="ask")
+    repl.add_argument(
+        "--permission",
+        choices=["auto", "ask", "session-ask", "deny-write", "deny"],
+        default="ask",
+    )
     repl.add_argument("--max-context-chars", type=int, default=12000)
     repl.add_argument("--keep-last", type=int, default=6)
     add_llm_runtime_args(repl)
+
+    tui = subparsers.add_parser(
+        "tui",
+        help="Start the fullscreen curses HyperAgent interface",
+    )
+    tui.add_argument("--session-id", default=None)
+    tui.add_argument("--new-title", default=None)
+    tui.add_argument("--provider", default="deepseek")
+    tui.add_argument("--model", default=None)
+    tui.add_argument(
+        "--mode",
+        choices=["research", "code", "algorithm"],
+        default="research",
+    )
+    tui.add_argument("--task-id", default=None)
+    tui.add_argument(
+        "--permission",
+        choices=["auto", "ask", "session-ask", "deny-write", "deny"],
+        default="session-ask",
+    )
+    tui.add_argument("--max-context-chars", type=int, default=12000)
+    tui.add_argument("--keep-last", type=int, default=6)
+    add_llm_runtime_args(tui)
 
     agent_context = subparsers.add_parser(
         "agent-context",
@@ -317,13 +350,44 @@ def _build_parser() -> argparse.ArgumentParser:
     add_llm_runtime_args(agent_act)
     agent_act.add_argument("--max-files", type=int, default=12)
     agent_act.add_argument("--max-preview-chars", type=int, default=1000)
-    agent_act.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="auto")
+    agent_act.add_argument(
+        "--permission",
+        choices=["auto", "ask", "session-ask", "deny-write", "deny"],
+        default="auto",
+    )
+
+    agent_run = subparsers.add_parser(
+        "agent-run",
+        help="Run a registered project subagent with user-authorized tools",
+    )
+    agent_run.add_argument("--agent", required=True)
+    agent_run.add_argument("--instruction", required=True)
+    agent_run.add_argument("--session-id", default=None)
+    agent_run.add_argument("--new-title", default=None)
+    agent_run.add_argument("--provider", default="deepseek")
+    agent_run.add_argument("--model", default=None)
+    agent_run.add_argument("--task-id", default=None)
+    agent_run.add_argument("--max-steps", type=int, default=3)
+    agent_run.add_argument("--temperature", type=float, default=0.2)
+    agent_run.add_argument("--max-tokens", type=int, default=None)
+    agent_run.add_argument("--max-files", type=int, default=12)
+    agent_run.add_argument("--max-preview-chars", type=int, default=1000)
+    agent_run.add_argument(
+        "--permission",
+        choices=["ask", "session-ask", "deny-write", "deny"],
+        default="session-ask",
+    )
+    add_llm_runtime_args(agent_run)
 
     agent_tool = subparsers.add_parser(
         "agent-tool",
         help="Run a controlled Claude-Code-like local tool",
     )
-    agent_tool.add_argument("--permission", choices=["auto", "ask", "deny-write", "deny"], default="auto")
+    agent_tool.add_argument(
+        "--permission",
+        choices=["auto", "ask", "session-ask", "deny-write", "deny"],
+        default="auto",
+    )
     agent_tool_sub = agent_tool.add_subparsers(dest="tool_command", required=True)
 
     tool_read = agent_tool_sub.add_parser("read-file", help="Read a project text file")
@@ -345,6 +409,17 @@ def _build_parser() -> argparse.ArgumentParser:
     tool_run.add_argument("--run-id", default=None)
     tool_run.add_argument("--json", action="store_true")
     tool_run.add_argument("argv", nargs=argparse.REMAINDER)
+
+    tool_experiment = agent_tool_sub.add_parser(
+        "run-experiment",
+        help="Run a HyperAgent experiment YAML through the controlled tool layer",
+    )
+    tool_experiment.add_argument("--plan", required=True)
+    tool_experiment.add_argument("--seeds", default="")
+    tool_experiment.add_argument("--output-dir", default=None)
+    tool_experiment.add_argument("--suite-name", default=None)
+    tool_experiment.add_argument("--run-id", default=None)
+    tool_experiment.add_argument("--json", action="store_true")
 
     tool_check_patch = agent_tool_sub.add_parser("check-patch", help="Validate a unified diff with git apply --check")
     tool_check_patch.add_argument("--patch-file", required=True)
@@ -862,6 +937,35 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 0
 
+    if args.command == "tui":
+        llm_store.ensure_defaults()
+        code = HyperAgentTui(
+            workspace=workspace,
+            conversations=session_store,
+            providers=llm_store,
+            prompt_library=prompt_library,
+            provider=args.provider,
+            model=resolve_llm_model(args),
+            mode=args.mode,
+            task_id=args.task_id,
+            session_id=args.session_id,
+            new_title=args.new_title,
+            permission_policy=args.permission,
+            max_context_chars=args.max_context_chars,
+            keep_last=args.keep_last,
+            llm_kwargs=build_llm_runtime_kwargs(args),
+        ).run()
+        append_worklog(
+            "运行全屏 HyperAgent TUI",
+            "REPL 命令处理、会话和工具权限已经实现。",
+            f"启动 provider={args.provider} mode={args.mode} permission={args.permission} 的 curses TUI。",
+            "TUI 只负责全屏输入输出，业务流程复用 REPL，避免交互界面和 agent 逻辑耦合。",
+            "TUI 已退出。",
+            "交互式会话和工具记录已按原 runtime 规则保存。",
+            "下一步可继续完善工具面板和实验故障暂停提示。",
+        )
+        return code
+
     if args.command == "agent-plan":
         llm_store.ensure_defaults()
         if args.session_id:
@@ -907,6 +1011,57 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"warning: {warning}")
         return 0
 
+    if args.command == "agent-run":
+        llm_store.ensure_defaults()
+        session_id = args.session_id
+        if not session_id and args.new_title:
+            session_id = session_store.new(args.new_title).session_id
+        run = GeneralAgentRunner(
+            workspace,
+            session_store,
+            llm_store,
+            permission_policy=args.permission,
+            permission_callback=(
+                confirm_tool_permission
+                if args.permission in {"ask", "session-ask"}
+                else None
+            ),
+        ).run(
+            args.agent,
+            args.instruction,
+            session_id=session_id,
+            provider=args.provider,
+            model=resolve_llm_model(args),
+            profile=args.reasonix_profile,
+            task_id=args.task_id,
+            max_steps=args.max_steps,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_files=args.max_files,
+            max_preview_chars=args.max_preview_chars,
+            llm_kwargs=build_llm_runtime_kwargs(args),
+        )
+        append_worklog(
+            "运行通用 SubAgent",
+            "SubAgent 注册表、ActionLoop 和受控工具执行器已具备。",
+            f"执行 agent={run.agent_name} role={run.role} run={run.run_id}。",
+            "通用 Agent 通过人工触发和会话授权执行 shell/训练工具，避免无约束后台调度。",
+            f"agent_run={Path(run.run_dir) / 'agent_run.json'}，action_run={run.action_run_path or 'none'}。",
+            f"run 状态为 {run.status}。",
+            "下一步可查看 agent_run.json 和工具 artifact，或在同一 session 继续执行。",
+        )
+        print(f"run_id: {run.run_id}")
+        print(f"status: {run.status}")
+        print(f"agent_run: {Path(run.run_dir) / 'agent_run.json'}")
+        print(f"session_id: {run.session_id}")
+        if run.action_run_path:
+            print(f"action_run: {run.action_run_path}")
+        for artifact in run.tool_artifacts:
+            print(f"artifact: {artifact}")
+        for warning in run.warnings:
+            print(f"warning: {warning}")
+        return 0
+
     if args.command == "agent-act":
         llm_store.ensure_defaults()
         if args.session_id:
@@ -921,6 +1076,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             llm_store,
             workspace,
             permission_policy=args.permission,
+            permission_callback=(
+                confirm_tool_permission
+                if args.permission in {"ask", "session-ask"}
+                else None
+            ),
         ).run(
             session_id=session_id,
             provider=args.provider,
@@ -958,7 +1118,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             workspace.project_root,
             workspace.workspace_dir,
             permission_policy=args.permission,
-            permission_callback=confirm_tool_permission if args.permission == "ask" else None,
+            permission_callback=(
+                confirm_tool_permission
+                if args.permission in {"ask", "session-ask"}
+                else None
+            ),
         )
         if args.tool_command == "read-file":
             result = executor.read_file(
@@ -979,6 +1143,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             result = executor.run_command(
                 argv,
                 timeout_sec=args.timeout_sec,
+                run_id=args.run_id,
+            )
+        elif args.tool_command == "run-experiment":
+            result = executor.run_experiment(
+                args.plan,
+                seeds=parse_int_list(args.seeds) if args.seeds else None,
+                output_dir=args.output_dir,
+                suite_name=args.suite_name,
                 run_id=args.run_id,
             )
         elif args.tool_command == "check-patch":
@@ -1331,9 +1503,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "experiment-cycle":
-        plan = ExperimentPlan.from_dict(read_yaml(Path(args.plan)))
-        result = ExperimentResult.from_dict(read_json(Path(args.result)))
-        audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
+        if args.resume_paused:
+            resume_path = Path(args.resume_paused)
+            cycle_path = resume_path / "cycle.json" if resume_path.is_dir() else resume_path
+            paused_cycle = ExperimentCycle.from_dict(read_json(cycle_path))
+            plan_path = Path(paused_cycle.previous_plan_path)
+            result_path = Path(paused_cycle.previous_result_path)
+            audit_path = Path(paused_cycle.audit_path)
+            output_root = Path(paused_cycle.cycle_dir).parent
+        else:
+            if not args.plan or not args.result or not args.audit:
+                raise ValueError(
+                    "experiment-cycle requires --plan, --result, and --audit unless --resume-paused is used"
+                )
+            plan_path = Path(args.plan)
+            result_path = Path(args.result)
+            audit_path = Path(args.audit)
+            output_root = Path(args.output_root)
+        plan = ExperimentPlan.from_dict(read_yaml(plan_path))
+        result = ExperimentResult.from_dict(read_json(result_path))
+        audit = DatasetAudit.from_dict(read_json(audit_path))
         cycle = ExperimentAutopilotAgent(
             workspace_dir=workspace.workspace_dir,
             llm_store=llm_store,
@@ -1341,10 +1530,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             plan,
             result,
             audit,
-            previous_plan_path=Path(args.plan),
-            previous_result_path=Path(args.result),
-            audit_path=Path(args.audit),
-            output_root=Path(args.output_root),
+            previous_plan_path=plan_path,
+            previous_result_path=result_path,
+            audit_path=audit_path,
+            output_root=output_root,
             objective=args.objective,
             target_oa=args.target_oa,
             run_next=args.run_next,
@@ -1353,6 +1542,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             llm_council=args.llm_council,
             council_profile=args.council_profile,
             council_llm_budget=args.council_llm_budget,
+            llm_required=args.council_mode == "executable",
+            llm_wait_on_failure=args.council_mode == "executable",
+            llm_retry_interval_sec=args.llm_gate_retry_sec,
+            llm_gate_token_budget=args.llm_gate_token_budget,
         )
         append_worklog(
             "执行自动实验闭环",
@@ -1371,6 +1564,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if cycle.council_run_path:
             print(f"council_run: {cycle.council_run_path}")
         print(f"next_plan: {cycle.next_plan_path}")
+        if cycle.pause_reason:
+            print(f"pause_reason: {cycle.pause_reason}")
+            if cycle.pause_details:
+                print(f"pause_details: {cycle.pause_details}")
         if cycle.next_result_path:
             print(f"next_result: {cycle.next_result_path}")
         if cycle.report_path:

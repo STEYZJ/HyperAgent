@@ -26,6 +26,7 @@ Allowed tools:
 - read_file: {"path": "relative/path", "start_line": 1, "max_lines": 120}
 - search_code: {"query": "text", "path": ".", "max_results": 30}
 - run_command: {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_sec": 60}
+- run_experiment: {"plan_path": "experiments/demo/experiment.yaml", "seeds": [42, 43], "output_dir": "experiments/demo_suite"}
 - check_patch: {"patch_text": "unified diff"}
 - apply_patch: {"patch_text": "unified diff"}
 
@@ -312,6 +313,28 @@ class AgentActionLoop:
             return self.tool_executor.run_command(
                 argv if isinstance(argv, list) else [],
                 timeout_sec=int(args.get("timeout_sec", 60)),
+                run_id=run_id,
+            )
+        if tool_name == "run_experiment":
+            seeds = args.get("seeds", [])
+            normalized_seeds = (
+                [int(seed) for seed in seeds]
+                if isinstance(seeds, list) and seeds
+                else None
+            )
+            return self.tool_executor.run_experiment(
+                str(args.get("plan_path", "")),
+                seeds=normalized_seeds,
+                output_dir=(
+                    None
+                    if args.get("output_dir") in {None, ""}
+                    else str(args.get("output_dir"))
+                ),
+                suite_name=(
+                    None
+                    if args.get("suite_name") in {None, ""}
+                    else str(args.get("suite_name"))
+                ),
                 run_id=run_id,
             )
         if tool_name == "check_patch":

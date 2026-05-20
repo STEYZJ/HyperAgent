@@ -1,5 +1,8 @@
 """Autonomous experiment-result analysis and next-experiment runner."""
 
+import json
+import os
+import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,15 +12,19 @@ from hyperagent.core.bootstrap import bootstrap_default_components
 from hyperagent.core.io import read_json, write_json, write_yaml
 from hyperagent.agents.executable_experiment_council import ExecutableExperimentCouncilAgent
 from hyperagent.agents.experiment_council import ExperimentCouncilAgent
+from hyperagent.runtime.deepseek_reasonix import get_reasonix_profile
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
+from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import (
     DatasetAudit,
     EvidenceItem,
     ExperimentCycle,
+    ExperimentCouncilDecision,
     ExperimentDiagnosis,
     ExperimentPlan,
     ExperimentResult,
+    LLMMessage,
     ParameterProposal,
 )
 from hyperagent.tools.parameter_tuner import ParameterTuner
@@ -39,10 +46,13 @@ class ExperimentAutopilotAgent:
         self.runner = BaselineRunner()
         self.report_builder = MarkdownReportBuilder()
         self.council = ExperimentCouncilAgent()
+        self.workspace_dir = workspace_dir
+        self.llm_store = llm_store
+        self.llm_client = llm_client or LLMClient()
         self.executable_council = ExecutableExperimentCouncilAgent(
             workspace_dir=workspace_dir,
             llm_store=llm_store,
-            llm_client=llm_client,
+            llm_client=self.llm_client,
         )
 
     def diagnose(
@@ -133,6 +143,11 @@ class ExperimentAutopilotAgent:
         llm_council: bool = False,
         council_profile: str = "reasonix-balanced",
         council_llm_budget: int = 3,
+        llm_required: bool = False,
+        llm_wait_on_failure: bool = False,
+        llm_retry_interval_sec: int = 30,
+        llm_gate_token_budget: int = 4096,
+        llm_provider: str = "deepseek",
     ) -> ExperimentCycle:
         cycle_id = self._new_cycle_id()
         cycle_dir = output_root / cycle_id
@@ -197,6 +212,83 @@ class ExperimentAutopilotAgent:
         next_result_path: Optional[str] = None
         report_path: Optional[str] = None
         warnings: List[str] = list(council_decision.warnings) + council_run_warnings
+        pause_reason: Optional[str] = None
+        pause_details: Dict[str, Any] = {}
+        if llm_required and council_mode == "executable":
+            while True:
+                gate = self._llm_gate_review(
+                    diagnosis,
+                    proposals,
+                    audit,
+                    plan,
+                    council_decision,
+                    provider=llm_provider,
+                    council_profile=council_profile,
+                    token_budget=llm_gate_token_budget,
+                )
+                if gate["ok"]:
+                    pause_reason = None
+                    pause_details = {}
+                    council_decision = self._apply_llm_gate(council_decision, gate)
+                    warnings.extend(str(v) for v in gate.get("warnings", []))
+                    selected = self._select_proposal(
+                        proposals,
+                        council_decision.selected_parameter,
+                    )
+                    next_plan = self.build_next_plan(
+                        plan,
+                        selected,
+                        output_dir=cycle_dir / "run",
+                        cycle_id=cycle_id,
+                    )
+                    write_json(council_path, council_decision)
+                    write_yaml(next_plan_path, next_plan)
+                    break
+                pause_reason = "llm_gate_failed"
+                pause_details = gate
+                message = str(gate.get("message", "LLM gate failed."))
+                warnings.append(message)
+                council_decision.action = "pause"
+                council_decision.selected_parameter = None
+                council_decision.warnings = sorted(
+                    set(list(council_decision.warnings) + [message])
+                )
+                council_decision.rationale = (
+                    "Paused because experiment-cycle requires a successful LLM "
+                    f"decision review: {message}"
+                )
+                write_json(council_path, council_decision)
+                interim = self._persist_cycle(
+                    cycle_id=cycle_id,
+                    cycle_dir=cycle_dir,
+                    previous_plan_path=previous_plan_path,
+                    previous_result_path=previous_result_path,
+                    audit_path=audit_path,
+                    diagnosis_path=diagnosis_path,
+                    proposals_path=proposals_path,
+                    next_plan_path=next_plan_path,
+                    council_path=council_path,
+                    council_run_path=council_run_path,
+                    selected_proposal=None,
+                    next_result_path=None,
+                    report_path=None,
+                    status="paused",
+                    warnings=warnings,
+                    pause_reason=pause_reason,
+                    pause_details=pause_details,
+                )
+                if not llm_wait_on_failure:
+                    return interim
+                print(
+                    "HyperAgent experiment-cycle paused: "
+                    f"{message}. Retrying in {llm_retry_interval_sec}s. "
+                    "Press Ctrl-C to leave the paused cycle on disk."
+                )
+                try:
+                    time.sleep(max(int(llm_retry_interval_sec), 1))
+                except KeyboardInterrupt:
+                    return interim
+
         status = "planned" if council_decision.action == "run" else "paused"
         if run_next and council_decision.action == "run":
             next_result = self.runner.run(next_plan)
@@ -209,26 +301,25 @@ class ExperimentAutopilotAgent:
             warnings.extend(next_result.warnings)
             status = "completed"
 
-        cycle = ExperimentCycle(
+        return self._persist_cycle(
             cycle_id=cycle_id,
-            created_at=utc_now(),
-            status=status,
-            previous_plan_path=str(previous_plan_path),
-            previous_result_path=str(previous_result_path),
-            audit_path=str(audit_path),
-            cycle_dir=str(cycle_dir),
-            diagnosis_path=str(diagnosis_path),
-            proposals_path=str(proposals_path),
-            next_plan_path=str(next_plan_path),
-            council_path=str(council_path),
-            council_run_path=str(council_run_path) if council_run_path else None,
+            cycle_dir=cycle_dir,
+            previous_plan_path=previous_plan_path,
+            previous_result_path=previous_result_path,
+            audit_path=audit_path,
+            diagnosis_path=diagnosis_path,
+            proposals_path=proposals_path,
+            next_plan_path=next_plan_path,
+            council_path=council_path,
+            council_run_path=council_run_path,
             selected_proposal=selected,
             next_result_path=next_result_path,
             report_path=report_path,
+            status=status,
             warnings=warnings,
+            pause_reason=pause_reason,
+            pause_details=pause_details,
         )
-        write_json(cycle_dir / "cycle.json", cycle)
-        return cycle
 
     def build_next_plan(
         self,
@@ -305,6 +396,237 @@ class ExperimentAutopilotAgent:
             ).strip("_")
             suffix = safe_parameter[:32] or "update"
         return f"{plan.experiment_name}_auto_{suffix}_{cycle_id[-6:]}"
+
+    def _llm_gate_review(
+        self,
+        diagnosis: ExperimentDiagnosis,
+        proposals: List[ParameterProposal],
+        audit: DatasetAudit,
+        plan: ExperimentPlan,
+        council_decision: ExperimentCouncilDecision,
+        *,
+        provider: str,
+        council_profile: str,
+        token_budget: int,
+    ) -> Dict[str, Any]:
+        if self.llm_store is None:
+            return {
+                "ok": False,
+                "reason": "missing_provider_store",
+                "message": "LLM provider store is not configured.",
+            }
+        if int(token_budget) <= 0:
+            return {
+                "ok": False,
+                "reason": "token_budget_exhausted",
+                "message": "LLM gate token budget is exhausted.",
+            }
+        try:
+            self.llm_store.ensure_defaults()
+            spec = self.llm_store.get(provider)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "reason": "provider_error",
+                "message": f"LLM provider could not be loaded: {exc}",
+            }
+        if not os.environ.get(spec.api_key_env):
+            return {
+                "ok": False,
+                "reason": "missing_api_key",
+                "message": f"API key is not configured: {spec.api_key_env}",
+                "api_key_env": spec.api_key_env,
+            }
+        profile = get_reasonix_profile(council_profile)
+        messages = self._llm_gate_messages(
+            diagnosis,
+            proposals,
+            audit,
+            plan,
+            council_decision,
+        )
+        response = self.llm_client.send(
+            spec,
+            messages,
+            model=profile.model if profile else None,
+            response_format={"type": "json_object"},
+            thinking={"type": profile.thinking} if profile and profile.thinking else None,
+            reasoning_effort=profile.reasoning_effort if profile else None,
+        )
+        if self.workspace_dir is not None:
+            LLMUsageLedger(self.workspace_dir).record_response(
+                response,
+                spec=spec,
+                event_type="experiment_cycle.llm_gate",
+                context_chars=sum(len(message.content) for message in messages),
+                metadata={"profile": council_profile},
+            )
+        if response.warnings:
+            return {
+                "ok": False,
+                "reason": "llm_request_failed",
+                "message": "; ".join(response.warnings),
+                "warnings": list(response.warnings),
+            }
+        total_tokens = int(response.usage.get("total_tokens", 0) or 0)
+        if total_tokens > int(token_budget):
+            return {
+                "ok": False,
+                "reason": "token_budget_exceeded",
+                "message": (
+                    f"LLM gate used {total_tokens} tokens, exceeding budget "
+                    f"{token_budget}."
+                ),
+                "usage": dict(response.usage),
+            }
+        try:
+            parsed = json.loads(response.content)
+        except json.JSONDecodeError as exc:
+            return {
+                "ok": False,
+                "reason": "invalid_response_json",
+                "message": f"LLM gate response was not valid JSON: {exc}",
+                "content": response.content,
+            }
+        if not isinstance(parsed, dict):
+            return {
+                "ok": False,
+                "reason": "invalid_response_schema",
+                "message": "LLM gate response JSON root is not an object.",
+                "content": response.content,
+            }
+        if "approved" not in parsed or "action" not in parsed or "rationale" not in parsed:
+            return {
+                "ok": False,
+                "reason": "invalid_response_schema",
+                "message": "LLM gate response must include approved, action, and rationale.",
+                "content": response.content,
+            }
+        return {
+            "ok": True,
+            "decision": parsed,
+            "usage": dict(response.usage),
+            "warnings": [str(v) for v in parsed.get("warnings", [])],
+        }
+
+    def _llm_gate_messages(
+        self,
+        diagnosis: ExperimentDiagnosis,
+        proposals: List[ParameterProposal],
+        audit: DatasetAudit,
+        plan: ExperimentPlan,
+        council_decision: ExperimentCouncilDecision,
+    ) -> List[LLMMessage]:
+        payload = {
+            "task": "Review HyperAgent experiment-cycle final decision.",
+            "required_schema": {
+                "approved": "boolean",
+                "action": "run|pause",
+                "selected_parameter": "string|null",
+                "rationale": "string",
+                "warnings": "list[string]",
+            },
+            "diagnosis": diagnosis.to_dict(),
+            "dataset": {
+                "name": audit.dataset_name,
+                "class_count": audit.class_count,
+                "band_count": audit.band_count,
+                "labeled_pixel_count": audit.labeled_pixel_count,
+            },
+            "plan": {
+                "experiment_name": plan.experiment_name,
+                "model": plan.model.name,
+                "seed": plan.seed,
+                "split": plan.split.__dict__,
+            },
+            "proposals": [proposal.to_dict() for proposal in proposals],
+            "council_decision": council_decision.to_dict(),
+        }
+        return [
+            LLMMessage(
+                role="system",
+                content=(
+                    "You are HyperAgent's final experiment-cycle gate. "
+                    "Return only one JSON object. If the decision lacks evidence, "
+                    "has repeated direction risk, unstable seed evidence, or unsafe "
+                    "budget assumptions, set approved=false and action='pause'."
+                ),
+            ),
+            LLMMessage(role="user", content=json.dumps(payload, ensure_ascii=False)),
+        ]
+
+    def _apply_llm_gate(
+        self,
+        council_decision: ExperimentCouncilDecision,
+        gate: Dict[str, Any],
+    ) -> ExperimentCouncilDecision:
+        decision = dict(gate.get("decision", {}))
+        approved = bool(decision.get("approved"))
+        action = str(decision.get("action", council_decision.action))
+        if action not in {"run", "pause"}:
+            action = "pause"
+        council_decision.action = action if approved else "pause"
+        selected_parameter = decision.get("selected_parameter")
+        if selected_parameter is not None:
+            council_decision.selected_parameter = str(selected_parameter)
+        if not approved:
+            council_decision.selected_parameter = None
+        rationale = str(decision.get("rationale", "")).strip()
+        if rationale:
+            council_decision.rationale = (
+                f"{council_decision.rationale}\n\nLLM gate: {rationale}"
+            )
+        council_decision.warnings = sorted(
+            set(
+                list(council_decision.warnings)
+                + [str(v) for v in decision.get("warnings", [])]
+            )
+        )
+        return council_decision
+
+    def _persist_cycle(
+        self,
+        *,
+        cycle_id: str,
+        cycle_dir: Path,
+        previous_plan_path: Path,
+        previous_result_path: Path,
+        audit_path: Path,
+        diagnosis_path: Path,
+        proposals_path: Path,
+        next_plan_path: Path,
+        council_path: Optional[Path],
+        council_run_path: Optional[Path],
+        selected_proposal: Optional[ParameterProposal],
+        next_result_path: Optional[str],
+        report_path: Optional[str],
+        status: str,
+        warnings: List[str],
+        pause_reason: Optional[str],
+        pause_details: Dict[str, Any],
+    ) -> ExperimentCycle:
+        cycle = ExperimentCycle(
+            cycle_id=cycle_id,
+            created_at=utc_now(),
+            status=status,
+            previous_plan_path=str(previous_plan_path),
+            previous_result_path=str(previous_result_path),
+            audit_path=str(audit_path),
+            cycle_dir=str(cycle_dir),
+            diagnosis_path=str(diagnosis_path),
+            proposals_path=str(proposals_path),
+            next_plan_path=str(next_plan_path),
+            council_path=str(council_path) if council_path else None,
+            council_run_path=str(council_run_path) if council_run_path else None,
+            selected_proposal=selected_proposal,
+            next_result_path=next_result_path,
+            report_path=report_path,
+            warnings=sorted(set(warnings)),
+            pause_reason=pause_reason,
+            pause_details=pause_details,
+        )
+        write_json(cycle_dir / "cycle.json", cycle)
+        return cycle
 
     def _new_cycle_id(self) -> str:
         return f"{utc_now().replace(':', '').replace('-', '')}-{uuid4().hex[:6]}"

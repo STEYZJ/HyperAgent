@@ -9,6 +9,7 @@ from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermission
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.extensions import RuntimeExtensionStore
+from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
@@ -73,6 +74,7 @@ class HyperAgentRepl:
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
+        self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
 
     def run(self) -> int:
@@ -86,17 +88,20 @@ class HyperAgentRepl:
             line = raw.strip()
             if not line:
                 continue
-            if line in {"/exit", "/quit", "exit", "quit"}:
-                self.output("bye")
+            if not self.handle_line(line):
                 return 0
-            try:
-                if line.startswith("/"):
-                    if self._handle_command(line):
-                        continue
-                    return 0
-                self._chat(line)
-            except Exception as exc:
-                self.output(f"error: {exc}")
+
+    def handle_line(self, line: str) -> bool:
+        if line in {"/exit", "/quit", "exit", "quit"}:
+            self.output("bye")
+            return False
+        try:
+            if line.startswith("/"):
+                return self._handle_command(line)
+            self._chat(line)
+        except Exception as exc:
+            self.output(f"error: {exc}")
+        return True
 
     def _ensure_session(
         self,
@@ -213,8 +218,13 @@ class HyperAgentRepl:
             self.conversations,
             self.providers,
             self.workspace,
-            permission_policy=self.permission_policy,
-            permission_callback=self._confirm_permission,
+            tool_executor=SafeAgentToolExecutor(
+                self.workspace.project_root,
+                self.workspace.workspace_dir,
+                permission_policy=self.permission_policy,
+                permission_callback=self._confirm_permission,
+                session_permission_cache=self.permission_cache,
+            ),
         ).run(
             session_id=self.session_id,
             provider=self.provider,
@@ -402,7 +412,34 @@ class HyperAgentRepl:
             item = self.extensions.add_subagent(args[1], args[2], tools=tools)
             self.output(f"subagent added: {item['id']}")
             return
-        self.output("usage: /agents [list|add <name> <role> [tools]]")
+        if args[0] == "run":
+            if len(args) < 3:
+                self.output("usage: /agents run <name|id> <instruction>")
+                return
+            run = GeneralAgentRunner(
+                self.workspace,
+                self.conversations,
+                self.providers,
+                permission_policy=self.permission_policy,
+                permission_callback=self._confirm_permission,
+                session_permission_cache=self.permission_cache,
+            ).run(
+                args[1],
+                " ".join(args[2:]),
+                session_id=self.session_id,
+                provider=self.provider,
+                model=self.model,
+                profile=str(self.llm_kwargs.get("reasonix_profile", "")),
+                task_id=self.task_id,
+            )
+            self.output(f"agent_run: {Path(run.run_dir) / 'agent_run.json'}")
+            self.output(f"status: {run.status}")
+            if run.action_run_path:
+                self.output(f"action_run: {run.action_run_path}")
+            for warning in run.warnings:
+                self.output(f"warning: {warning}")
+            return
+        self.output("usage: /agents [list|add <name> <role> [tools]|run <name|id> <instruction>]")
 
     def _hooks(self, args: List[str]) -> None:
         if not args or args[0] == "list":
@@ -528,6 +565,7 @@ class HyperAgentRepl:
             self.workspace.workspace_dir,
             permission_policy=self.permission_policy,
             permission_callback=self._confirm_permission,
+            session_permission_cache=self.permission_cache,
         )
         tool = args[0]
         rest = args[1:]
@@ -542,6 +580,14 @@ class HyperAgentRepl:
             result = executor.search_code(query, path=path)
         elif tool == "run":
             result = executor.run_command(rest)
+        elif tool in {"run-experiment", "experiment"}:
+            path = rest[0] if rest else ""
+            seeds = (
+                [int(seed) for seed in rest[1].split(",") if seed]
+                if len(rest) > 1 and rest[1]
+                else None
+            )
+            result = executor.run_experiment(path, seeds=seeds)
         elif tool == "check-patch":
             result = executor.check_patch(self._read_text_arg(rest))
         elif tool == "apply-patch":
@@ -560,7 +606,7 @@ class HyperAgentRepl:
         return " ".join(args)
 
     def _confirm_permission(self, request: ToolPermissionRequest) -> bool:
-        if self.permission_policy != "ask":
+        if self.permission_policy not in {"ask", "session-ask"}:
             return True
         self.output(
             f"permission requested: {request.tool_name} "
@@ -570,7 +616,7 @@ class HyperAgentRepl:
         return answer in {"y", "yes"}
 
     def _tool_names(self) -> List[str]:
-        return ["read", "search", "run", "check-patch", "apply-patch"]
+        return ["read", "search", "run", "run-experiment", "check-patch", "apply-patch"]
 
     def _tool_usage(self) -> str:
         return (
@@ -578,6 +624,7 @@ class HyperAgentRepl:
             "  /tool read <path> [start_line] [max_lines]\n"
             "  /tool search <query> [path]\n"
             "  /tool run <argv...>\n"
+            "  /tool run-experiment <experiment_yaml> [seed1,seed2]\n"
             "  /tool check-patch <patch_file_or_text>\n"
             "  /tool apply-patch <patch_file_or_text>"
         )
@@ -598,7 +645,7 @@ class HyperAgentRepl:
             "/clear                clear current context after saving a rewind snapshot\n"
             "/init                 create project HyperAgent.md memory\n"
             "/memory ...           list/show/add memory entries\n"
-            "/agents ...           list/add project subagents\n"
+            "/agents ...           list/add/run project subagents\n"
             "/hooks ...            list/add project hooks\n"
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"

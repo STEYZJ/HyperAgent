@@ -225,3 +225,47 @@ class AgentActionRun:
             ],
             warnings=[str(v) for v in data.get("warnings", [])],
         )
+
+
+@dataclass
+class GeneralAgentRun:
+    run_id: str
+    agent_id: str
+    agent_name: str
+    role: str
+    instruction: str
+    created_at: str
+    run_dir: str
+    provider: str
+    model: str
+    profile: str = ""
+    session_id: str = ""
+    permission_policy: str = "session-ask"
+    status: str = "running"
+    action_run_path: Optional[str] = None
+    tool_artifacts: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "GeneralAgentRun":
+        return cls(
+            run_id=str(data["run_id"]),
+            agent_id=str(data["agent_id"]),
+            agent_name=str(data["agent_name"]),
+            role=str(data["role"]),
+            instruction=str(data["instruction"]),
+            created_at=str(data["created_at"]),
+            run_dir=str(data["run_dir"]),
+            provider=str(data["provider"]),
+            model=str(data["model"]),
+            profile=str(data.get("profile", "")),
+            session_id=str(data.get("session_id", "")),
+            permission_policy=str(data.get("permission_policy", "session-ask")),
+            status=str(data.get("status", "running")),
+            action_run_path=data.get("action_run_path"),
+            tool_artifacts=[str(v) for v in data.get("tool_artifacts", [])],
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )

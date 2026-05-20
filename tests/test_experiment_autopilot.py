@@ -49,6 +49,21 @@ class _FakeCouncilLLMClient:
         )
 
 
+class _FakeGateLLMClient:
+    def __init__(self, content):
+        self.content = content
+        self.calls = 0
+
+    def send(self, spec, messages, model=None, **kwargs):
+        self.calls += 1
+        return LLMResponse(
+            provider=spec.name,
+            model=model or spec.default_model,
+            content=self.content,
+            usage={"total_tokens": 15, "prompt_tokens": 10, "completion_tokens": 5},
+        )
+
+
 class ExperimentAutopilotTest(unittest.TestCase):
     def test_autopilot_builds_diagnosis_and_next_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,6 +156,8 @@ class ExperimentAutopilotTest(unittest.TestCase):
                                 str(root / "audit.json"),
                                 "--output-root",
                                 str(root / "cycles"),
+                                "--council-mode",
+                                "static",
                                 "--run-next",
                             ]
                         ),
@@ -150,11 +167,11 @@ class ExperimentAutopilotTest(unittest.TestCase):
                 self.assertIn("cycle_id:", output)
                 self.assertIn("next_result:", output)
                 self.assertIn("council:", output)
-                self.assertIn("council_run:", output)
                 cycle_dirs = sorted((root / "cycles").iterdir())
                 self.assertEqual(len(cycle_dirs), 1)
                 cycle = ExperimentCycle.from_dict(read_json(cycle_dirs[0] / "cycle.json"))
                 self.assertEqual(cycle.status, "completed")
+                self.assertIsNone(cycle.council_run_path)
                 self.assertTrue(Path(cycle.next_result_path).exists())
                 self.assertTrue(Path(cycle.report_path).exists())
             finally:
@@ -473,6 +490,162 @@ class ExperimentAutopilotTest(unittest.TestCase):
             self.assertFalse(council_run.role_runs[1].llm_used)
             usage_path = workspace_dir / "usage" / "llm_usage.jsonl"
             self.assertTrue(usage_path.exists())
+
+    def test_llm_gate_missing_api_key_pauses_cycle(self):
+        old_key = os.environ.pop("DEEPSEEK_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                workspace_dir = root / ".hyperagent"
+                data_root = root / "data"
+                write_synthetic_mat(data_root, seed=59)
+                agent = CoordinatorAgent()
+                audit = agent.audit(data_root, root / "audit.json")
+                spectral = agent.analyze(audit, root / "spectral.json")
+                recommendation = agent.recommend(
+                    audit,
+                    spectral,
+                    root / "recommendation.json",
+                )
+                plan = agent.plan(
+                    audit,
+                    spectral,
+                    recommendation,
+                    root / "plan.yaml",
+                    root / "run",
+                    seed=59,
+                )
+                result = agent.run(plan)
+
+                cycle = ExperimentAutopilotAgent(
+                    workspace_dir=workspace_dir,
+                    llm_store=LLMProviderStore(workspace_dir),
+                ).run_cycle(
+                    plan,
+                    result,
+                    audit,
+                    previous_plan_path=root / "plan.yaml",
+                    previous_result_path=Path(result.experiment_dir) / "result.json",
+                    audit_path=root / "audit.json",
+                    output_root=root / "cycles",
+                    llm_required=True,
+                    llm_wait_on_failure=False,
+                )
+
+                self.assertEqual(cycle.status, "paused")
+                self.assertEqual(cycle.pause_reason, "llm_gate_failed")
+                self.assertEqual(cycle.pause_details["reason"], "missing_api_key")
+        finally:
+            if old_key is not None:
+                os.environ["DEEPSEEK_API_KEY"] = old_key
+
+    def test_llm_gate_invalid_schema_pauses_cycle(self):
+        old_key = os.environ.get("DEEPSEEK_API_KEY")
+        os.environ["DEEPSEEK_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                workspace_dir = root / ".hyperagent"
+                data_root = root / "data"
+                write_synthetic_mat(data_root, seed=61)
+                agent = CoordinatorAgent()
+                audit = agent.audit(data_root, root / "audit.json")
+                spectral = agent.analyze(audit, root / "spectral.json")
+                recommendation = agent.recommend(
+                    audit,
+                    spectral,
+                    root / "recommendation.json",
+                )
+                plan = agent.plan(
+                    audit,
+                    spectral,
+                    recommendation,
+                    root / "plan.yaml",
+                    root / "run",
+                    seed=61,
+                )
+                result = agent.run(plan)
+
+                cycle = ExperimentAutopilotAgent(
+                    workspace_dir=workspace_dir,
+                    llm_store=LLMProviderStore(workspace_dir),
+                    llm_client=_FakeGateLLMClient('{"rationale":"missing fields"}'),
+                ).run_cycle(
+                    plan,
+                    result,
+                    audit,
+                    previous_plan_path=root / "plan.yaml",
+                    previous_result_path=Path(result.experiment_dir) / "result.json",
+                    audit_path=root / "audit.json",
+                    output_root=root / "cycles",
+                    llm_required=True,
+                    llm_wait_on_failure=False,
+                )
+
+                self.assertEqual(cycle.status, "paused")
+                self.assertEqual(cycle.pause_details["reason"], "invalid_response_schema")
+        finally:
+            if old_key is None:
+                os.environ.pop("DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["DEEPSEEK_API_KEY"] = old_key
+
+    def test_llm_gate_success_allows_planning(self):
+        old_key = os.environ.get("DEEPSEEK_API_KEY")
+        os.environ["DEEPSEEK_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                workspace_dir = root / ".hyperagent"
+                data_root = root / "data"
+                write_synthetic_mat(data_root, seed=67)
+                agent = CoordinatorAgent()
+                audit = agent.audit(data_root, root / "audit.json")
+                spectral = agent.analyze(audit, root / "spectral.json")
+                recommendation = agent.recommend(
+                    audit,
+                    spectral,
+                    root / "recommendation.json",
+                )
+                plan = agent.plan(
+                    audit,
+                    spectral,
+                    recommendation,
+                    root / "plan.yaml",
+                    root / "run",
+                    seed=67,
+                )
+                result = agent.run(plan)
+                fake = _FakeGateLLMClient(
+                    '{"approved":true,"action":"run","selected_parameter":null,'
+                    '"rationale":"Decision has sufficient evidence.","warnings":[]}'
+                )
+
+                cycle = ExperimentAutopilotAgent(
+                    workspace_dir=workspace_dir,
+                    llm_store=LLMProviderStore(workspace_dir),
+                    llm_client=fake,
+                ).run_cycle(
+                    plan,
+                    result,
+                    audit,
+                    previous_plan_path=root / "plan.yaml",
+                    previous_result_path=Path(result.experiment_dir) / "result.json",
+                    audit_path=root / "audit.json",
+                    output_root=root / "cycles",
+                    llm_required=True,
+                    llm_wait_on_failure=False,
+                )
+
+                self.assertEqual(fake.calls, 1)
+                self.assertIn(cycle.status, {"planned", "paused"})
+                self.assertIsNone(cycle.pause_reason)
+                self.assertTrue((workspace_dir / "usage" / "llm_usage.jsonl").exists())
+        finally:
+            if old_key is None:
+                os.environ.pop("DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["DEEPSEEK_API_KEY"] = old_key
 
 
 if __name__ == "__main__":

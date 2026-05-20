@@ -33,7 +33,9 @@ EXISTING_COMMANDS = {
     "agent-context",
     "agent-plan",
     "agent-act",
+    "agent-run",
     "agent-tool",
+    "tui",
     "session-new",
     "session-add",
     "session-list",
@@ -153,10 +155,11 @@ Slash-style aliases:
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
+  HyperAgent /tui
   HyperAgent /repl
 
 Inside REPL:
-  /context, /compact, /clear, /usage, /init, /memory, /agents, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
+  /context, /compact, /clear, /usage, /init, /memory, /agents, /agents run, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
 
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
@@ -175,6 +178,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["hyperagent-commands"]
     if alias == "repl":
         return ["repl"] + list(rest)
+    if alias == "tui":
+        return ["tui"] + list(rest)
     if alias == "status":
         return ["status"] + list(rest)
     if alias == "sessions":

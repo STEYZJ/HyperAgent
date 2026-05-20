@@ -6,7 +6,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
+from hyperagent.agents import CoordinatorAgent
 from hyperagent.cli import main
+from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.schemas import AgentToolResult
@@ -81,6 +83,80 @@ class AgentToolsTest(unittest.TestCase):
                 permission_callback=lambda request: True,
             ).run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
             self.assertEqual(allowed.status, "ok")
+
+    def test_session_ask_caches_same_risk_and_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            package = root / "hyperagent"
+            package.mkdir()
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            approvals = []
+            cache = {}
+
+            executor = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="session-ask",
+                permission_callback=lambda request: approvals.append(request) or True,
+                session_permission_cache=cache,
+            )
+            first = executor.run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+            second = executor.run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+
+            self.assertEqual(first.status, "ok")
+            self.assertEqual(second.status, "ok")
+            self.assertEqual(len(approvals), 1)
+
+    def test_arbitrary_command_requires_explicit_executor_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+
+            blocked = SafeAgentToolExecutor(root, workspace.workspace_dir).run_command(
+                [sys.executable, "-c", "print('blocked')"]
+            )
+            self.assertEqual(blocked.status, "blocked")
+
+            allowed = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: True,
+                allow_arbitrary_commands=True,
+            ).run_command([sys.executable, "-c", "print('allowed')"])
+            self.assertEqual(allowed.status, "ok")
+            self.assertIn("allowed", allowed.content)
+
+    def test_run_experiment_tool_runs_synthetic_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            data_root = root / "data"
+            write_synthetic_mat(data_root, seed=71)
+            agent = CoordinatorAgent()
+            audit = agent.audit(data_root, root / "audit.json")
+            spectral = agent.analyze(audit, root / "spectral.json")
+            recommendation = agent.recommend(audit, spectral, root / "recommendation.json")
+            plan = agent.plan(
+                audit,
+                spectral,
+                recommendation,
+                root / "plan.yaml",
+                root / "run",
+                seed=71,
+            )
+
+            result = SafeAgentToolExecutor(root, workspace.workspace_dir).run_experiment(
+                "plan.yaml"
+            )
+
+            self.assertEqual(result.status, "ok")
+            self.assertIn("result_path", result.content)
+            self.assertTrue((Path(plan.output_dir) / "result.json").exists())
 
     def test_deny_write_blocks_apply_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
