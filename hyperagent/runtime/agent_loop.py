@@ -1,5 +1,6 @@
 """Conversation-backed LLM agent loop for HyperAgent."""
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -8,8 +9,9 @@ from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.prompts import PromptLibrary
-from hyperagent.runtime.workspace import HyperAgentWorkspace
+from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
 from hyperagent.schemas import (
+    AgentTurnTiming,
     AgentTurnResult,
     ConversationMessage,
     ConversationSession,
@@ -79,6 +81,7 @@ class AgentLoop:
         user: Optional[str] = None,
         extra_body: Optional[Dict[str, Any]] = None,
         output_path: Optional[Path] = None,
+        thinking_displayed: Optional[bool] = None,
     ) -> AgentTurnResult:
         if auto_compress:
             self.conversations.auto_compress(
@@ -95,6 +98,8 @@ class AgentLoop:
         )
         self.providers.ensure_defaults()
         spec = self.providers.get(provider)
+        turn_started_at = utc_now()
+        started = time.monotonic()
         response = self.llm_client.send(
             spec,
             messages,
@@ -108,16 +113,45 @@ class AgentLoop:
             user=user,
             extra_body=extra_body,
         )
+        elapsed_sec = round(time.monotonic() - started, 4)
+        turn_completed_at = utc_now()
+        timing = AgentTurnTiming(
+            turn_started_at=turn_started_at,
+            turn_completed_at=turn_completed_at,
+            model_wait_elapsed_sec=elapsed_sec,
+        )
+        context_chars = sum(len(message.content) for message in messages)
+        context_message_count = len(messages)
         LLMUsageLedger(self.workspace.workspace_dir).record_response(
             response,
             spec=spec,
             session_id=session_id,
             event_type="agent_loop.response",
-            context_chars=sum(len(message.content) for message in messages),
-            metadata={"mode": mode, "task_id": task_id},
+            context_chars=context_chars,
+            metadata={
+                "mode": mode,
+                "task_id": task_id,
+                "model_wait_elapsed_sec": elapsed_sec,
+            },
         )
         assistant_content = response.content or "\n".join(response.warnings)
-        self.conversations.add_message(session_id, "assistant", assistant_content)
+        self.conversations.add_message(
+            session_id,
+            "assistant",
+            assistant_content,
+            metadata={
+                "turn_started_at": turn_started_at,
+                "turn_completed_at": turn_completed_at,
+                "model_wait_elapsed_sec": elapsed_sec,
+                "context_chars": context_chars,
+                "context_message_count": context_message_count,
+                "provider": spec.name,
+                "model": model or spec.default_model,
+                "mode": mode,
+                "reasoning_content_chars": len(response.reasoning_content or ""),
+                "thinking_displayed": bool(thinking_displayed),
+            },
+        )
         result = AgentTurnResult(
             session_id=session_id,
             provider=spec.name,
@@ -125,10 +159,11 @@ class AgentLoop:
             mode=mode,
             task_id=task_id,
             response=response,
-            context_message_count=len(messages),
-            context_chars=sum(len(message.content) for message in messages),
+            context_message_count=context_message_count,
+            context_chars=context_chars,
             output_path=str(output_path) if output_path else None,
             warnings=list(response.warnings),
+            timing=timing,
         )
         if output_path:
             write_json(output_path, result)

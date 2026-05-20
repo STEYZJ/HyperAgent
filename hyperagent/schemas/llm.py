@@ -130,6 +130,16 @@ class LLMResponse:
 
 
 @dataclass
+class AgentTurnTiming:
+    turn_started_at: str
+    turn_completed_at: str
+    model_wait_elapsed_sec: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class AgentTurnResult:
     session_id: str
     provider: str
@@ -141,6 +151,7 @@ class AgentTurnResult:
     context_chars: int
     output_path: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
+    timing: Optional[AgentTurnTiming] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

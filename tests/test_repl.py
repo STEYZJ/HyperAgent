@@ -2,12 +2,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
+from hyperagent.runtime.wait_indicator import NullWaitIndicator
 from hyperagent.runtime.workspace import HyperAgentWorkspace
+from hyperagent.schemas import AgentTurnResult, AgentTurnTiming, LLMResponse
 
 
 PROMPT_ROOT = Path(__file__).resolve().parents[1] / "hyperagent" / "prompts"
@@ -161,6 +164,65 @@ class HyperAgentReplTest(unittest.TestCase):
             )
             self.assertEqual(len(compressed.messages), 4)
             self.assertEqual(len(compressed.summaries), 1)
+
+    def test_thinking_toggle_controls_reasoning_display(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+            calls = []
+
+            class FakeAgentLoop:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def run(self, **kwargs):
+                    calls.append(kwargs)
+                    return AgentTurnResult(
+                        session_id=kwargs["session_id"],
+                        provider="deepseek",
+                        model="deepseek-chat",
+                        mode="research",
+                        task_id=None,
+                        response=LLMResponse(
+                            provider="deepseek",
+                            model="deepseek-chat",
+                            content="final answer",
+                            reasoning_content="reasoning trace",
+                        ),
+                        context_message_count=2,
+                        context_chars=12,
+                        timing=AgentTurnTiming(
+                            turn_started_at="2026-05-20T00:00:00Z",
+                            turn_completed_at="2026-05-20T00:00:01Z",
+                            model_wait_elapsed_sec=1.0,
+                        ),
+                    )
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                output_func=outputs.append,
+                wait_indicator_factory=NullWaitIndicator,
+            )
+
+            with patch("hyperagent.runtime.repl.AgentLoop", FakeAgentLoop):
+                repl._chat("hello")
+                repl.handle_line("/thinking on")
+                repl._chat("hello again")
+
+            text = "\n".join(outputs)
+            self.assertIn("【思考内容已隐藏，可用 /thinking on 查看】", text)
+            self.assertIn("thinking: on", text)
+            self.assertIn("【思考内容】", text)
+            self.assertIn("reasoning trace", text)
+            self.assertFalse(calls[0]["thinking_displayed"])
+            self.assertTrue(calls[1]["thinking_displayed"])
 
 
 if __name__ == "__main__":

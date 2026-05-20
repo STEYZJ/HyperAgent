@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from hyperagent.core.io import read_json, write_json
@@ -47,10 +47,23 @@ class ConversationStore:
         target_dir.mkdir(parents=True, exist_ok=True)
         return write_json(target_dir / f"{session.session_id}.json", session)
 
-    def add_message(self, session_id: str, role: str, content: str) -> ConversationSession:
+    def add_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
+        created_at: Optional[str] = None,
+    ) -> ConversationSession:
         session = self.load(session_id)
         session.messages.append(
-            ConversationMessage(role=role, content=content, created_at=utc_now())
+            ConversationMessage(
+                role=role,
+                content=content,
+                created_at=created_at or utc_now(),
+                metadata=dict(metadata or {}),
+            )
         )
         self.save(session)
         return session

@@ -26,12 +26,18 @@ from hyperagent.runtime.tool_panel import (
     render_tool_catalog,
     render_tool_result,
 )
+from hyperagent.runtime.wait_indicator import (
+    ConsoleWaitIndicator,
+    WaitIndicator,
+    run_with_wait_indicator,
+)
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.schemas import LLMMessage
 
 
 InputFunc = Callable[[str], str]
 OutputFunc = Callable[[str], None]
+WaitIndicatorFactory = Callable[[], WaitIndicator]
 
 
 class HyperAgentRepl:
@@ -56,6 +62,7 @@ class HyperAgentRepl:
         llm_kwargs: Optional[Dict[str, object]] = None,
         input_func: InputFunc = input,
         output_func: OutputFunc = print,
+        wait_indicator_factory: Optional[WaitIndicatorFactory] = None,
     ) -> None:
         self.workspace = workspace
         self.conversations = conversations
@@ -71,11 +78,13 @@ class HyperAgentRepl:
         self.llm_kwargs = dict(llm_kwargs or {})
         self.input = input_func
         self.output = output_func
+        self.wait_indicator_factory = wait_indicator_factory
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
+        self.show_thinking = self._default_show_thinking()
 
     def run(self) -> int:
         self.output(self._banner())
@@ -164,6 +173,8 @@ class HyperAgentRepl:
             self._rewind(args)
         elif command in {"/reasonix", "/deepseek"}:
             self._reasonix(args)
+        elif command == "/thinking":
+            self._thinking(args)
         elif command == "/simplify":
             self._simplify()
         elif command == "/model":
@@ -187,26 +198,38 @@ class HyperAgentRepl:
         return True
 
     def _chat(self, message: str) -> None:
-        result = AgentLoop(
-            self.conversations,
-            self.providers,
-            self.workspace,
-            prompt_library=self.prompt_library,
-        ).run(
-            session_id=self.session_id,
-            provider=self.provider,
-            user_message=message,
-            model=self.model,
-            mode=self.mode,
-            task_id=self.task_id,
-            max_context_chars=self.max_context_chars,
-            **self.llm_kwargs,
+        def turn():
+            return AgentLoop(
+                self.conversations,
+                self.providers,
+                self.workspace,
+                prompt_library=self.prompt_library,
+            ).run(
+                session_id=self.session_id,
+                provider=self.provider,
+                user_message=message,
+                model=self.model,
+                mode=self.mode,
+                task_id=self.task_id,
+                max_context_chars=self.max_context_chars,
+                thinking_displayed=self.show_thinking,
+                **self.llm_kwargs,
+            )
+
+        indicator = (
+            self.wait_indicator_factory()
+            if self.wait_indicator_factory is not None
+            else ConsoleWaitIndicator(self.output)
         )
+        result = run_with_wait_indicator(turn, indicator).value
         for warning in result.warnings:
             self.output(f"warning: {warning}")
         if result.response.reasoning_content:
-            self.output("[reasoning]")
-            self.output(result.response.reasoning_content)
+            if self.show_thinking:
+                self.output("【思考内容】")
+                self.output(result.response.reasoning_content)
+            else:
+                self.output("【思考内容已隐藏，可用 /thinking on 查看】")
         if result.response.content:
             self.output(result.response.content)
 
@@ -523,6 +546,28 @@ class HyperAgentRepl:
         lines.append("cache rule: " + str(guidance["rule"]))
         self.output("\n".join(lines))
 
+    def _thinking(self, args: List[str]) -> None:
+        if not args or args[0] == "status":
+            self.output(f"thinking: {'on' if self.show_thinking else 'off'}")
+            return
+        action = args[0].lower()
+        if action == "on":
+            self.show_thinking = True
+        elif action == "off":
+            self.show_thinking = False
+        elif action == "toggle":
+            self.show_thinking = not self.show_thinking
+        else:
+            self.output("usage: /thinking [on|off|toggle|status]")
+            return
+        self.output(f"thinking: {'on' if self.show_thinking else 'off'}")
+
+    def _default_show_thinking(self) -> bool:
+        thinking = self.llm_kwargs.get("thinking")
+        if isinstance(thinking, dict):
+            return str(thinking.get("type", "")).lower() == "enabled"
+        return False
+
     def _simplify(self) -> None:
         self.output(
             "simplify council:\n"
@@ -650,6 +695,7 @@ class HyperAgentRepl:
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"
             "/reasonix [profile]   show DeepSeek Reasonix-inspired profiles\n"
+            "/thinking ...         show/hide reasoning_content blocks\n"
             "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
             "/mcp                  list MCP servers\n"

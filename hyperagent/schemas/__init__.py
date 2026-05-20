@@ -27,6 +27,7 @@ from hyperagent.schemas.experiment import (
 )
 from hyperagent.schemas.literature import LiteraturePaper, LiteratureSearchResult
 from hyperagent.schemas.llm import (
+    AgentTurnTiming,
     AgentTurnResult,
     LLMMessage,
     LLMProviderSpec,
@@ -66,6 +67,7 @@ __all__ = [
     "AblationVariant",
     "AgentActionRun",
     "AgentActionStep",
+    "AgentTurnTiming",
     "AgentTurnResult",
     "AgentToolCall",
     "AgentToolResult",

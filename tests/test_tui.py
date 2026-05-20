@@ -1,6 +1,9 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from hyperagent.runtime.tui import HyperAgentTui
+from hyperagent.runtime.workspace import HyperAgentWorkspace
 
 
 class HyperAgentTuiTest(unittest.TestCase):
@@ -32,6 +35,44 @@ class HyperAgentTuiTest(unittest.TestCase):
         tui = self._tui()
         self.assertEqual(tui._clip_to_width("中文abc", 4), "中文")
         self.assertEqual(tui._clip_to_width("中文abc", 5), "中文a")
+
+    def test_scroll_visible_lines_and_clamp(self):
+        tui = self._tui()
+        lines = [f"line {index}" for index in range(10)]
+
+        self.assertEqual(tui._visible_lines(lines, height=3, scroll_offset=0), lines[-3:])
+        self.assertEqual(tui._visible_lines(lines, height=3, scroll_offset=2), lines[-5:-2])
+        self.assertEqual(tui._clamp_scroll_offset(100, line_count=10, viewport_height=3), 7)
+        self.assertEqual(tui._clamp_scroll_offset(-5, line_count=10, viewport_height=3), 0)
+
+    def test_tui_history_persists_only_main_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            tui = HyperAgentTui(
+                workspace=workspace,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+            )
+
+            tui._record_history("HyperAgent> ", "/status")
+            tui._record_history("allow? [y/N] ", "y")
+            tui._record_history("HyperAgent> ", "/context")
+            tui._record_history("HyperAgent> ", "/exit")
+
+            reloaded = HyperAgentTui(
+                workspace=workspace,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+            )
+            self.assertEqual(reloaded.command_history, ["/status", "/context"])
+            self.assertEqual(reloaded._history_previous("draft"), "/context")
+            self.assertEqual(reloaded._history_previous("/context"), "/status")
+            self.assertEqual(reloaded._history_next(), "/context")
+            self.assertEqual(reloaded._history_next(), "draft")
 
 
 if __name__ == "__main__":

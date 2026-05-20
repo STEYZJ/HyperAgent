@@ -77,8 +77,36 @@ class AgentLoopTest(unittest.TestCase):
             self.assertEqual(result.response.content, "assistant answer")
             self.assertEqual([message.role for message in saved.messages], ["user", "assistant"])
             self.assertEqual(saved.messages[-1].content, "assistant answer")
+            self.assertIsNotNone(result.timing)
+            self.assertGreaterEqual(result.timing.model_wait_elapsed_sec, 0.0)
+            self.assertIn("turn_started_at", saved.messages[-1].metadata)
+            self.assertIn("turn_completed_at", saved.messages[-1].metadata)
+            self.assertIn("model_wait_elapsed_sec", saved.messages[-1].metadata)
+            self.assertEqual(saved.messages[-1].metadata["provider"], "deepseek")
+            self.assertEqual(saved.messages[-1].metadata["mode"], "research")
             self.assertIn("帮我设计下一步实验", fake.calls[0]["messages"][-1].content)
             self.assertGreater(result.context_message_count, 1)
+
+    def test_conversation_message_metadata_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            session = conversations.new("metadata")
+
+            conversations.add_message(
+                session.session_id,
+                "assistant",
+                "answer",
+                created_at="2026-05-20T00:00:00Z",
+                metadata={"model_wait_elapsed_sec": 1.25, "provider": "deepseek"},
+            )
+
+            saved = conversations.load(session.session_id)
+            self.assertEqual(saved.messages[-1].created_at, "2026-05-20T00:00:00Z")
+            self.assertEqual(saved.messages[-1].metadata["model_wait_elapsed_sec"], 1.25)
+            self.assertEqual(saved.messages[-1].metadata["provider"], "deepseek")
 
     def test_agent_loop_injects_task_and_artifact_context(self):
         with tempfile.TemporaryDirectory() as tmp:
