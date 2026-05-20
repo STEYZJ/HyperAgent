@@ -52,7 +52,7 @@ Already partially present:
 Still worth implementing:
 
 - centralized slash-command registry shared by CLI and REPL
-- true subagent execution budgets
+- broader subagent execution budgets outside experiment council
 - searchable session index
 - skill usage telemetry and curator
 

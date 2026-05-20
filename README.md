@@ -60,7 +60,8 @@ HyperAgent demo --synthetic
 HyperAgent literature --query "hyperspectral image classification mamba" --output reports/literature.json
 HyperAgent auto-experiment --audit reports/audit.json --spectral reports/spectral_report.json --recommendation reports/model_recommendation.json --output reports/agenda.json
 HyperAgent tune-next --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output reports/tuning.json
-HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --run-next --max-repeated-parameter 2
+HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --max-repeated-parameter 2
+HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json --output-root experiments/autopilot --llm-council --council-profile reasonix-balanced
 HyperAgent propose-module --audit reports/audit.json --spectral reports/spectral_report.json --literature reports/literature.json --output reports/module_proposal.json
 HyperAgent llm-providers
 HyperAgent llm-profile
@@ -151,6 +152,11 @@ HyperAgent /help
 Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/hooks`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
+
+`experiment-cycle` now uses an executable multi-agent council by default. It
+writes `council_run.json` plus the compatible `council_decision.json`; pass
+`--council-mode static` to use the older fixed-rule council. The command only
+runs the next experiment when `--run-next` is explicit.
 
 ## MVP Limits
 

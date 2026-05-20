@@ -25,6 +25,7 @@ class RuntimeExtensionStore:
         role: str,
         tools: Optional[List[str]] = None,
         model: str = "",
+        profile: str = "",
         color: str = "",
     ) -> Dict[str, object]:
         item = {
@@ -33,6 +34,7 @@ class RuntimeExtensionStore:
             "role": role,
             "tools": tools or [],
             "model": model,
+            "profile": profile,
             "color": color,
             "created_at": utc_now(),
         }

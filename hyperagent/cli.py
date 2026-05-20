@@ -173,6 +173,14 @@ def _build_parser() -> argparse.ArgumentParser:
     experiment_cycle.add_argument("--target-oa", type=float, default=0.9)
     experiment_cycle.add_argument("--run-next", action="store_true")
     experiment_cycle.add_argument("--max-repeated-parameter", type=int, default=2)
+    experiment_cycle.add_argument(
+        "--council-mode",
+        choices=["executable", "static"],
+        default="executable",
+    )
+    experiment_cycle.add_argument("--llm-council", action="store_true")
+    experiment_cycle.add_argument("--council-profile", default="reasonix-balanced")
+    experiment_cycle.add_argument("--council-llm-budget", type=int, default=3)
 
     module = subparsers.add_parser(
         "propose-module",
@@ -1326,7 +1334,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         plan = ExperimentPlan.from_dict(read_yaml(Path(args.plan)))
         result = ExperimentResult.from_dict(read_json(Path(args.result)))
         audit = DatasetAudit.from_dict(read_json(Path(args.audit)))
-        cycle = ExperimentAutopilotAgent().run_cycle(
+        cycle = ExperimentAutopilotAgent(
+            workspace_dir=workspace.workspace_dir,
+            llm_store=llm_store,
+        ).run_cycle(
             plan,
             result,
             audit,
@@ -1338,6 +1349,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             target_oa=args.target_oa,
             run_next=args.run_next,
             max_repeated_parameter=args.max_repeated_parameter,
+            council_mode=args.council_mode,
+            llm_council=args.llm_council,
+            council_profile=args.council_profile,
+            council_llm_budget=args.council_llm_budget,
         )
         append_worklog(
             "执行自动实验闭环",
@@ -1353,6 +1368,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"diagnosis: {cycle.diagnosis_path}")
         print(f"proposals: {cycle.proposals_path}")
         print(f"council: {cycle.council_path}")
+        if cycle.council_run_path:
+            print(f"council_run: {cycle.council_run_path}")
         print(f"next_plan: {cycle.next_plan_path}")
         if cycle.next_result_path:
             print(f"next_result: {cycle.next_result_path}")

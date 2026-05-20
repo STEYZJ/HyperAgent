@@ -7,7 +7,9 @@ from uuid import uuid4
 
 from hyperagent.core.bootstrap import bootstrap_default_components
 from hyperagent.core.io import read_json, write_json, write_yaml
+from hyperagent.agents.executable_experiment_council import ExecutableExperimentCouncilAgent
 from hyperagent.agents.experiment_council import ExperimentCouncilAgent
+from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import (
     DatasetAudit,
@@ -26,12 +28,22 @@ from hyperagent.training.baseline_runner import BaselineRunner
 class ExperimentAutopilotAgent:
     """Analyzes completed experiments and launches evidence-backed next runs."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        workspace_dir: Optional[Path] = None,
+        llm_store: Optional[LLMProviderStore] = None,
+        llm_client: Optional[LLMClient] = None,
+    ) -> None:
         bootstrap_default_components()
         self.tuner = ParameterTuner()
         self.runner = BaselineRunner()
         self.report_builder = MarkdownReportBuilder()
         self.council = ExperimentCouncilAgent()
+        self.executable_council = ExecutableExperimentCouncilAgent(
+            workspace_dir=workspace_dir,
+            llm_store=llm_store,
+            llm_client=llm_client,
+        )
 
     def diagnose(
         self,
@@ -117,6 +129,10 @@ class ExperimentAutopilotAgent:
         target_oa: float = 0.9,
         run_next: bool = False,
         max_repeated_parameter: int = 2,
+        council_mode: str = "executable",
+        llm_council: bool = False,
+        council_profile: str = "reasonix-balanced",
+        council_llm_budget: int = 3,
     ) -> ExperimentCycle:
         cycle_id = self._new_cycle_id()
         cycle_dir = output_root / cycle_id
@@ -130,15 +146,37 @@ class ExperimentAutopilotAgent:
         )
         proposals = self.tuner.propose(plan, result, audit)
         history = self._load_history(output_root)
-        council_decision = self.council.review(
-            diagnosis,
-            proposals,
-            audit,
-            plan,
-            history,
-            target_oa=target_oa,
-            max_repeated_parameter=max_repeated_parameter,
-        )
+        council_run_path: Optional[Path] = None
+        council_run_warnings: List[str] = []
+        if council_mode == "static":
+            council_decision = self.council.review(
+                diagnosis,
+                proposals,
+                audit,
+                plan,
+                history,
+                target_oa=target_oa,
+                max_repeated_parameter=max_repeated_parameter,
+            )
+        elif council_mode == "executable":
+            council_run = self.executable_council.review(
+                diagnosis,
+                proposals,
+                audit,
+                plan,
+                history,
+                target_oa=target_oa,
+                max_repeated_parameter=max_repeated_parameter,
+                llm_enabled=llm_council,
+                llm_budget=council_llm_budget,
+                council_profile=council_profile,
+            )
+            council_decision = council_run.final_decision
+            council_run_warnings = list(council_run.warnings)
+            council_run_path = cycle_dir / "council_run.json"
+            write_json(council_run_path, council_run)
+        else:
+            raise ValueError(f"Unsupported council_mode: {council_mode}")
         selected = self._select_proposal(proposals, council_decision.selected_parameter)
         next_plan = self.build_next_plan(
             plan,
@@ -158,7 +196,7 @@ class ExperimentAutopilotAgent:
 
         next_result_path: Optional[str] = None
         report_path: Optional[str] = None
-        warnings: List[str] = list(council_decision.warnings)
+        warnings: List[str] = list(council_decision.warnings) + council_run_warnings
         status = "planned" if council_decision.action == "run" else "paused"
         if run_next and council_decision.action == "run":
             next_result = self.runner.run(next_plan)
@@ -183,6 +221,7 @@ class ExperimentAutopilotAgent:
             proposals_path=str(proposals_path),
             next_plan_path=str(next_plan_path),
             council_path=str(council_path),
+            council_run_path=str(council_run_path) if council_run_path else None,
             selected_proposal=selected,
             next_result_path=next_result_path,
             report_path=report_path,

@@ -225,6 +225,77 @@ class ExperimentCouncilDecision:
 
 
 @dataclass
+class ExperimentCouncilRoleRun:
+    agent_name: str
+    role: str
+    decision: str
+    rationale: str
+    confidence: float = 0.5
+    evidence: List[EvidenceItem] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    llm_used: bool = False
+    budget_used: int = 0
+    model: str = ""
+    profile: str = ""
+    tools: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentCouncilRoleRun":
+        return cls(
+            agent_name=str(data["agent_name"]),
+            role=str(data["role"]),
+            decision=str(data["decision"]),
+            rationale=str(data["rationale"]),
+            confidence=float(data.get("confidence", 0.5)),
+            evidence=[
+                EvidenceItem.from_dict(item) for item in data.get("evidence", [])
+            ],
+            warnings=[str(v) for v in data.get("warnings", [])],
+            llm_used=bool(data.get("llm_used", False)),
+            budget_used=int(data.get("budget_used", 0)),
+            model=str(data.get("model", "")),
+            profile=str(data.get("profile", "")),
+            tools=[str(v) for v in data.get("tools", [])],
+        )
+
+
+@dataclass
+class ExperimentCouncilRun:
+    run_id: str
+    mode: str
+    llm_enabled: bool
+    budget_limit: int
+    budget_used: int
+    role_runs: List[ExperimentCouncilRoleRun]
+    final_decision: ExperimentCouncilDecision
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExperimentCouncilRun":
+        return cls(
+            run_id=str(data["run_id"]),
+            mode=str(data["mode"]),
+            llm_enabled=bool(data.get("llm_enabled", False)),
+            budget_limit=int(data.get("budget_limit", 0)),
+            budget_used=int(data.get("budget_used", 0)),
+            role_runs=[
+                ExperimentCouncilRoleRun.from_dict(item)
+                for item in data.get("role_runs", [])
+            ],
+            final_decision=ExperimentCouncilDecision.from_dict(
+                data.get("final_decision", {})
+            ),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
 class ExperimentCycle:
     cycle_id: str
     created_at: str
@@ -237,6 +308,7 @@ class ExperimentCycle:
     proposals_path: str
     next_plan_path: str
     council_path: Optional[str] = None
+    council_run_path: Optional[str] = None
     selected_proposal: Optional[ParameterProposal] = None
     next_result_path: Optional[str] = None
     report_path: Optional[str] = None
@@ -260,6 +332,7 @@ class ExperimentCycle:
             proposals_path=str(data["proposals_path"]),
             next_plan_path=str(data["next_plan_path"]),
             council_path=data.get("council_path"),
+            council_run_path=data.get("council_run_path"),
             selected_proposal=(
                 None
                 if proposal is None
