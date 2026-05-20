@@ -1,5 +1,6 @@
 """Stdlib curses fullscreen interface for HyperAgent."""
 
+import unicodedata
 from typing import Dict, List, Optional
 
 from hyperagent.runtime.conversations import ConversationStore
@@ -133,20 +134,27 @@ class HyperAgentTui:
         )
         self._addstr(0, 0, status[: max(width - 1, 0)], curses.A_REVERSE)
         log_height = max(1, height - 3)
-        visible = self.lines[-log_height:]
+        main_content_width = max(main_width - 1, 1)
+        visible = self._wrap_lines(self.lines, main_content_width)[-log_height:]
         for index, line in enumerate(visible, start=1):
-            self._addstr(index, 0, line[: max(main_width - 1, 0)])
+            self._addstr(index, 0, self._clip_to_width(line, main_content_width))
         if side_width:
             separator_x = main_width
             for row in range(1, height - 1):
                 self._addstr(row, separator_x, "|")
             panel_x = separator_x + 1
-            self._addstr(1, panel_x, "Agent/Tool Panel"[: side_width - 1], curses.A_BOLD)
-            panel_lines = self._panel_lines()
+            panel_width = max(side_width - 1, 1)
+            self._addstr(
+                1,
+                panel_x,
+                self._clip_to_width("Agent/Tool Panel", panel_width),
+                curses.A_BOLD,
+            )
+            panel_lines = self._wrap_lines(self._panel_lines(), panel_width)
             for offset, line in enumerate(panel_lines[: max(height - 4, 0)], start=3):
-                self._addstr(offset, panel_x, line[: side_width - 1])
+                self._addstr(offset, panel_x, self._clip_to_width(line, panel_width))
         self._addstr(height - 2, 0, "-" * max(width - 1, 0))
-        self._addstr(height - 1, 0, prompt_line[: max(width - 1, 0)])
+        self._addstr(height - 1, 0, self._clip_to_width(prompt_line, max(width - 1, 1)))
         self.stdscr.refresh()
 
     def _panel_lines(self) -> List[str]:
@@ -172,3 +180,58 @@ class HyperAgentTui:
             self.stdscr.addstr(y, x, text, attr)
         except curses.error:
             pass
+
+    def _wrap_lines(self, lines: List[str], width: int) -> List[str]:
+        wrapped: List[str] = []
+        for line in lines:
+            wrapped.extend(self._wrap_line(line, width))
+        return wrapped
+
+    def _wrap_line(self, line: str, width: int) -> List[str]:
+        width = max(int(width), 1)
+        expanded = str(line).expandtabs(4)
+        if not expanded:
+            return [""]
+        parts: List[str] = []
+        current: List[str] = []
+        current_width = 0
+        for char in expanded:
+            char_width = self._char_width(char)
+            if current and current_width + char_width > width:
+                parts.append("".join(current))
+                current = []
+                current_width = 0
+            if char_width > width:
+                parts.append(char)
+                continue
+            current.append(char)
+            current_width += char_width
+        if current:
+            parts.append("".join(current))
+        return parts or [""]
+
+    def _clip_to_width(self, text: str, width: int) -> str:
+        width = max(int(width), 0)
+        if width <= 0:
+            return ""
+        current_width = 0
+        output: List[str] = []
+        for char in str(text).expandtabs(4):
+            char_width = self._char_width(char)
+            if current_width + char_width > width:
+                break
+            output.append(char)
+            current_width += char_width
+        return "".join(output)
+
+    def _display_width(self, text: str) -> int:
+        return sum(self._char_width(char) for char in str(text).expandtabs(4))
+
+    def _char_width(self, char: str) -> int:
+        if not char:
+            return 0
+        if unicodedata.combining(char):
+            return 0
+        if unicodedata.category(char) in {"Cc", "Cf"}:
+            return 0
+        return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
