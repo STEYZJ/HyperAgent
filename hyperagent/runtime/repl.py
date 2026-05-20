@@ -84,7 +84,7 @@ class HyperAgentRepl:
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
-        self.show_thinking = self._default_show_thinking()
+        self.expand_reasoning_content = self._default_expand_reasoning_content()
 
     def run(self) -> int:
         self.output(self._banner())
@@ -212,7 +212,8 @@ class HyperAgentRepl:
                 mode=self.mode,
                 task_id=self.task_id,
                 max_context_chars=self.max_context_chars,
-                thinking_displayed=self.show_thinking,
+                thinking_displayed=self.expand_reasoning_content,
+                reasoning_content_expanded=self.expand_reasoning_content,
                 **self.llm_kwargs,
             )
 
@@ -225,11 +226,11 @@ class HyperAgentRepl:
         for warning in result.warnings:
             self.output(f"warning: {warning}")
         if result.response.reasoning_content:
-            if self.show_thinking:
-                self.output("【思考内容】")
+            if self.expand_reasoning_content:
+                self.output("【模型思考内容】")
                 self.output(result.response.reasoning_content)
             else:
-                self.output("【思考内容已隐藏，可用 /thinking on 查看】")
+                self.output("【模型思考内容已折叠，可用 /thinking on 展开】")
         if result.response.content:
             self.output(result.response.content)
 
@@ -548,25 +549,39 @@ class HyperAgentRepl:
 
     def _thinking(self, args: List[str]) -> None:
         if not args or args[0] == "status":
-            self.output(f"thinking: {'on' if self.show_thinking else 'off'}")
+            self.output(self._thinking_status())
             return
         action = args[0].lower()
         if action == "on":
-            self.show_thinking = True
+            self.expand_reasoning_content = True
         elif action == "off":
-            self.show_thinking = False
+            self.expand_reasoning_content = False
         elif action == "toggle":
-            self.show_thinking = not self.show_thinking
+            self.expand_reasoning_content = not self.expand_reasoning_content
         else:
             self.output("usage: /thinking [on|off|toggle|status]")
             return
-        self.output(f"thinking: {'on' if self.show_thinking else 'off'}")
+        self.output(self._thinking_status())
 
-    def _default_show_thinking(self) -> bool:
+    def _default_expand_reasoning_content(self) -> bool:
+        return self._model_thinking_mode() == "enabled"
+
+    def _model_thinking_mode(self) -> str:
         thinking = self.llm_kwargs.get("thinking")
         if isinstance(thinking, dict):
-            return str(thinking.get("type", "")).lower() == "enabled"
-        return False
+            value = str(thinking.get("type", "")).lower()
+            if value in {"enabled", "disabled"}:
+                return value
+        return "unknown"
+
+    def _reasoning_display_mode(self) -> str:
+        return "expanded" if self.expand_reasoning_content else "collapsed"
+
+    def _thinking_status(self) -> str:
+        return (
+            f"model thinking: {self._model_thinking_mode()}\n"
+            f"reasoning display: {self._reasoning_display_mode()}"
+        )
 
     def _simplify(self) -> None:
         self.output(
@@ -695,7 +710,7 @@ class HyperAgentRepl:
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"
             "/reasonix [profile]   show DeepSeek Reasonix-inspired profiles\n"
-            "/thinking ...         show/hide reasoning_content blocks\n"
+            "/thinking ...         expand/collapse model reasoning_content display\n"
             "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
             "/mcp                  list MCP servers\n"

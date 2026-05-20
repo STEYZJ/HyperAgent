@@ -84,6 +84,9 @@ class AgentLoopTest(unittest.TestCase):
             self.assertIn("model_wait_elapsed_sec", saved.messages[-1].metadata)
             self.assertEqual(saved.messages[-1].metadata["provider"], "deepseek")
             self.assertEqual(saved.messages[-1].metadata["mode"], "research")
+            self.assertIn("thinking_displayed", saved.messages[-1].metadata)
+            self.assertIn("reasoning_content_expanded", saved.messages[-1].metadata)
+            self.assertFalse(saved.messages[-1].metadata["reasoning_content_expanded"])
             self.assertIn("帮我设计下一步实验", fake.calls[0]["messages"][-1].content)
             self.assertGreater(result.context_message_count, 1)
 

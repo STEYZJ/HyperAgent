@@ -165,7 +165,7 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertEqual(len(compressed.messages), 4)
             self.assertEqual(len(compressed.summaries), 1)
 
-    def test_thinking_toggle_controls_reasoning_display(self):
+    def test_thinking_toggle_controls_reasoning_display_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             workspace = HyperAgentWorkspace(root)
@@ -207,22 +207,75 @@ class HyperAgentReplTest(unittest.TestCase):
                 conversations=conversations,
                 providers=providers,
                 prompt_library=PromptLibrary([PROMPT_ROOT]),
+                llm_kwargs={"thinking": {"type": "disabled"}},
+                output_func=outputs.append,
+                wait_indicator_factory=NullWaitIndicator,
+            )
+
+            with patch("hyperagent.runtime.repl.AgentLoop", FakeAgentLoop):
+                repl.handle_line("/thinking status")
+                repl._chat("hello")
+                repl.handle_line("/thinking on")
+                repl._chat("hello again")
+
+            text = "\n".join(outputs)
+            self.assertIn("model thinking: disabled", text)
+            self.assertIn("reasoning display: collapsed", text)
+            self.assertIn("【模型思考内容已折叠，可用 /thinking on 展开】", text)
+            self.assertIn("reasoning display: expanded", text)
+            self.assertIn("【模型思考内容】", text)
+            self.assertIn("reasoning trace", text)
+            self.assertFalse(calls[0]["thinking_displayed"])
+            self.assertFalse(calls[0]["reasoning_content_expanded"])
+            self.assertTrue(calls[1]["thinking_displayed"])
+            self.assertTrue(calls[1]["reasoning_content_expanded"])
+            self.assertEqual(repl.llm_kwargs["thinking"], {"type": "disabled"})
+
+    def test_chat_without_reasoning_content_does_not_show_folded_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+
+            class FakeAgentLoop:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def run(self, **kwargs):
+                    return AgentTurnResult(
+                        session_id=kwargs["session_id"],
+                        provider="deepseek",
+                        model="deepseek-chat",
+                        mode="research",
+                        task_id=None,
+                        response=LLMResponse(
+                            provider="deepseek",
+                            model="deepseek-chat",
+                            content="plain answer",
+                            reasoning_content="",
+                        ),
+                        context_message_count=2,
+                        context_chars=12,
+                    )
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
                 output_func=outputs.append,
                 wait_indicator_factory=NullWaitIndicator,
             )
 
             with patch("hyperagent.runtime.repl.AgentLoop", FakeAgentLoop):
                 repl._chat("hello")
-                repl.handle_line("/thinking on")
-                repl._chat("hello again")
 
             text = "\n".join(outputs)
-            self.assertIn("【思考内容已隐藏，可用 /thinking on 查看】", text)
-            self.assertIn("thinking: on", text)
-            self.assertIn("【思考内容】", text)
-            self.assertIn("reasoning trace", text)
-            self.assertFalse(calls[0]["thinking_displayed"])
-            self.assertTrue(calls[1]["thinking_displayed"])
+            self.assertIn("plain answer", text)
+            self.assertNotIn("模型思考内容已折叠", text)
 
 
 if __name__ == "__main__":

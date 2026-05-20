@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from hyperagent.runtime.tui import HyperAgentTui
 from hyperagent.runtime.workspace import HyperAgentWorkspace
@@ -55,6 +56,17 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertEqual(tui._mouse_scroll_delta(button5_pressed), -3)
         self.assertEqual(tui._mouse_scroll_delta(button5_clicked), -3)
         self.assertEqual(tui._mouse_scroll_delta(0), 0)
+
+    def test_panel_uses_reasoning_display_language(self):
+        tui = self._tui()
+        tui.repl = SimpleNamespace(
+            session_id="session-1",
+            _reasoning_display_mode=lambda: "expanded",
+        )
+
+        lines = tui._panel_lines()
+        self.assertIn("reasoning: expanded", lines)
+        self.assertNotIn("thinking: on", "\n".join(lines))
 
     def test_tui_history_persists_only_main_commands(self):
         with tempfile.TemporaryDirectory() as tmp:

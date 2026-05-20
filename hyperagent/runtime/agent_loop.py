@@ -82,6 +82,7 @@ class AgentLoop:
         extra_body: Optional[Dict[str, Any]] = None,
         output_path: Optional[Path] = None,
         thinking_displayed: Optional[bool] = None,
+        reasoning_content_expanded: Optional[bool] = None,
     ) -> AgentTurnResult:
         if auto_compress:
             self.conversations.auto_compress(
@@ -135,6 +136,11 @@ class AgentLoop:
             },
         )
         assistant_content = response.content or "\n".join(response.warnings)
+        expanded = bool(
+            reasoning_content_expanded
+            if reasoning_content_expanded is not None
+            else thinking_displayed
+        )
         self.conversations.add_message(
             session_id,
             "assistant",
@@ -149,7 +155,8 @@ class AgentLoop:
                 "model": model or spec.default_model,
                 "mode": mode,
                 "reasoning_content_chars": len(response.reasoning_content or ""),
-                "thinking_displayed": bool(thinking_displayed),
+                "thinking_displayed": expanded,
+                "reasoning_content_expanded": expanded,
             },
         )
         result = AgentTurnResult(

@@ -181,12 +181,12 @@ class HyperAgentTui:
         height, width = self.stdscr.getmaxyx()
         side_width = max(28, min(44, width // 3)) if width >= 90 else 0
         main_width = width - side_width - (1 if side_width else 0)
-        thinking = "off"
-        if self.repl is not None and self.repl.show_thinking:
-            thinking = "on"
+        reasoning = "collapsed"
+        if self.repl is not None:
+            reasoning = self.repl._reasoning_display_mode()
         status = (
             f" HyperAgent TUI | provider={self.provider} "
-            f"| permission={self.permission_policy} | thinking={thinking} "
+            f"| permission={self.permission_policy} | reasoning={reasoning} "
             f"| /help /exit "
         )
         if self.wait_status:
@@ -244,14 +244,14 @@ class HyperAgentTui:
 
     def _panel_lines(self) -> List[str]:
         session = self.repl.session_id if self.repl is not None else self.session_id
-        thinking = ""
+        reasoning = "collapsed"
         if self.repl is not None:
-            thinking = "on" if self.repl.show_thinking else "off"
+            reasoning = self.repl._reasoning_display_mode()
         lines = [
             f"session: {session or ''}",
             f"mode: {self.mode}",
             f"model: {self.model or 'profile/default'}",
-            f"thinking: {thinking or 'off'}",
+            f"reasoning: {reasoning}",
             "",
             "recent artifacts:",
         ]
