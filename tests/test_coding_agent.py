@@ -27,7 +27,9 @@ class _FakeLLMClient:
         model=None,
         temperature=0.2,
         max_tokens=None,
+        **kwargs,
     ):
+        del kwargs
         return LLMResponse(
             provider=spec.name,
             model=model or spec.default_model,

@@ -30,6 +30,7 @@ class _FakeLLMClient:
         model=None,
         temperature=0.2,
         max_tokens=None,
+        **kwargs,
     ):
         self.calls.append(
             {
@@ -38,6 +39,7 @@ class _FakeLLMClient:
                 "model": model,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "kwargs": kwargs,
             }
         )
         return LLMResponse(

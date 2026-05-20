@@ -1,7 +1,7 @@
 """Claude-Code-like planning workflow over repository context."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from hyperagent.core.io import write_json
@@ -45,6 +45,12 @@ class CodingAgent:
         max_context_chars: int = 18000,
         max_tokens: Optional[int] = None,
         temperature: float = 0.2,
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        thinking: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        user: Optional[str] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> CodingAgentRun:
         run_id = self._new_run_id()
         run_dir = self.workspace.workspace_dir / "agent_runs" / run_id
@@ -87,6 +93,12 @@ class CodingAgent:
             max_context_chars=max_context_chars,
             max_tokens=max_tokens,
             temperature=temperature,
+            top_p=top_p,
+            response_format=response_format,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
+            user=user,
+            extra_body=extra_body,
             output_path=response_path,
         )
         plan_text = result.response.content or "\n".join(result.warnings)

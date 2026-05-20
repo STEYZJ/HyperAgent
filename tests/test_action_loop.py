@@ -22,8 +22,9 @@ class FakeLLMClient:
         model=None,
         temperature=0.2,
         max_tokens=None,
+        **kwargs,
     ):
-        del temperature, max_tokens
+        del temperature, max_tokens, kwargs
         self.messages.append(list(messages))
         return LLMResponse(
             provider=spec.name,

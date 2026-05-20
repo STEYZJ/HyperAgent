@@ -59,6 +59,8 @@ python -m hyperagent.cli propose-module --audit reports/audit.json --spectral re
 python -m hyperagent.cli llm-providers
 python -m hyperagent.cli llm-dry-run --provider openai --user "Plan an HSI experiment"
 python -m hyperagent.cli llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
+python -m hyperagent.cli llm-dry-run --provider deepseek --model deepseek-v4-pro --thinking enabled --reasoning-effort max --json-output --user "Return a JSON experiment plan"
+python -m hyperagent.cli llm-send --provider deepseek --model deepseek-v4-flash --thinking disabled --top-p 0.9 --user "Plan the next HSI baseline"
 python -m hyperagent.cli agent-chat --provider deepseek --new-title "HSI research" --mode research --message "Plan the next experiment"
 python -m hyperagent.cli agent-context --query "agent plan" --max-files 12
 python -m hyperagent.cli agent-plan --provider deepseek --mode code --instruction "Make HyperAgent more like Claude Code"
@@ -86,6 +88,29 @@ The local dataset root used in this workspace is recorded in `configs/hyperagent
 ```text
 /data2/lzj/lab/Mamba_test/dataset
 ```
+
+## LLM Runtime Options
+
+OpenAI-compatible providers share one runtime path. DeepSeek currently supports explicit model selection, thinking mode, reasoning effort, JSON output, and raw request-body extensions:
+
+```bash
+python -m hyperagent.cli llm-send \
+  --provider deepseek \
+  --model deepseek-v4-pro \
+  --thinking enabled \
+  --reasoning-effort max \
+  --json-output \
+  --user "Return one JSON object with the next HSI experiment."
+```
+
+Useful flags:
+
+- `--model`: choose a provider model such as `deepseek-v4-flash` or `deepseek-v4-pro`.
+- `--thinking enabled|disabled`: switch DeepSeek thinking mode for supported models.
+- `--reasoning-effort high|max`: choose thinking strength. Compatibility aliases `low`, `medium`, and `xhigh` are accepted by the CLI.
+- `--json-output`: sends `response_format={"type":"json_object"}`.
+- `--extra-body-json`: merges raw JSON into the request body, so provider features such as `tools` and `tool_choice` can be used without changing the core agent code.
+- `--top-p` and `--user-id`: pass common provider options when supported.
 
 ## MVP Limits
 

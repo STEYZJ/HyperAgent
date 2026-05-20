@@ -1,7 +1,7 @@
 """Conversation-backed LLM agent loop for HyperAgent."""
 
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from hyperagent.core.io import write_json
 from hyperagent.runtime.conversations import ConversationStore
@@ -71,6 +71,12 @@ class AgentLoop:
         max_context_chars: int = 12000,
         max_tokens: Optional[int] = None,
         temperature: float = 0.2,
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        thinking: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        user: Optional[str] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
         output_path: Optional[Path] = None,
     ) -> AgentTurnResult:
         if auto_compress:
@@ -94,6 +100,12 @@ class AgentLoop:
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
+            top_p=top_p,
+            response_format=response_format,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
+            user=user,
+            extra_body=extra_body,
         )
         assistant_content = response.content or "\n".join(response.warnings)
         self.conversations.add_message(session_id, "assistant", assistant_content)

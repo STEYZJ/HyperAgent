@@ -1,6 +1,7 @@
 """Command line interface for HyperAgent."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import List, Optional
@@ -185,6 +186,7 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_dry.add_argument("--user", required=True)
     llm_dry.add_argument("--temperature", type=float, default=0.2)
     llm_dry.add_argument("--max-tokens", type=int, default=None)
+    add_llm_runtime_args(llm_dry)
 
     llm_send = subparsers.add_parser("llm-send", help="Send a prompt to a configured LLM provider")
     llm_send.add_argument("--provider", required=True)
@@ -193,6 +195,7 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_send.add_argument("--user", required=True)
     llm_send.add_argument("--temperature", type=float, default=0.2)
     llm_send.add_argument("--max-tokens", type=int, default=None)
+    add_llm_runtime_args(llm_send)
     llm_send.add_argument("--output", default=None)
 
     agent_chat = subparsers.add_parser(
@@ -212,6 +215,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_chat.add_argument("--task-id", default=None)
     agent_chat.add_argument("--temperature", type=float, default=0.2)
     agent_chat.add_argument("--max-tokens", type=int, default=None)
+    add_llm_runtime_args(agent_chat)
     agent_chat.add_argument("--max-context-chars", type=int, default=12000)
     agent_chat.add_argument("--no-auto-compress", action="store_true")
     agent_chat.add_argument("--output", default=None)
@@ -243,6 +247,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_plan.add_argument("--task-id", default=None)
     agent_plan.add_argument("--temperature", type=float, default=0.2)
     agent_plan.add_argument("--max-tokens", type=int, default=None)
+    add_llm_runtime_args(agent_plan)
     agent_plan.add_argument("--max-context-chars", type=int, default=18000)
     agent_plan.add_argument("--max-files", type=int, default=20)
     agent_plan.add_argument("--max-preview-chars", type=int, default=1200)
@@ -260,6 +265,7 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_act.add_argument("--max-steps", type=int, default=3)
     agent_act.add_argument("--temperature", type=float, default=0.2)
     agent_act.add_argument("--max-tokens", type=int, default=None)
+    add_llm_runtime_args(agent_act)
     agent_act.add_argument("--max-files", type=int, default=12)
     agent_act.add_argument("--max-preview-chars", type=int, default=1000)
 
@@ -622,6 +628,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             model=args.model,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            **build_llm_runtime_kwargs(args),
         )
         print_json(payload)
         return 0
@@ -638,6 +645,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             model=args.model,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            **build_llm_runtime_kwargs(args),
         )
         if args.output:
             write_json(Path(args.output), response)
@@ -645,6 +653,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             for warning in response.warnings:
                 print(f"warning: {warning}")
         else:
+            if response.reasoning_content:
+                print("reasoning_content:")
+                print(response.reasoning_content)
+            if response.tool_calls:
+                print("tool_calls:")
+                print_json({"tool_calls": response.tool_calls})
             print(response.content)
         return 0
 
@@ -673,6 +687,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_context_chars=args.max_context_chars,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            **build_llm_runtime_kwargs(args),
             output_path=Path(args.output) if args.output else None,
         )
         append_worklog(
@@ -741,6 +756,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_context_chars=args.max_context_chars,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            **build_llm_runtime_kwargs(args),
         )
         append_worklog(
             "运行 Claude Code 式 Agent Plan",
@@ -783,6 +799,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_preview_chars=args.max_preview_chars,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            **build_llm_runtime_kwargs(args),
         )
         append_worklog(
             "运行 LLM 受控 Action Loop",
@@ -1263,9 +1280,61 @@ def parse_int_list(value: str) -> List[int]:
     return [int(part.strip()) for part in value.split(",") if part.strip()]
 
 
-def print_json(value) -> None:
-    import json
+def add_llm_runtime_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--top-p", type=float, default=None)
+    parser.add_argument(
+        "--thinking",
+        choices=["enabled", "disabled"],
+        default=None,
+        help="DeepSeek thinking mode switch for supported models.",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["low", "medium", "high", "xhigh", "max"],
+        default=None,
+        help="Reasoning strength for providers that support it.",
+    )
+    parser.add_argument(
+        "--json-output",
+        action="store_true",
+        help="Request JSON-object output when the provider supports response_format.",
+    )
+    parser.add_argument(
+        "--extra-body-json",
+        default=None,
+        help="Raw JSON object merged into the provider request body.",
+    )
+    parser.add_argument(
+        "--user-id",
+        default=None,
+        help="Optional provider-side user identifier, separate from the prompt text.",
+    )
 
+
+def build_llm_runtime_kwargs(args: argparse.Namespace) -> dict:
+    extra_body = parse_json_object(args.extra_body_json, "--extra-body-json")
+    thinking = {"type": args.thinking} if args.thinking else None
+    response_format = {"type": "json_object"} if args.json_output else None
+    return {
+        "top_p": args.top_p,
+        "response_format": response_format,
+        "thinking": thinking,
+        "reasoning_effort": args.reasoning_effort,
+        "user": args.user_id,
+        "extra_body": extra_body,
+    }
+
+
+def parse_json_object(value: Optional[str], flag_name: str) -> dict:
+    if not value:
+        return {}
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{flag_name} must be a JSON object")
+    return parsed
+
+
+def print_json(value) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
 
 

@@ -72,6 +72,12 @@ class AgentActionLoop:
         max_preview_chars: int = 1000,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        thinking: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        user: Optional[str] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> AgentActionRun:
         self.llm_store.ensure_defaults()
         spec = self.llm_store.get(provider)
@@ -105,6 +111,12 @@ class AgentActionLoop:
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                top_p=top_p,
+                response_format=response_format,
+                thinking=thinking,
+                reasoning_effort=reasoning_effort,
+                user=user,
+                extra_body=extra_body,
             )
             if response.warnings:
                 run.status = "failed"

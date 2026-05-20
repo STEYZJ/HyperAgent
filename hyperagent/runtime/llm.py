@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -31,7 +31,15 @@ DEFAULT_PROVIDERS = [
         kind="openai_compatible",
         base_url="https://api.deepseek.com/chat/completions",
         api_key_env="DEEPSEEK_API_KEY",
-        default_model="deepseek-chat",
+        default_model="deepseek-v4-flash",
+        metadata={
+            "recommended_models": ["deepseek-v4-flash", "deepseek-v4-pro"],
+            "supports_thinking": True,
+            "thinking_types": ["enabled", "disabled"],
+            "reasoning_effort": ["high", "max"],
+            "supports_response_format": True,
+            "supports_tools": True,
+        },
     ),
     LLMProviderSpec(
         name="openrouter",
@@ -65,7 +73,9 @@ class LLMProviderStore:
 
     def ensure_defaults(self) -> List[LLMProviderSpec]:
         if self.path.exists():
-            return self.list()
+            providers = self._merge_defaults(self.list())
+            write_json(self.path, {"providers": [item.to_dict() for item in providers]})
+            return providers
         write_json(self.path, {"providers": [item.to_dict() for item in DEFAULT_PROVIDERS]})
         return list(DEFAULT_PROVIDERS)
 
@@ -86,6 +96,34 @@ class LLMProviderStore:
         providers[provider.name] = provider
         write_json(self.path, {"providers": [item.to_dict() for item in providers.values()]})
 
+    def _merge_defaults(self, providers: List[LLMProviderSpec]) -> List[LLMProviderSpec]:
+        by_name: Dict[str, LLMProviderSpec] = {item.name: item for item in providers}
+        changed = False
+        for default in DEFAULT_PROVIDERS:
+            current = by_name.get(default.name)
+            if current is None:
+                by_name[default.name] = default
+                changed = True
+                continue
+            for key, value in default.metadata.items():
+                if key not in current.metadata:
+                    current.metadata[key] = value
+                    changed = True
+            if (
+                current.name == "deepseek"
+                and current.default_model == "deepseek-chat"
+                and default.default_model != current.default_model
+            ):
+                current.default_model = default.default_model
+                changed = True
+        if changed:
+            return [by_name[item.name] for item in DEFAULT_PROVIDERS if item.name in by_name] + [
+                item
+                for name, item in by_name.items()
+                if name not in {default.name for default in DEFAULT_PROVIDERS}
+            ]
+        return providers
+
 
 class LLMRequestBuilder:
     """Builds vendor-specific request payloads for dry-run or future clients."""
@@ -97,6 +135,12 @@ class LLMRequestBuilder:
         model: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        thinking: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        user: Optional[str] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, object]:
         request = LLMRequest(
             provider=spec.name,
@@ -104,8 +148,33 @@ class LLMRequestBuilder:
             messages=list(messages),
             temperature=temperature,
             max_tokens=max_tokens,
+            top_p=top_p,
+            response_format=response_format,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
+            user=user,
+            extra_body=dict(extra_body or {}),
         )
         if spec.kind == "openai_compatible":
+            body: Dict[str, Any] = {
+                "model": request.model,
+                "messages": [message.to_dict() for message in request.messages],
+            }
+            if not self._skip_sampling_for_thinking(spec, request.thinking):
+                body["temperature"] = request.temperature
+                if request.top_p is not None:
+                    body["top_p"] = request.top_p
+            if request.max_tokens is not None:
+                body["max_tokens"] = request.max_tokens
+            if request.response_format is not None:
+                body["response_format"] = request.response_format
+            if request.thinking is not None:
+                body["thinking"] = request.thinking
+            if request.reasoning_effort:
+                body["reasoning_effort"] = request.reasoning_effort
+            if request.user:
+                body["user"] = request.user
+            body.update(request.extra_body)
             return {
                 "url": spec.base_url,
                 "api_key_env": spec.api_key_env,
@@ -113,18 +182,23 @@ class LLMRequestBuilder:
                     "Authorization": "Bearer ${%s}" % spec.api_key_env,
                     "Content-Type": "application/json",
                 },
-                "json": {
-                    "model": request.model,
-                    "messages": [message.to_dict() for message in request.messages],
-                    "temperature": request.temperature,
-                    **({"max_tokens": max_tokens} if max_tokens is not None else {}),
-                },
+                "json": body,
             }
         if spec.kind == "anthropic_messages":
             system_messages = [m.content for m in request.messages if m.role == "system"]
             chat_messages = [
                 m.to_dict() for m in request.messages if m.role in ("user", "assistant")
             ]
+            body = {
+                "model": request.model,
+                "messages": chat_messages,
+                "system": "\n\n".join(system_messages),
+                "temperature": request.temperature,
+                "max_tokens": max_tokens or 1024,
+            }
+            if request.top_p is not None:
+                body["top_p"] = request.top_p
+            body.update(request.extra_body)
             return {
                 "url": spec.base_url,
                 "api_key_env": spec.api_key_env,
@@ -133,13 +207,7 @@ class LLMRequestBuilder:
                     "anthropic-version": "2023-06-01",
                     "Content-Type": "application/json",
                 },
-                "json": {
-                    "model": request.model,
-                    "messages": chat_messages,
-                    "system": "\n\n".join(system_messages),
-                    "temperature": request.temperature,
-                    "max_tokens": max_tokens or 1024,
-                },
+                "json": body,
             }
         if spec.kind == "google_generate_content":
             contents = [
@@ -153,28 +221,42 @@ class LLMRequestBuilder:
             system_text = "\n\n".join(
                 message.content for message in request.messages if message.role == "system"
             )
+            generation_config: Dict[str, Any] = {
+                "temperature": request.temperature,
+                **(
+                    {"maxOutputTokens": max_tokens}
+                    if max_tokens is not None
+                    else {}
+                ),
+            }
+            if request.top_p is not None:
+                generation_config["topP"] = request.top_p
+            body = {
+                "contents": contents,
+                **(
+                    {"systemInstruction": {"parts": [{"text": system_text}]}}
+                    if system_text
+                    else {}
+                ),
+                "generationConfig": generation_config,
+            }
+            body.update(request.extra_body)
             return {
                 "url": f"{spec.base_url}/models/{request.model}:generateContent?key=${{{spec.api_key_env}}}",
                 "api_key_env": spec.api_key_env,
                 "headers": {},
-                "json": {
-                    "contents": contents,
-                    **(
-                        {"systemInstruction": {"parts": [{"text": system_text}]}}
-                        if system_text
-                        else {}
-                    ),
-                    "generationConfig": {
-                        "temperature": request.temperature,
-                        **(
-                            {"maxOutputTokens": max_tokens}
-                            if max_tokens is not None
-                            else {}
-                        ),
-                    },
-                },
+                "json": body,
             }
         raise ValueError(f"Unsupported provider kind: {spec.kind}")
+
+    def _skip_sampling_for_thinking(
+        self,
+        spec: LLMProviderSpec,
+        thinking: Optional[Dict[str, Any]],
+    ) -> bool:
+        if spec.name != "deepseek" or not thinking:
+            return False
+        return str(thinking.get("type", "")).lower() == "enabled"
 
 
 class LLMClient:
@@ -191,6 +273,12 @@ class LLMClient:
         model: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+        thinking: Optional[Dict[str, Any]] = None,
+        reasoning_effort: Optional[str] = None,
+        user: Optional[str] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> LLMResponse:
         payload = self.builder.build(
             spec,
@@ -198,6 +286,12 @@ class LLMClient:
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
+            top_p=top_p,
+            response_format=response_format,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
+            user=user,
+            extra_body=extra_body,
         )
         api_key = os.environ.get(spec.api_key_env)
         if not api_key:
@@ -245,19 +339,34 @@ class LLMClient:
             provider=spec.name,
             model=model or spec.default_model,
             content=self._extract_content(spec, raw),
+            reasoning_content=self._extract_reasoning_content(spec, raw),
+            tool_calls=self._extract_tool_calls(spec, raw),
+            usage=self._extract_usage(raw),
+            message=self._extract_message(spec, raw),
             raw=raw,
         )
 
+    def _extract_message(
+        self,
+        spec: LLMProviderSpec,
+        raw: Dict[str, object],
+    ) -> Dict[str, Any]:
+        if spec.kind != "openai_compatible":
+            return {}
+        choices = raw.get("choices", [])
+        if not isinstance(choices, list) or not choices:
+            return {}
+        first = choices[0]
+        if not isinstance(first, dict):
+            return {}
+        message = first.get("message", {})
+        return dict(message) if isinstance(message, dict) else {}
+
     def _extract_content(self, spec: LLMProviderSpec, raw: Dict[str, object]) -> str:
         if spec.kind == "openai_compatible":
-            choices = raw.get("choices", [])
-            if isinstance(choices, list) and choices:
-                first = choices[0]
-                if isinstance(first, dict):
-                    message = first.get("message", {})
-                    if isinstance(message, dict):
-                        content = message.get("content", "")
-                        return "" if content is None else str(content)
+            message = self._extract_message(spec, raw)
+            content = message.get("content", "")
+            return "" if content is None else str(content)
         if spec.kind == "anthropic_messages":
             blocks = raw.get("content", [])
             if isinstance(blocks, list):
@@ -281,3 +390,31 @@ class LLMClient:
                                 if isinstance(part, dict)
                             )
         return ""
+
+    def _extract_reasoning_content(
+        self,
+        spec: LLMProviderSpec,
+        raw: Dict[str, object],
+    ) -> str:
+        if spec.kind != "openai_compatible":
+            return ""
+        message = self._extract_message(spec, raw)
+        reasoning = message.get("reasoning_content", "")
+        return "" if reasoning is None else str(reasoning)
+
+    def _extract_tool_calls(
+        self,
+        spec: LLMProviderSpec,
+        raw: Dict[str, object],
+    ) -> List[Dict[str, Any]]:
+        if spec.kind != "openai_compatible":
+            return []
+        message = self._extract_message(spec, raw)
+        tool_calls = message.get("tool_calls", [])
+        if not isinstance(tool_calls, list):
+            return []
+        return [dict(item) for item in tool_calls if isinstance(item, dict)]
+
+    def _extract_usage(self, raw: Dict[str, object]) -> Dict[str, Any]:
+        usage = raw.get("usage", {})
+        return dict(usage) if isinstance(usage, dict) else {}
