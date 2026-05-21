@@ -1,6 +1,7 @@
 """Command line interface for HyperAgent."""
 
 import argparse
+import difflib
 import json
 import os
 import sys
@@ -13,11 +14,13 @@ from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.action_loop import AgentActionLoop
-from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
+from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, tool_catalog
 from hyperagent.runtime.channels import ChannelConfigStore, ChannelRouter
 from hyperagent.runtime.channels.gateway import create_channel_app
+from hyperagent.runtime.checkpoints import CheckpointStore
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.coding_agent import CodingAgent
+from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.extensions import RuntimeExtensionStore
@@ -41,6 +44,7 @@ from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.repl import HyperAgentRepl
+from hyperagent.runtime.semantic_index import SemanticIndexStore
 from hyperagent.schemas import (
     ChannelInboundMessage,
     DatasetAudit,
@@ -307,6 +311,30 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     agent_chat.add_argument("--no-auto-compress", action="store_true")
     agent_chat.add_argument("--output", default=None)
 
+    headless_run = subparsers.add_parser(
+        "run",
+        help="Run one headless HyperAgent action-loop instruction",
+    )
+    headless_run.add_argument("instruction", nargs="+")
+    headless_run.add_argument("--session-id", default=None)
+    headless_run.add_argument("--new-title", default=None)
+    headless_run.add_argument("--provider", default="deepseek")
+    headless_run.add_argument("--model", default=None)
+    headless_run.add_argument("--task-id", default=None)
+    headless_run.add_argument("--max-steps", type=int, default=3)
+    headless_run.add_argument("--temperature", type=float, default=0.2)
+    headless_run.add_argument("--max-tokens", type=int, default=None)
+    headless_run.add_argument("--max-files", type=int, default=12)
+    headless_run.add_argument("--max-preview-chars", type=int, default=1000)
+    headless_run.add_argument("--loop-mode", choices=["standard", "cache-first"], default="standard")
+    headless_run.add_argument("--token-budget", type=int, default=None)
+    headless_run.add_argument(
+        "--permission",
+        choices=["auto", "ask", "session-ask", "deny-write", "deny"],
+        default="auto",
+    )
+    add_llm_runtime_args(headless_run, translator)
+
     repl = subparsers.add_parser(
         "repl",
         help=_txt(
@@ -483,6 +511,8 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     add_llm_runtime_args(agent_act, translator)
     agent_act.add_argument("--max-files", type=int, default=12)
     agent_act.add_argument("--max-preview-chars", type=int, default=1000)
+    agent_act.add_argument("--loop-mode", choices=["standard", "cache-first"], default="standard")
+    agent_act.add_argument("--token-budget", type=int, default=None)
     agent_act.add_argument(
         "--permission",
         choices=["auto", "ask", "session-ask", "deny-write", "deny"],
@@ -505,6 +535,8 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     agent_run.add_argument("--max-tokens", type=int, default=None)
     agent_run.add_argument("--max-files", type=int, default=12)
     agent_run.add_argument("--max-preview-chars", type=int, default=1000)
+    agent_run.add_argument("--loop-mode", choices=["standard", "cache-first"], default="standard")
+    agent_run.add_argument("--token-budget", type=int, default=None)
     agent_run.add_argument(
         "--permission",
         choices=["ask", "session-ask", "deny-write", "deny"],
@@ -589,6 +621,42 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     doctor = subparsers.add_parser("doctor", help="Run a local HyperAgent self-check")
     doctor.add_argument("--json", action="store_true")
 
+    events = subparsers.add_parser("events", help="List runtime event-log records")
+    events.add_argument("--limit", type=int, default=50)
+    events.add_argument("--type", default=None)
+    events.add_argument("--session-id", default=None)
+    events.add_argument("--run-id", default=None)
+    events.add_argument("--json", action="store_true")
+
+    replay = subparsers.add_parser("replay", help="Replay runtime events for a session or run")
+    replay.add_argument("--session-id", default=None)
+    replay.add_argument("--run-id", default=None)
+    replay.add_argument("--limit", type=int, default=200)
+    replay.add_argument("--json", action="store_true")
+
+    diff_cmd = subparsers.add_parser("diff", help="Show a unified diff between two text artifacts")
+    diff_cmd.add_argument("--left", required=True)
+    diff_cmd.add_argument("--right", required=True)
+    diff_cmd.add_argument("--context", type=int, default=3)
+    diff_cmd.add_argument("--json", action="store_true")
+
+    stats = subparsers.add_parser("stats", help="Summarize runtime events and LLM usage")
+    stats.add_argument("--json", action="store_true")
+
+    prune_sessions = subparsers.add_parser("prune-sessions", help="List or prune archived sessions")
+    prune_sessions.add_argument("--dry-run", action="store_true")
+    prune_sessions.add_argument("--json", action="store_true")
+
+    checkpoint = subparsers.add_parser("checkpoint", help="Create or list reversible file checkpoints")
+    checkpoint.add_argument("--path", action="append", default=[])
+    checkpoint.add_argument("--reason", default="")
+    checkpoint.add_argument("--list", action="store_true")
+    checkpoint.add_argument("--json", action="store_true")
+
+    restore = subparsers.add_parser("restore", help="Restore files from a checkpoint")
+    restore.add_argument("--checkpoint-id", required=True)
+    restore.add_argument("--json", action="store_true")
+
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
 
@@ -620,6 +688,16 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     skills = subparsers.add_parser("skill-list", help="List compatible SKILL.md skills")
     skills.add_argument("--json", action="store_true")
 
+    skill_run = subparsers.add_parser("skill-run", help="Render or run a SKILL.md skill")
+    skill_run.add_argument("--name", required=True)
+    skill_run.add_argument("--arguments", default="")
+    skill_run.add_argument("--run", action="store_true")
+    skill_run.add_argument("--provider", default="deepseek")
+    skill_run.add_argument("--model", default=None)
+    skill_run.add_argument("--max-steps", type=int, default=2)
+    skill_run.add_argument("--json", action="store_true")
+    add_llm_runtime_args(skill_run, translator)
+
     mcp_add = subparsers.add_parser("mcp-add", help="Register an MCP server launch spec")
     mcp_add.add_argument("--name", required=True)
     mcp_add.add_argument("--command", dest="server_command", required=True)
@@ -632,6 +710,19 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
     mcp_export = subparsers.add_parser("mcp-export", help="Export MCP client-style config")
     mcp_export.add_argument("--output", default=None)
+
+    mcp_inspect = subparsers.add_parser("mcp-inspect", help="Inspect a registered MCP server spec")
+    mcp_inspect.add_argument("--name", required=True)
+    mcp_inspect.add_argument("--json", action="store_true")
+
+    mcp_health = subparsers.add_parser("mcp-health", help="Report configured MCP server health metadata")
+    mcp_health.add_argument("--json", action="store_true")
+
+    index = subparsers.add_parser("index", help="Build or search a lightweight project semantic index")
+    index.add_argument("--root", action="append", default=[])
+    index.add_argument("--query", default="")
+    index.add_argument("--limit", type=int, default=10)
+    index.add_argument("--json", action="store_true")
 
     obsidian_index = subparsers.add_parser("obsidian-index", help="Index an Obsidian vault")
     obsidian_index.add_argument("--vault", required=True)
@@ -1330,6 +1421,63 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(result.response.content)
         return 0
 
+    if args.command == "run":
+        llm_store.ensure_defaults()
+        instruction = " ".join(args.instruction).strip()
+        if args.session_id:
+            session_id = args.session_id
+            session_store.load(session_id)
+        else:
+            title = args.new_title or instruction.splitlines()[0][:80]
+            session_id = session_store.new(title or "HyperAgent run").session_id
+        run = AgentActionLoop(
+            session_store,
+            llm_store,
+            workspace,
+            permission_policy=args.permission,
+            permission_callback=(
+                confirm_tool_permission
+                if args.permission in {"ask", "session-ask"}
+                else None
+            ),
+        ).run(
+            session_id=session_id,
+            provider=args.provider,
+            instruction=instruction,
+            model=resolve_llm_model(args),
+            task_id=args.task_id,
+            max_steps=args.max_steps,
+            max_files=args.max_files,
+            max_preview_chars=args.max_preview_chars,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            loop_mode=args.loop_mode,
+            token_budget=args.token_budget,
+            **build_llm_runtime_kwargs(args),
+        )
+        append_worklog(
+            "运行 Reasonix 风格 Headless Run",
+            "ActionLoop、事件日志和 cache-first metadata 已接入。",
+            f"执行 run={run.run_id} session={run.session_id} loop_mode={run.loop_mode} steps={len(run.steps)}。",
+            "headless run 是脚本化 agent 操作入口，便于后续 CI、实验自动化和 channel 安全隔离复用。",
+            f"artifact={Path(run.run_dir) / 'action_run.json'}，event_log={run.event_log_path}。",
+            f"run 状态为 {run.status}。",
+            "下一步可用 events/replay/stats 查看运行轨迹，或继续同一 session。",
+        )
+        print(f"run_id: {run.run_id}")
+        print(f"session_id: {run.session_id}")
+        print(f"status: {run.status}")
+        print(f"action_run: {Path(run.run_dir) / 'action_run.json'}")
+        if run.stable_prefix_hash:
+            print(f"stable_prefix_hash: {run.stable_prefix_hash}")
+        if run.event_log_path:
+            print(f"event_log: {run.event_log_path}")
+        if run.final_response:
+            print(run.final_response)
+        for warning in run.warnings:
+            print(f"warning: {warning}")
+        return 0
+
     if args.command == "agent-context":
         builder = RepoContextBuilder(workspace.project_root)
         snapshot = builder.build(
@@ -1486,6 +1634,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_tokens=args.max_tokens,
             max_files=args.max_files,
             max_preview_chars=args.max_preview_chars,
+            loop_mode=args.loop_mode,
+            token_budget=args.token_budget,
             llm_kwargs=build_llm_runtime_kwargs(args),
         )
         append_worklog(
@@ -1539,6 +1689,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_preview_chars=args.max_preview_chars,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
+            loop_mode=args.loop_mode,
+            token_budget=args.token_budget,
             **build_llm_runtime_kwargs(args),
         )
         append_worklog(
@@ -1723,6 +1875,131 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"- {key}: {value}")
         return 0
 
+    if args.command == "events":
+        log = RuntimeEventLog(workspace.workspace_dir)
+        events = log.records(
+            limit=args.limit,
+            event_type=args.type,
+            session_id=args.session_id,
+            run_id=args.run_id,
+        )
+        if args.json:
+            print_json({"events": [event.to_dict() for event in events], "summary": log.summarize(events)})
+        else:
+            for event in events:
+                print(
+                    f"{event.timestamp}\t{event.event_type}\t{event.status}\t"
+                    f"session={event.session_id or ''}\trun={event.run_id or ''}\t"
+                    f"tool={event.tool_name or ''}\t{event.message}"
+                )
+        return 0
+
+    if args.command == "replay":
+        log = RuntimeEventLog(workspace.workspace_dir)
+        events = log.records(
+            limit=args.limit,
+            session_id=args.session_id,
+            run_id=args.run_id,
+        )
+        if args.json:
+            print_json({"events": [event.to_dict() for event in events]})
+        else:
+            for index, event in enumerate(events, start=1):
+                subject = event.tool_name or event.source
+                print(f"{index}. {event.timestamp} {event.event_type} [{event.status}] {subject}")
+                if event.message:
+                    print(f"   {event.message}")
+        return 0
+
+    if args.command == "diff":
+        left = Path(args.left)
+        right = Path(args.right)
+        left_text = left.read_text(encoding="utf-8", errors="replace").splitlines()
+        right_text = right.read_text(encoding="utf-8", errors="replace").splitlines()
+        diff_lines = list(
+            difflib.unified_diff(
+                left_text,
+                right_text,
+                fromfile=str(left),
+                tofile=str(right),
+                lineterm="",
+                n=args.context,
+            )
+        )
+        if args.json:
+            print_json({"left": str(left), "right": str(right), "diff": diff_lines})
+        else:
+            print("\n".join(diff_lines))
+        return 0
+
+    if args.command == "stats":
+        event_log = RuntimeEventLog(workspace.workspace_dir)
+        payload = {
+            "events": event_log.summarize(),
+            "llm_usage": LLMUsageLedger(workspace.workspace_dir).summarize(),
+            "tools": tool_catalog(),
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print("Runtime stats:")
+            print(f"- events: {payload['events']['event_count']}")
+            print(f"- llm_requests: {payload['llm_usage']['request_count']}")
+            print(f"- llm_total_tokens: {payload['llm_usage']['total_tokens']}")
+            print(f"- cache_hit_ratio: {payload['llm_usage']['cache_hit_ratio']}")
+            print(f"- tools: {len(payload['tools'])}")
+        return 0
+
+    if args.command == "prune-sessions":
+        sessions = session_store.list(include_archived=True)
+        archived = [session for session in sessions if session.status == "archived"]
+        payload = {
+            "archived_sessions": [session.to_dict() for session in archived],
+            "dry_run": args.dry_run,
+            "deleted": [],
+        }
+        if not args.dry_run:
+            for session in archived:
+                session_store.delete(session.session_id, hard=True)
+                payload["deleted"].append(session.session_id)
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"archived: {len(archived)}")
+            print(f"deleted: {len(payload['deleted'])}")
+            if args.dry_run:
+                print("dry-run: no sessions deleted")
+        return 0
+
+    if args.command == "checkpoint":
+        store = CheckpointStore(workspace.project_root, workspace.workspace_dir)
+        if args.list or not args.path:
+            checkpoints = store.list()
+            if args.json:
+                print_json({"checkpoints": [item.to_dict() for item in checkpoints]})
+            else:
+                for item in checkpoints[-30:]:
+                    print(f"{item.checkpoint_id}\t{item.created_at}\tfiles={len(item.files)}\t{item.reason}")
+            return 0
+        checkpoint = store.create(args.path, reason=args.reason)
+        if args.json:
+            print_json(checkpoint.to_dict())
+        else:
+            print(f"checkpoint_id: {checkpoint.checkpoint_id}")
+            print(f"manifest: {checkpoint.manifest_path}")
+            print(f"files: {len(checkpoint.files)}")
+        return 0
+
+    if args.command == "restore":
+        checkpoint = CheckpointStore(workspace.project_root, workspace.workspace_dir).restore(args.checkpoint_id)
+        if args.json:
+            print_json(checkpoint.to_dict())
+        else:
+            print(f"restored: {checkpoint.checkpoint_id}")
+            for path in checkpoint.files:
+                print(f"  {path}")
+        return 0
+
     if args.command == "session-new":
         session = session_store.new(args.title)
         print(session.session_id)
@@ -1776,6 +2053,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "skill-list":
         roots = [
+            PACKAGE_ROOT / "skills",
             Path("skills"),
             workspace.workspace_dir / "skills",
         ]
@@ -1788,6 +2066,62 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             for skill in skills:
                 print(f"{skill.name}\t{skill.path}\t{skill.description}")
+        return 0
+
+    if args.command == "skill-run":
+        roots = [
+            PACKAGE_ROOT / "skills",
+            Path("skills"),
+            workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        if codex_home:
+            roots.append(Path(codex_home) / "skills")
+        skill = SkillStore(roots).render(args.name, args.arguments)
+        if not args.run:
+            payload = skill.to_dict()
+            if args.json:
+                print_json(payload)
+            else:
+                print(skill.body)
+            return 0
+        llm_store.ensure_defaults()
+        session_id = session_store.new(f"skill:{skill.name}").session_id
+        run = AgentActionLoop(
+            session_store,
+            llm_store,
+            workspace,
+            permission_policy="session-ask",
+            permission_callback=confirm_tool_permission,
+        ).run(
+            session_id=session_id,
+            provider=args.provider,
+            instruction=(
+                f"Run skill `{skill.name}` ({skill.run_as}) for this task.\n\n"
+                f"{skill.body}"
+            ),
+            model=resolve_llm_model(args) or skill.model or None,
+            max_steps=args.max_steps,
+            **build_llm_runtime_kwargs(args),
+        )
+        payload = {
+            "skill": skill.to_dict(),
+            "session_id": session_id,
+            "action_run": str(Path(run.run_dir) / "action_run.json"),
+            "status": run.status,
+            "final_response": run.final_response,
+            "warnings": run.warnings,
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"skill: {skill.name}")
+            print(f"status: {run.status}")
+            print(f"action_run: {payload['action_run']}")
+            if run.final_response:
+                print(run.final_response)
+            for warning in run.warnings:
+                print(f"warning: {warning}")
         return 0
 
     if args.command == "mcp-add":
@@ -1818,6 +2152,69 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Wrote MCP config: {args.output}")
         else:
             print_json(payload)
+        return 0
+
+    if args.command == "mcp-inspect":
+        matched = None
+        for server in mcp_store.list():
+            if server.name == args.name:
+                matched = server
+                break
+        if matched is None:
+            raise KeyError(f"MCP server not found: {args.name}")
+        payload = {
+            **matched.to_dict(),
+            "runtime_client": "not_connected",
+            "note": "HyperAgent currently stores MCP launch specs; live MCP client runtime is planned.",
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"name: {matched.name}")
+            print(f"enabled: {matched.enabled}")
+            print(f"command: {matched.command} {' '.join(matched.args)}")
+            print("runtime_client: not_connected")
+        return 0
+
+    if args.command == "mcp-health":
+        payload = {
+            "servers": [
+                {
+                    **server.to_dict(),
+                    "configured": True,
+                    "runtime_client": "not_connected",
+                    "health": "registered",
+                }
+                for server in mcp_store.list()
+            ]
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            if not payload["servers"]:
+                print("no MCP servers")
+            for server in payload["servers"]:
+                print(f"{server['name']}\t{server['enabled']}\t{server['health']}\t{server['runtime_client']}")
+        return 0
+
+    if args.command == "index":
+        store = SemanticIndexStore(workspace.project_root, workspace.workspace_dir)
+        if args.query:
+            results = store.search(args.query, limit=args.limit)
+            if args.json:
+                print_json({"results": results, "index_path": str(store.path)})
+            else:
+                for result in results:
+                    print(f"{result['score']}\t{result['path']}\t{', '.join(result['matched_terms'][:8])}")
+            return 0
+        roots = args.root or ["hyperagent", "tests", "README.md", "README.zh-CN.md"]
+        payload = store.build(roots)
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"index: {store.path}")
+            print(f"documents: {len(payload['documents'])}")
+            print(f"engine: {payload['engine']}")
         return 0
 
     if args.command == "obsidian-index":

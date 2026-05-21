@@ -29,6 +29,7 @@ EXISTING_COMMANDS = {
     "llm-dry-run",
     "llm-send",
     "agent-chat",
+    "run",
     "repl",
     "agent-context",
     "agent-plan",
@@ -39,6 +40,13 @@ EXISTING_COMMANDS = {
     "command-render",
     "todos",
     "doctor",
+    "events",
+    "replay",
+    "diff",
+    "stats",
+    "prune-sessions",
+    "checkpoint",
+    "restore",
     "tui",
     "session-new",
     "session-add",
@@ -48,9 +56,13 @@ EXISTING_COMMANDS = {
     "session-delete",
     "session-compress",
     "skill-list",
+    "skill-run",
     "mcp-add",
     "mcp-list",
     "mcp-export",
+    "mcp-inspect",
+    "mcp-health",
+    "index",
     "obsidian-index",
     "obsidian-search",
     "prompt-list",
@@ -78,6 +90,8 @@ BOOLEAN_FLAGS = {
     "--json",
     "--include-archived",
     "--hard",
+    "--dry-run",
+    "--list",
 }
 
 
@@ -142,6 +156,10 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["llm-profile"] + rest
     if alias == "usage":
         return global_options + ["llm-usage"] + rest
+    if alias == "cost":
+        return global_options + ["llm-usage"] + rest
+    if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
+        return global_options + [alias] + rest
     if alias in {"commands", "command"}:
         return global_options + ["command-list"] + rest
     if alias == "todos":
@@ -174,6 +192,9 @@ Slash-style aliases:
   HyperAgent /model
   HyperAgent /reasonix
   HyperAgent /usage
+  HyperAgent /cost
+  HyperAgent /events
+  HyperAgent /stats
   HyperAgent /commands
   HyperAgent /todos
   HyperAgent /doctor
@@ -185,7 +206,7 @@ Slash-style aliases:
   HyperAgent /repl
 
 Inside REPL:
-  /context, /compact, /clear, /usage, /init, /memory, /agents, /agents run, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
+  /context, /compact, /clear, /usage, /cost, /stats, /budget, /pro, /skill, /checkpoint, /restore, /logs, /init, /memory, /agents, /agents run, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
 
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
@@ -226,6 +247,10 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["llm-profile"] + list(rest)
     if alias == "usage":
         return ["llm-usage"] + list(rest)
+    if alias == "cost":
+        return ["llm-usage"] + list(rest)
+    if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
+        return [alias] + list(rest)
     if alias in {"commands", "command"}:
         return ["command-list"] + list(rest)
     if alias == "todos":

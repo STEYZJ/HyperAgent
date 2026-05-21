@@ -81,6 +81,14 @@ HyperAgent /language
 HyperAgent /commands
 HyperAgent /todos
 HyperAgent /doctor
+HyperAgent run --loop-mode cache-first --token-budget 4096 "检查 reports 并决定下一步行动"
+HyperAgent events --limit 20
+HyperAgent replay --run-id <run_id>
+HyperAgent stats
+HyperAgent checkpoint --path hyperagent/runtime/action_loop.py --reason "修改前"
+HyperAgent restore --checkpoint-id <checkpoint_id>
+HyperAgent index --root hyperagent --root tests
+HyperAgent skill-run --name review-experiment --arguments "评审最新实验结果"
 ```
 
 ## TUI / REPL
@@ -110,6 +118,19 @@ HyperAgent doctor
 ```
 
 项目级命令可以放到 `.hyperagent/commands/*.md`，项目级 agent 可以放到 `.hyperagent/agents/*.md`，hook 可以通过 `/hooks add` 或 `.hyperagent/hooks/*.md` 管理。外部 Bot 渠道仍然只允许聊天/查询，不能触发 shell、训练、写文件或通用 agent 工具。
+
+## Reasonix 风格运行时
+
+HyperAgent 参考 DeepSeek-Reasonix 的架构思想重新用 Python 实现，不复制其 TypeScript 源码。当前阶段已经补上：
+
+- `--loop-mode cache-first`：ActionLoop 记录稳定前缀 hash，把稳定规则放在动态工具输出之前，便于后续利用 DeepSeek prefix cache。
+- native `tool_calls` 解析、JSON/reasoning-content 修复，以及重复工具调用 storm breaker。
+- `.hyperagent/events/runtime_events.jsonl` 事件日志，可用 `HyperAgent events`、`HyperAgent replay`、`HyperAgent stats` 查看。
+- `.hyperagent/checkpoints` 可恢复文件检查点，可用 `HyperAgent checkpoint`、`HyperAgent restore`、`/checkpoint`、`/restore`。
+- 内置 HSI skills：`review-experiment`、`spectral-critic`、`paper-method-extractor` 等。
+- `HyperAgent index` 轻量词法索引，作为后续 embedding 语义检索的稳定接口。
+
+这还不是完整 Reasonix 克隆：实时 MCP client、富 dashboard/desktop、编辑审查 gate 和后台 job 管理仍在后续阶段。
 
 ## DeepSeek / Reasonix
 

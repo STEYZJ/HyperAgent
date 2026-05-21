@@ -383,9 +383,22 @@ class HyperAgentTui:
             f"permission: {self.permission_policy}",
             f"reasoning: {reasoning}",
             f"mouse: {self.mouse_mode}",
-            "",
-            self._t("tui.panel.commands", "command suggestions:"),
         ]
+        if self.repl is not None:
+            try:
+                usage = self.repl.usage.summarize()
+                lines.extend(
+                    [
+                        f"llm_requests: {usage['request_count']}",
+                        f"tokens: {usage['total_tokens']}",
+                        f"cache_hit: {usage['cache_hit_ratio']}",
+                        f"loop: {self.repl.action_loop_mode}",
+                        f"budget: {self.repl.action_token_budget}",
+                    ]
+                )
+            except Exception:
+                pass
+        lines.extend(["", self._t("tui.panel.commands", "command suggestions:")])
         lines.extend(self.command_suggestions[:6] or [self._t("tui.panel.none", "none")])
         lines.append("")
         lines.append(self._t("tui.panel.todos", "todos:"))
@@ -438,6 +451,14 @@ class HyperAgentTui:
             "tool",
             "act",
             "plan",
+            "cost",
+            "stats",
+            "skill",
+            "checkpoint",
+            "restore",
+            "budget",
+            "pro",
+            "logs",
             "mouse",
             "exit",
         ]

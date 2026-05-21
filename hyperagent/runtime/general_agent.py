@@ -56,6 +56,8 @@ class GeneralAgentRunner:
         max_tokens: Optional[int] = None,
         max_files: int = 12,
         max_preview_chars: int = 1000,
+        loop_mode: str = "standard",
+        token_budget: Optional[int] = None,
         llm_kwargs: Optional[Dict[str, object]] = None,
     ) -> GeneralAgentRun:
         agent = self._find_agent(agent_ref)
@@ -134,6 +136,8 @@ class GeneralAgentRunner:
             max_preview_chars=max_preview_chars,
             temperature=temperature,
             max_tokens=max_tokens,
+            loop_mode=loop_mode,
+            token_budget=token_budget,
             **runtime_kwargs,
         )
         action_path = Path(action_run.run_dir) / "action_run.json"

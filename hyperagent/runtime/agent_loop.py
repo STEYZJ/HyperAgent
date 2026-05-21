@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from hyperagent.core.io import write_json
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.prompts import PromptLibrary
@@ -61,6 +62,7 @@ class AgentLoop:
         self.workspace = workspace
         self.prompt_library = prompt_library
         self.llm_client = llm_client or LLMClient()
+        self.event_log = RuntimeEventLog(workspace.workspace_dir)
 
     def run(
         self,
@@ -101,6 +103,14 @@ class AgentLoop:
         spec = self.providers.get(provider)
         turn_started_at = utc_now()
         started = time.monotonic()
+        self.event_log.append(
+            "agent_loop.start",
+            source="agent_loop",
+            session_id=session_id,
+            status="running",
+            message=user_message[:500],
+            payload={"provider": provider, "model": model or spec.default_model, "mode": mode},
+        )
         response = self.llm_client.send(
             spec,
             messages,
@@ -133,6 +143,23 @@ class AgentLoop:
                 "mode": mode,
                 "task_id": task_id,
                 "model_wait_elapsed_sec": elapsed_sec,
+            },
+        )
+        self.event_log.append(
+            "agent_loop.response",
+            source="agent_loop",
+            session_id=session_id,
+            status="ok" if not response.warnings else "warning",
+            message=(response.content or "\n".join(response.warnings))[:500],
+            payload={
+                "provider": spec.name,
+                "model": model or spec.default_model,
+                "mode": mode,
+                "context_chars": context_chars,
+                "context_message_count": context_message_count,
+                "model_wait_elapsed_sec": elapsed_sec,
+                "usage": response.usage,
+                "warnings": response.warnings,
             },
         )
         assistant_content = response.content or "\n".join(response.warnings)

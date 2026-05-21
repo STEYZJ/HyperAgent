@@ -10,9 +10,30 @@ class SkillSpec:
     path: str
     description: str = ""
     source: str = "local"
+    body: str = ""
+    run_as: str = "inline"
+    allowed_tools: List[str] = field(default_factory=list)
+    model: str = ""
+    profile: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SkillSpec":
+        return cls(
+            name=str(data["name"]),
+            path=str(data.get("path", "")),
+            description=str(data.get("description", "")),
+            source=str(data.get("source", "local")),
+            body=str(data.get("body", "")),
+            run_as=str(data.get("run_as", data.get("runAs", "inline"))),
+            allowed_tools=[str(v) for v in data.get("allowed_tools", data.get("allowed-tools", []))],
+            model=str(data.get("model", "")),
+            profile=str(data.get("profile", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
 
 
 @dataclass
@@ -83,4 +104,3 @@ class MaterializationResult:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-

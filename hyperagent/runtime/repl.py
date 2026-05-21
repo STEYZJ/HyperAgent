@@ -6,9 +6,11 @@ from typing import Callable, Dict, List, Optional
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermissionRequest
+from hyperagent.runtime.checkpoints import CheckpointStore
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
@@ -94,6 +96,9 @@ class HyperAgentRepl:
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
         self.expand_reasoning_content = self._default_expand_reasoning_content()
+        self.last_user_message = ""
+        self.action_loop_mode = "standard"
+        self.action_token_budget: Optional[int] = None
 
     def run(self) -> int:
         self.output(self._banner())
@@ -182,8 +187,16 @@ class HyperAgentRepl:
             self._clear()
         elif command == "/context":
             self._context()
-        elif command == "/usage":
+        elif command in {"/usage", "/cost"}:
             self._usage(args)
+        elif command == "/stats":
+            self._stats()
+        elif command == "/retry":
+            self._retry()
+        elif command == "/stop":
+            self.output("no active model request")
+        elif command == "/copy":
+            self._export(args)
         elif command == "/init":
             self._init_memory()
         elif command == "/memory":
@@ -208,6 +221,12 @@ class HyperAgentRepl:
             self._rewind(args)
         elif command in {"/reasonix", "/deepseek"}:
             self._reasonix(args)
+        elif command == "/preset":
+            self._preset(args)
+        elif command == "/pro":
+            self._pro()
+        elif command == "/budget":
+            self._budget(args)
         elif command == "/thinking":
             self._thinking(args)
         elif command == "/simplify":
@@ -217,7 +236,15 @@ class HyperAgentRepl:
         elif command == "/mcp":
             self._mcp()
         elif command in {"/skills", "/skill"}:
-            self._skills()
+            self._skills(args)
+        elif command == "/checkpoint":
+            self._checkpoint(args)
+        elif command == "/restore":
+            self._restore(args)
+        elif command == "/jobs":
+            self.output("background jobs are not active in this runtime slice")
+        elif command == "/logs":
+            self._logs(args)
         elif command == "/tools":
             self.output(
                 render_tool_catalog(
@@ -245,6 +272,8 @@ class HyperAgentRepl:
         return True
 
     def _chat(self, message: str) -> None:
+        self.last_user_message = message
+
         def turn():
             return AgentLoop(
                 self.conversations,
@@ -303,6 +332,8 @@ class HyperAgentRepl:
             instruction=instruction,
             model=self.model,
             task_id=self.task_id,
+            loop_mode=self.action_loop_mode,
+            token_budget=self.action_token_budget,
             **self.llm_kwargs,
         )
         self.output(render_action_run(run))
@@ -440,6 +471,25 @@ class HyperAgentRepl:
             f"- cache_hit_ratio: {summary['cache_hit_ratio']}\n"
             f"- ledger: {summary['ledger_path']}"
         )
+
+    def _stats(self) -> None:
+        events = RuntimeEventLog(self.workspace.workspace_dir).summarize()
+        usage = self.usage.summarize()
+        self.output(
+            "runtime stats:\n"
+            f"- events: {events['event_count']}\n"
+            f"- event_log: {events['path']}\n"
+            f"- llm_requests: {usage['request_count']}\n"
+            f"- llm_total_tokens: {usage['total_tokens']}\n"
+            f"- cache_hit_ratio: {usage['cache_hit_ratio']}"
+        )
+
+    def _retry(self) -> None:
+        if not self.last_user_message:
+            self.output("no previous user message to retry")
+            return
+        self.output("retrying previous message")
+        self._chat(self.last_user_message)
 
     def _init_memory(self) -> None:
         path = self.memory.ensure_project_memory()
@@ -721,6 +771,37 @@ class HyperAgentRepl:
         lines.append("cache rule: " + str(guidance["rule"]))
         self.output("\n".join(lines))
 
+    def _preset(self, args: List[str]) -> None:
+        if not args or args[0] == "list":
+            self._reasonix([])
+            return
+        profile = get_reasonix_profile(args[0])
+        if profile is None:
+            self.output("usage: /preset [list|reasonix-cheap|reasonix-balanced|reasonix-deep]")
+            return
+        self.llm_kwargs["reasonix_profile"] = profile.name
+        if profile.thinking:
+            self.llm_kwargs["thinking"] = {"type": profile.thinking}
+        if profile.reasoning_effort:
+            self.llm_kwargs["reasoning_effort"] = profile.reasoning_effort
+        self.model = profile.model
+        self.output(f"preset: {profile.name} model={profile.model}")
+
+    def _pro(self) -> None:
+        self._preset(["reasonix-deep"])
+        self.action_loop_mode = "cache-first"
+        self.output("pro mode armed: reasonix-deep + cache-first action loop")
+
+    def _budget(self, args: List[str]) -> None:
+        if not args:
+            self.output(f"token_budget: {self.action_token_budget}")
+            return
+        if args[0].lower() in {"off", "none", "clear"}:
+            self.action_token_budget = None
+        else:
+            self.action_token_budget = int(args[0])
+        self.output(f"token_budget: {self.action_token_budget}")
+
     def _thinking(self, args: List[str]) -> None:
         if not args or args[0] == "status":
             self.output(self._thinking_status())
@@ -781,14 +862,71 @@ class HyperAgentRepl:
         for server in servers:
             self.output(f"{server.name}\t{server.command}\t{' '.join(server.args)}")
 
-    def _skills(self) -> None:
-        roots = [Path("skills"), self.workspace.workspace_dir / "skills"]
-        skills = SkillStore(roots).list()
+    def _skills(self, args: Optional[List[str]] = None) -> None:
+        args = args or []
+        roots = [
+            Path(__file__).resolve().parents[1] / "skills",
+            Path("skills"),
+            self.workspace.workspace_dir / "skills",
+        ]
+        store = SkillStore(roots)
+        if args and args[0] in {"show", "render"} and len(args) >= 2:
+            try:
+                skill = store.render(args[1], " ".join(args[2:]))
+            except KeyError as exc:
+                self.output(str(exc))
+                return
+            self.output(skill.body)
+            return
+        if args and args[0] == "run" and len(args) >= 2:
+            self._act(
+                "Run skill `{}` with arguments:\n{}".format(
+                    args[1],
+                    " ".join(args[2:]),
+                )
+            )
+            return
+        skills = store.list()
         if not skills:
             self.output("no skills")
             return
         for skill in skills:
-            self.output(f"{skill.name}\t{skill.path}\t{skill.description}")
+            self.output(f"{skill.name}\t{skill.run_as}\t{skill.path}\t{skill.description}")
+
+    def _checkpoint(self, args: List[str]) -> None:
+        store = CheckpointStore(self.workspace.project_root, self.workspace.workspace_dir)
+        if not args or args[0] == "list":
+            checkpoints = store.list()
+            if not checkpoints:
+                self.output("no checkpoints")
+                return
+            for item in checkpoints[-20:]:
+                self.output(f"{item.checkpoint_id}\tfiles={len(item.files)}\t{item.reason}")
+            return
+        checkpoint = store.create(args, reason="manual REPL checkpoint")
+        self.output(f"checkpoint: {checkpoint.checkpoint_id}")
+
+    def _restore(self, args: List[str]) -> None:
+        if not args:
+            self.output("usage: /restore <checkpoint_id>")
+            return
+        checkpoint = CheckpointStore(
+            self.workspace.project_root,
+            self.workspace.workspace_dir,
+        ).restore(args[0])
+        self.output(f"restored: {checkpoint.checkpoint_id} files={len(checkpoint.files)}")
+
+    def _logs(self, args: List[str]) -> None:
+        limit = int(args[0]) if args else 20
+        events = RuntimeEventLog(self.workspace.workspace_dir).records(limit=limit)
+        if not events:
+            self.output("no runtime events")
+            return
+        for event in events:
+            self.output(
+                f"{event.timestamp}\t{event.event_type}\t{event.status}\t"
+                f"{event.message[:160]}"
+            )
 
     def _manual_tool(self, args: List[str]) -> None:
         if not args:
@@ -896,6 +1034,11 @@ class HyperAgentRepl:
             "/resume <session_id>  switch session\n"
             "/context              show context compression status\n"
             "/usage [limit]        summarize LLM usage and cache-hit ledger\n"
+            "/cost [limit]         alias for usage/cost ledger\n"
+            "/stats                summarize events and LLM usage\n"
+            "/retry                retry the previous plain-text user message\n"
+            "/stop                 report active request status\n"
+            "/copy [path]          export current session for terminal copy\n"
             "/compact [keep_last]  compress current session\n"
             "/clear                clear current context after saving a rewind snapshot\n"
             "/init                 create project HyperAgent.md memory\n"
@@ -910,11 +1053,18 @@ class HyperAgentRepl:
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"
             "/reasonix [profile]   show DeepSeek Reasonix-inspired profiles\n"
+            "/preset ...           list or set Reasonix-style runtime preset\n"
+            "/pro                  arm reasonix-deep + cache-first mode\n"
+            "/budget [tokens|off]  show or set action-loop token budget\n"
             "/thinking ...         expand/collapse model reasoning_content display\n"
             "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
             "/mcp                  list MCP servers\n"
-            "/skills               list skills\n"
+            "/skill ...            list/show/run skills\n"
+            "/checkpoint ...       list or create file checkpoints\n"
+            "/restore <id>         restore a checkpoint\n"
+            "/jobs                 show background job status\n"
+            "/logs [limit]         show recent runtime events\n"
             "/tools                list local tools\n"
             "/tool ...             run a local tool with permission policy\n"
             "/plan <instruction>   generate a coding/algorithm plan\n"

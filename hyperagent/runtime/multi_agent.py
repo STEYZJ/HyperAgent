@@ -53,6 +53,8 @@ class MultiAgentTaskRunner:
         max_preview_chars: int = 1000,
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
+        loop_mode: str = "standard",
+        token_budget: Optional[int] = None,
         llm_kwargs: Optional[Dict[str, object]] = None,
     ) -> MultiAgentTaskRun:
         self.providers.ensure_defaults()
@@ -77,9 +79,9 @@ class MultiAgentTaskRunner:
             self._persist(run)
             return run
         if mode == "parallel":
-            self._run_parallel(run, agent_names, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, llm_kwargs or {})
+            self._run_parallel(run, agent_names, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, loop_mode, token_budget, llm_kwargs or {})
         else:
-            self._run_sequential(run, agent_names, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, llm_kwargs or {})
+            self._run_sequential(run, agent_names, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, loop_mode, token_budget, llm_kwargs or {})
         if not run.role_runs:
             run.status = "failed"
         elif any(item.status == "completed" for item in run.role_runs):
@@ -90,14 +92,14 @@ class MultiAgentTaskRunner:
         self._persist(run)
         return run
 
-    def _run_sequential(self, run: MultiAgentTaskRun, agent_names: List[str], provider: str, model: Optional[str], profile: str, task_id: Optional[str], max_steps: int, max_files: int, max_preview_chars: int, temperature: float, max_tokens: Optional[int], llm_kwargs: Dict[str, object]) -> None:
+    def _run_sequential(self, run: MultiAgentTaskRun, agent_names: List[str], provider: str, model: Optional[str], profile: str, task_id: Optional[str], max_steps: int, max_files: int, max_preview_chars: int, temperature: float, max_tokens: Optional[int], loop_mode: str, token_budget: Optional[int], llm_kwargs: Dict[str, object]) -> None:
         for agent_name in agent_names:
             run.role_runs.append(
-                self._run_one(agent_name, run.instruction, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, llm_kwargs)
+                self._run_one(agent_name, run.instruction, provider, model, profile, task_id, max_steps, max_files, max_preview_chars, temperature, max_tokens, loop_mode, token_budget, llm_kwargs)
             )
             self._persist(run)
 
-    def _run_parallel(self, run: MultiAgentTaskRun, agent_names: List[str], provider: str, model: Optional[str], profile: str, task_id: Optional[str], max_steps: int, max_files: int, max_preview_chars: int, temperature: float, max_tokens: Optional[int], llm_kwargs: Dict[str, object]) -> None:
+    def _run_parallel(self, run: MultiAgentTaskRun, agent_names: List[str], provider: str, model: Optional[str], profile: str, task_id: Optional[str], max_steps: int, max_files: int, max_preview_chars: int, temperature: float, max_tokens: Optional[int], loop_mode: str, token_budget: Optional[int], llm_kwargs: Dict[str, object]) -> None:
         with ThreadPoolExecutor(max_workers=min(len(agent_names), 4)) as pool:
             futures = {
                 pool.submit(
@@ -113,6 +115,8 @@ class MultiAgentTaskRunner:
                     max_preview_chars,
                     temperature,
                     max_tokens,
+                    loop_mode,
+                    token_budget,
                     llm_kwargs,
                 ): agent_name
                 for agent_name in agent_names
@@ -134,6 +138,8 @@ class MultiAgentTaskRunner:
         max_preview_chars: int,
         temperature: float,
         max_tokens: Optional[int],
+        loop_mode: str,
+        token_budget: Optional[int],
         llm_kwargs: Dict[str, object],
     ) -> MultiAgentRoleRun:
         try:
@@ -158,6 +164,8 @@ class MultiAgentTaskRunner:
                 max_preview_chars=max_preview_chars,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                loop_mode=loop_mode,
+                token_budget=token_budget,
                 llm_kwargs=llm_kwargs,
             )
             final_response = ""

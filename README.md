@@ -105,8 +105,19 @@ HyperAgent llm-send --provider deepseek --model deepseek-v4-flash --thinking dis
 HyperAgent "Plan the next experiment"
 HyperAgent chat --provider deepseek --new-title "HSI research" --mode research "Plan the next experiment"
 HyperAgent agent-context --query "agent plan" --max-files 12
+HyperAgent run --loop-mode cache-first --token-budget 4096 "inspect reports and decide the next action"
 HyperAgent plan --provider deepseek --mode code "Make HyperAgent more like Claude Code"
 HyperAgent act --provider deepseek --new-title "Action loop" --max-steps 3 "Inspect benchmark matrix and choose the next safe step"
+HyperAgent events --limit 20
+HyperAgent replay --run-id <run_id>
+HyperAgent stats
+HyperAgent diff --left reports/a.json --right reports/b.json
+HyperAgent checkpoint --path hyperagent/runtime/action_loop.py --reason "before repair change"
+HyperAgent restore --checkpoint-id <checkpoint_id>
+HyperAgent index --root hyperagent --root tests
+HyperAgent index --query "spectral experiment council"
+HyperAgent skill-list
+HyperAgent skill-run --name review-experiment --arguments "review the latest result"
 HyperAgent agent-tool read-file --path hyperagent/cli.py --max-lines 80
 HyperAgent agent-tool search-code --query "AgentLoop" --path hyperagent
 HyperAgent agent-tool run-command -- python -m unittest discover -s tests
@@ -202,6 +213,19 @@ HyperAgent doctor
 ```
 
 Project commands can be added under `.hyperagent/commands/*.md`; project agents can be added under `.hyperagent/agents/*.md`; hooks can be added through `/hooks add` or `.hyperagent/hooks/*.md`. External Bot channels remain chat/query only and cannot trigger shell, training, write, or general agent tools.
+
+## Reasonix-Inspired Runtime
+
+HyperAgent reimplements selected DeepSeek-Reasonix ideas in Python without copying its TypeScript source. The current slice adds:
+
+- `--loop-mode cache-first` for action-loop runs, which records a stable prefix hash and keeps Reasonix cache guidance ahead of volatile tool output.
+- Native `tool_calls` parsing plus JSON/reasoning-content repair and a repeated tool-call storm breaker.
+- Runtime event logs under `.hyperagent/events/runtime_events.jsonl`, inspectable with `HyperAgent events`, `HyperAgent replay`, and `HyperAgent stats`.
+- Reversible file checkpoints under `.hyperagent/checkpoints`, usable through `HyperAgent checkpoint`, `HyperAgent restore`, `/checkpoint`, and `/restore`.
+- Built-in HSI skills under `hyperagent/skills`, including `review-experiment`, `spectral-critic`, and `paper-method-extractor`.
+- A lightweight lexical `HyperAgent index` command as the placeholder interface for later embedding-backed semantic retrieval.
+
+This is not a full Reasonix clone yet: live MCP clients, rich dashboard/desktop parity, edit gates, and background job management remain staged work.
 
 `experiment-cycle` now uses an executable multi-agent council by default. It
 writes `council_run.json` plus the compatible `council_decision.json`; pass

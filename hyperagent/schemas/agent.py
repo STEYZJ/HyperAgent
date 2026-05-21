@@ -165,6 +165,7 @@ class AgentActionStep:
     args: Dict[str, Any] = field(default_factory=dict)
     tool_result: Optional[AgentToolResult] = None
     warnings: List[str] = field(default_factory=list)
+    parse_source: str = "content"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -185,6 +186,7 @@ class AgentActionStep:
                 else None
             ),
             warnings=[str(v) for v in data.get("warnings", [])],
+            parse_source=str(data.get("parse_source", "content")),
         )
 
 
@@ -199,6 +201,11 @@ class AgentActionRun:
     run_dir: str
     status: str = "running"
     task_id: Optional[str] = None
+    loop_mode: str = "standard"
+    stable_prefix_hash: str = ""
+    token_budget: Optional[int] = None
+    budget_exhausted: bool = False
+    event_log_path: str = ""
     final_response: str = ""
     steps: List[AgentActionStep] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -218,6 +225,13 @@ class AgentActionRun:
             run_dir=str(data["run_dir"]),
             status=str(data.get("status", "running")),
             task_id=None if data.get("task_id") is None else str(data.get("task_id")),
+            loop_mode=str(data.get("loop_mode", "standard")),
+            stable_prefix_hash=str(data.get("stable_prefix_hash", "")),
+            token_budget=(
+                None if data.get("token_budget") is None else int(data.get("token_budget"))
+            ),
+            budget_exhausted=bool(data.get("budget_exhausted", False)),
+            event_log_path=str(data.get("event_log_path", "")),
             final_response=str(data.get("final_response", "")),
             steps=[
                 AgentActionStep.from_dict(dict(item))

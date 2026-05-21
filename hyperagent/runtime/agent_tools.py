@@ -2,12 +2,14 @@
 
 import json
 import subprocess
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
 from hyperagent.core.io import read_yaml, write_json
+from hyperagent.runtime.checkpoints import CheckpointStore, paths_from_unified_diff
+from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.repo_context import SKIP_DIRS, TEXT_SUFFIXES
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import AgentToolCall, AgentToolResult, ExperimentPlan
@@ -39,6 +41,102 @@ class ToolPermissionRequest:
     run_id: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class ToolMetadata:
+    name: str
+    risk_level: str = "read"
+    mutating: bool = False
+    parallel_safe: bool = True
+    description: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+TOOL_METADATA: Dict[str, ToolMetadata] = {
+    "read_file": ToolMetadata(
+        name="read_file",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Read a text file inside the project root.",
+    ),
+    "search_code": ToolMetadata(
+        name="search_code",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Search text inside project files.",
+    ),
+    "run_command": ToolMetadata(
+        name="run_command",
+        risk_level="execute",
+        mutating=True,
+        parallel_safe=False,
+        description="Run an allowlisted or user-authorized shell command.",
+    ),
+    "run_experiment": ToolMetadata(
+        name="run_experiment",
+        risk_level="training",
+        mutating=True,
+        parallel_safe=False,
+        description="Run a HyperAgent experiment YAML.",
+    ),
+    "task": ToolMetadata(
+        name="task",
+        risk_level="agent",
+        mutating=False,
+        parallel_safe=True,
+        description="Run one or more subagents and aggregate their output.",
+    ),
+    "run_skill": ToolMetadata(
+        name="run_skill",
+        risk_level="agent",
+        mutating=False,
+        parallel_safe=True,
+        description="Run a SKILL.md skill inline or as a subagent.",
+    ),
+    "todo_write": ToolMetadata(
+        name="todo_write",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Replace TodoWrite state.",
+    ),
+    "check_patch": ToolMetadata(
+        name="check_patch",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Validate a unified diff without applying it.",
+    ),
+    "apply_patch": ToolMetadata(
+        name="apply_patch",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Apply a unified diff after permission and checkpoint.",
+    ),
+}
+
+
+def tool_metadata(tool_name: str) -> ToolMetadata:
+    return TOOL_METADATA.get(
+        tool_name,
+        ToolMetadata(
+            name=tool_name,
+            risk_level="unknown",
+            mutating=True,
+            parallel_safe=False,
+            description="Unknown tool.",
+        ),
+    )
+
+
+def tool_catalog() -> List[Dict[str, Any]]:
+    return [TOOL_METADATA[name].to_dict() for name in sorted(TOOL_METADATA)]
+
+
 class SafeAgentToolExecutor:
     """Executes a small set of auditable local tools."""
 
@@ -51,6 +149,7 @@ class SafeAgentToolExecutor:
         session_permission_cache: Optional[Dict[str, bool]] = None,
         allow_arbitrary_commands: bool = False,
         hook_engine: Optional[Any] = None,
+        event_log: Optional[RuntimeEventLog] = None,
     ) -> None:
         self.project_root = project_root.resolve()
         self.workspace_dir = workspace_dir.resolve()
@@ -62,6 +161,7 @@ class SafeAgentToolExecutor:
         )
         self.allow_arbitrary_commands = allow_arbitrary_commands
         self.hook_engine = hook_engine
+        self.event_log = event_log or RuntimeEventLog(self.workspace_dir)
 
     def read_file(
         self,
@@ -380,6 +480,13 @@ class SafeAgentToolExecutor:
                 warnings=[f"{tool_name} requires a non-empty unified diff"],
             )
         if apply:
+            touched_paths = paths_from_unified_diff(patch_text)
+            if touched_paths:
+                checkpoint = CheckpointStore(
+                    self.project_root,
+                    self.workspace_dir,
+                ).create(touched_paths, reason=f"before {tool_name}")
+                call.args["checkpoint_id"] = checkpoint.checkpoint_id
             permission = self._check_permission(
                 call,
                 risk_level="write",
@@ -578,6 +685,23 @@ class SafeAgentToolExecutor:
                 },
             )
             result.warnings.extend(hook_result.warnings)
+        if self.event_log is not None:
+            self.event_log.append(
+                "tool.result",
+                source="agent_tool",
+                run_id=call.run_id,
+                tool_name=call.tool_name,
+                status=status,
+                message=content[:500],
+                payload={
+                    "call_id": call.call_id,
+                    "args": call.args,
+                    "artifact_path": str(path),
+                    "exit_code": exit_code,
+                    "warnings": warnings or [],
+                    "metadata": tool_metadata(call.tool_name).to_dict(),
+                },
+            )
         return result
 
     def _resolve_safe_path(self, path: str) -> Path:
