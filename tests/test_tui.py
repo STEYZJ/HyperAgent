@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from hyperagent.runtime.tui import HyperAgentTui
 from hyperagent.runtime.workspace import HyperAgentWorkspace
@@ -66,7 +67,49 @@ class HyperAgentTuiTest(unittest.TestCase):
 
         lines = tui._panel_lines()
         self.assertIn("reasoning: expanded", lines)
+        self.assertIn("mouse: interactive", lines)
         self.assertNotIn("thinking: on", "\n".join(lines))
+
+    def test_shell_prompt_uses_env_user_host_and_cwd(self):
+        tui = self._tui()
+
+        with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "HyperAgent"}, clear=True), patch(
+            "hyperagent.runtime.tui.getpass.getuser",
+            return_value="lzj",
+        ), patch(
+            "hyperagent.runtime.tui.socket.gethostname",
+            return_value="nwafu-406.example",
+        ), patch(
+            "hyperagent.runtime.tui.Path.cwd",
+            return_value=Path("/data2/lzj/HyperAgent"),
+        ):
+            self.assertEqual(
+                tui._main_prompt(),
+                "(HyperAgent) lzj@nwafu-406:/data2/lzj/HyperAgent$ ",
+            )
+
+    def test_shell_prompt_left_elides_cwd_when_narrow(self):
+        tui = self._tui()
+        prompt = "(HyperAgent) lzj@nwafu-406:/data2/lzj/some/deep/HyperAgent$ "
+
+        fitted = tui._fit_input_prompt(prompt, width=42)
+
+        self.assertLessEqual(tui._display_width(fitted), 41)
+        self.assertIn("...", fitted)
+        self.assertTrue(fitted.endswith("$ "))
+
+    def test_shell_prompt_falls_back_for_tiny_width(self):
+        tui = self._tui()
+
+        self.assertEqual(
+            tui._fit_input_prompt("(HyperAgent) user@host:/very/long/path$ ", width=4),
+            "$ ",
+        )
+
+    def test_non_shell_prompt_is_clipped_not_replaced(self):
+        tui = self._tui()
+
+        self.assertEqual(tui._fit_input_prompt("allow? [y/N] ", width=8), "allow? ")
 
     def test_input_edit_helpers_preserve_cursor_position(self):
         tui = self._tui()
@@ -127,11 +170,12 @@ class HyperAgentTuiTest(unittest.TestCase):
                 providers=None,
                 prompt_library=None,
             )
+            prompt = "(HyperAgent) user@host:/tmp/project$ "
 
-            tui._record_history("HyperAgent> ", "/status")
+            tui._record_history(prompt, "/status")
             tui._record_history("allow? [y/N] ", "y")
-            tui._record_history("HyperAgent> ", "/context")
-            tui._record_history("HyperAgent> ", "/exit")
+            tui._record_history(prompt, "/context")
+            tui._record_history(prompt, "/exit")
 
             reloaded = HyperAgentTui(
                 workspace=workspace,
@@ -144,6 +188,31 @@ class HyperAgentTuiTest(unittest.TestCase):
             self.assertEqual(reloaded._history_previous("/context"), "/status")
             self.assertEqual(reloaded._history_next(), "/context")
             self.assertEqual(reloaded._history_next(), "draft")
+
+    def test_mouse_mode_commands_switch_tui_behavior(self):
+        tui = self._tui()
+
+        self.assertEqual(tui.mouse_mode, "interactive")
+        self.assertTrue(tui._handle_tui_command("/mouse select"))
+        self.assertEqual(tui.mouse_mode, "selection")
+        self.assertIn("selection", tui.lines[-1])
+
+        self.assertTrue(tui._handle_tui_command("/mouse interactive"))
+        self.assertEqual(tui.mouse_mode, "interactive")
+        self.assertIn("interactive", tui.lines[-1])
+
+        self.assertTrue(tui._handle_tui_command("/mouse toggle"))
+        self.assertEqual(tui.mouse_mode, "selection")
+
+    def test_mouse_event_is_ignored_in_selection_mode(self):
+        tui = self._tui()
+        tui.mouse_mode = "selection"
+        tui.main_scroll_offset = 0
+        tui.stdscr = SimpleNamespace(getmaxyx=lambda: (20, 100))
+
+        tui._handle_mouse_event(0, 2, 2 << 15)
+
+        self.assertEqual(tui.main_scroll_offset, 0)
 
 
 if __name__ == "__main__":

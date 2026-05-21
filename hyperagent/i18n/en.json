@@ -54,6 +54,9 @@
     "tui.panel.title": "Agent/Tool Panel",
     "tui.panel.recent_artifacts": "recent artifacts:",
     "tui.panel.none": "none",
+    "tui.mouse.selection": "mouse mode: selection. Terminal-native drag selection is enabled; press F2 or run /mouse interactive to restore TUI mouse controls.",
+    "tui.mouse.interactive": "mouse mode: interactive. TUI handles wheel scrolling and input clicks; press F2 or run /mouse select for terminal-native selection.",
+    "tui.mouse.help": "usage: /mouse status|select|interactive|toggle",
     "tool.catalog.title": "Available local tools"
   }
 }

@@ -54,6 +54,9 @@
     "tui.panel.title": "Agent/工具面板",
     "tui.panel.recent_artifacts": "最近工件:",
     "tui.panel.none": "无",
+    "tui.mouse.selection": "鼠标模式: selection。已启用终端原生拖拽选中文本；按 F2 或运行 /mouse interactive 恢复 TUI 鼠标控制。",
+    "tui.mouse.interactive": "鼠标模式: interactive。TUI 处理滚轮滚动和输入栏点击；按 F2 或运行 /mouse select 启用终端原生选择。",
+    "tui.mouse.help": "用法: /mouse status|select|interactive|toggle",
     "tool.catalog.title": "可用本地工具"
   }
 }

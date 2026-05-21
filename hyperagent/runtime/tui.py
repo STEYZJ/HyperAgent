@@ -1,7 +1,11 @@
 """Stdlib curses fullscreen interface for HyperAgent."""
 
+import getpass
 import json
+import os
 from pathlib import Path
+import socket
+import sys
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 
@@ -84,6 +88,8 @@ class HyperAgentTui:
         self.history_draft = ""
         self.history_path = self._history_path()
         self.command_history = self._load_history()
+        self.mouse_mode = "interactive"
+        self._main_prompt_suffix = "$ "
 
     def run(self) -> int:
         if curses is None:
@@ -100,15 +106,7 @@ class HyperAgentTui:
         self.stdscr = stdscr
         curses.curs_set(1)
         stdscr.keypad(True)
-        try:
-            mouse_mask = curses.ALL_MOUSE_EVENTS | getattr(
-                curses,
-                "REPORT_MOUSE_POSITION",
-                0,
-            )
-            curses.mousemask(mouse_mask)
-        except curses.error:
-            pass
+        self._set_mouse_mode("interactive")
         self.repl = HyperAgentRepl(
             workspace=self.workspace,
             conversations=self.conversations,
@@ -132,8 +130,10 @@ class HyperAgentTui:
         self._append_output(self.repl._banner())
         while True:
             self._draw()
-            line = self._read_line("HyperAgent> ")
+            line = self._read_line(self._main_prompt())
             if not line.strip():
+                continue
+            if self._handle_tui_command(line.strip()):
                 continue
             assert self.repl is not None
             keep_running = self.repl.handle_line(line.strip())
@@ -160,8 +160,9 @@ class HyperAgentTui:
         self.history_draft = ""
         while True:
             _, width = self.stdscr.getmaxyx()
+            display_prompt = self._fit_input_prompt(prompt, max(width - 1, 1))
             prompt_line, cursor_x, view_start = self._input_prompt_view(
-                prompt,
+                display_prompt,
                 buffer,
                 cursor_index,
                 max(width - 1, 1),
@@ -199,7 +200,12 @@ class HyperAgentTui:
             if key in {curses.KEY_PPAGE, curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END}:
                 self._handle_scroll_key(key)
                 continue
+            if self._is_f2_key(key):
+                self._toggle_mouse_mode()
+                continue
             if key == curses.KEY_MOUSE:
+                if self.mouse_mode == "selection":
+                    continue
                 event = self._read_mouse_event()
                 if event is None:
                     continue
@@ -209,7 +215,7 @@ class HyperAgentTui:
                     continue
                 if self._mouse_targets_input(y, state):
                     cursor_index = self._cursor_index_from_input_x(
-                        prompt,
+                        display_prompt,
                         buffer,
                         view_start,
                         x,
@@ -221,6 +227,71 @@ class HyperAgentTui:
             if isinstance(key, str) and key.isprintable():
                 buffer, cursor_index = self._insert_text(buffer, cursor_index, key)
                 self._reset_history_browse()
+
+    def _main_prompt(self) -> str:
+        return f"({self._environment_name()}) {self._user_name()}@{self._host_name()}:{Path.cwd()}$ "
+
+    def _environment_name(self) -> str:
+        env_name = os.environ.get("CONDA_DEFAULT_ENV", "").strip()
+        if env_name:
+            return env_name
+        prefix_name = Path(sys.prefix).name if sys.prefix else ""
+        if prefix_name and prefix_name not in {"", "usr", "local"}:
+            return prefix_name
+        return "HyperAgent"
+
+    def _user_name(self) -> str:
+        return getpass.getuser() or "user"
+
+    def _host_name(self) -> str:
+        hostname = socket.gethostname().split(".", 1)[0].strip()
+        return hostname or "localhost"
+
+    def _fit_input_prompt(
+        self,
+        prompt: str,
+        width: int,
+        *,
+        min_input_width: int = 1,
+    ) -> str:
+        prompt_budget = max(int(width) - max(int(min_input_width), 0), 1)
+        if self._display_width(prompt) <= prompt_budget:
+            return prompt
+        if not (prompt.endswith("$ ") and ":" in prompt):
+            return self._clip_to_width(prompt, prompt_budget)
+        if prompt.endswith("$ ") and ":" in prompt:
+            prefix, cwd_with_suffix = prompt.rsplit(":", 1)
+            cwd_text = cwd_with_suffix[:-2]
+            shell_prefix = f"{prefix}:"
+            shell_suffix = "$ "
+            cwd_budget = prompt_budget - self._display_width(shell_prefix + shell_suffix)
+            if cwd_budget > 0:
+                candidate = f"{shell_prefix}{self._left_ellipsis(cwd_text, cwd_budget)}{shell_suffix}"
+                if self._display_width(candidate) <= prompt_budget:
+                    return candidate
+        for fallback in ("HyperAgent$ ", "$ ", "$"):
+            if self._display_width(fallback) <= prompt_budget:
+                return fallback
+        return ""
+
+    def _left_ellipsis(self, text: str, width: int) -> str:
+        width = max(int(width), 0)
+        if self._display_width(text) <= width:
+            return text
+        marker = "..."
+        marker_width = self._display_width(marker)
+        if width <= marker_width:
+            return self._clip_to_width(marker, width)
+        suffix_budget = width - marker_width
+        suffix: List[str] = []
+        current_width = 0
+        for char in reversed(str(text)):
+            char_width = self._char_width(char)
+            if current_width + char_width > suffix_budget:
+                break
+            suffix.append(char)
+            current_width += char_width
+        return marker + "".join(reversed(suffix))
 
     def _draw(self, prompt_line: str = "HyperAgent> ", cursor_x: Optional[int] = None) -> None:
         assert self.stdscr is not None
@@ -238,6 +309,7 @@ class HyperAgentTui:
         )
         if self.wait_status:
             status += f"| {self.wait_status} "
+        status += f"| mouse={self.mouse_mode} "
         self._addstr(
             0,
             0,
@@ -307,6 +379,7 @@ class HyperAgentTui:
             f"mode: {self.mode}",
             f"model: {self.model or 'profile/default'}",
             f"reasoning: {reasoning}",
+            f"mouse: {self.mouse_mode}",
             "",
             self._t("tui.panel.recent_artifacts", "recent artifacts:"),
         ]
@@ -487,6 +560,8 @@ class HyperAgentTui:
             self.main_scroll_offset = 0
 
     def _handle_mouse(self) -> None:
+        if self.mouse_mode == "selection":
+            return
         event = self._read_mouse_event()
         if event is None:
             return
@@ -503,6 +578,8 @@ class HyperAgentTui:
         return int(x), int(y), int(state)
 
     def _handle_mouse_event(self, x: int, y: int, state: int) -> None:
+        if self.mouse_mode == "selection":
+            return
         delta = self._mouse_scroll_delta(state)
         if delta == 0:
             return
@@ -537,6 +614,74 @@ class HyperAgentTui:
             if pressed:
                 mask |= int(pressed)
         return mask
+
+    def _interactive_mouse_mask(self) -> int:
+        if curses is None:
+            return 0
+        return int(curses.ALL_MOUSE_EVENTS | getattr(curses, "REPORT_MOUSE_POSITION", 0))
+
+    def _set_mouse_mode(self, mode: str) -> None:
+        if mode not in {"interactive", "selection"}:
+            raise ValueError(f"unsupported mouse mode: {mode}")
+        self.mouse_mode = mode
+        if curses is None:
+            return
+        try:
+            curses.mousemask(0 if mode == "selection" else self._interactive_mouse_mask())
+        except curses.error:
+            pass
+
+    def _toggle_mouse_mode(self) -> str:
+        mode = "selection" if self.mouse_mode == "interactive" else "interactive"
+        self._set_mouse_mode(mode)
+        self._append_output(self._mouse_mode_message(mode))
+        return mode
+
+    def _mouse_mode_message(self, mode: Optional[str] = None) -> str:
+        mode = mode or self.mouse_mode
+        if mode == "selection":
+            return self._t(
+                "tui.mouse.selection",
+                "mouse mode: selection. Terminal-native drag selection is enabled; press F2 or run /mouse interactive to restore TUI mouse controls.",
+            )
+        return self._t(
+            "tui.mouse.interactive",
+            "mouse mode: interactive. TUI handles wheel scrolling and input clicks; press F2 or run /mouse select for terminal-native selection.",
+        )
+
+    def _handle_tui_command(self, line: str) -> bool:
+        parts = line.strip().split()
+        if not parts or parts[0] != "/mouse":
+            return False
+        action = parts[1] if len(parts) > 1 else "status"
+        if action == "status":
+            self._append_output(self._mouse_mode_message())
+        elif action == "select":
+            self._set_mouse_mode("selection")
+            self._append_output(self._mouse_mode_message("selection"))
+        elif action == "interactive":
+            self._set_mouse_mode("interactive")
+            self._append_output(self._mouse_mode_message("interactive"))
+        elif action == "toggle":
+            self._toggle_mouse_mode()
+        else:
+            self._append_output(
+                self._t(
+                    "tui.mouse.help",
+                    "usage: /mouse status|select|interactive|toggle",
+                )
+            )
+        return True
+
+    def _is_f2_key(self, key: object) -> bool:
+        if curses is None:
+            return False
+        candidates = {getattr(curses, "KEY_F2", None)}
+        try:
+            candidates.add(curses.KEY_F(2))
+        except Exception:
+            pass
+        return isinstance(key, int) and key in {value for value in candidates if value is not None}
 
     def _history_path(self) -> Optional[Path]:
         workspace_dir = getattr(self.workspace, "workspace_dir", None)
@@ -579,7 +724,7 @@ class HyperAgentTui:
             return False
         if command in {"/exit", "/quit", "exit", "quit"}:
             return False
-        return prompt.startswith("HyperAgent> ")
+        return prompt.endswith(self._main_prompt_suffix)
 
     def _history_previous(self, current_buffer: str) -> str:
         if not self.command_history:
