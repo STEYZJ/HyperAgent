@@ -39,12 +39,15 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertEqual(tui._clip_to_width("中文abc", 4), "中文")
         self.assertEqual(tui._clip_to_width("中文abc", 5), "中文a")
 
-    def test_addstr_writes_wide_chars_at_display_columns(self):
+    def test_addstr_writes_wide_text_as_one_curses_string(self):
         tui = self._tui()
 
         class FakeWindow:
             def __init__(self):
                 self.calls = []
+
+            def getmaxyx(self):
+                return (5, 20)
 
             def addstr(self, y, x, text, attr=0):
                 self.calls.append((y, x, text, attr))
@@ -54,8 +57,27 @@ class HyperAgentTuiTest(unittest.TestCase):
 
         tui._addstr(1, 3, "你好A")
 
-        self.assertEqual([call[1] for call in fake.calls], [3, 5, 7])
-        self.assertEqual("".join(call[2] for call in fake.calls), "你好A")
+        self.assertEqual(fake.calls, [(1, 3, "你好A", 0)])
+
+    def test_addstr_clips_wide_text_before_right_edge(self):
+        tui = self._tui()
+
+        class FakeWindow:
+            def __init__(self):
+                self.calls = []
+
+            def getmaxyx(self):
+                return (5, 8)
+
+            def addstr(self, y, x, text, attr=0):
+                self.calls.append((y, x, text, attr))
+
+        fake = FakeWindow()
+        tui.stdscr = fake
+
+        tui._addstr(1, 3, "你好ABC")
+
+        self.assertEqual(fake.calls, [(1, 3, "你好A", 0)])
 
     def test_wrap_and_render_keeps_chinese_content(self):
         tui = self._tui()

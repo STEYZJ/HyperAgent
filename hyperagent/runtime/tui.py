@@ -517,16 +517,35 @@ class HyperAgentTui:
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
         assert self.stdscr is not None
-        current_x = max(int(x), 0)
-        for char in str(text).expandtabs(4):
-            char_width = self._char_width(char)
-            if char_width <= 0:
-                continue
+        row = int(y)
+        col = max(int(x), 0)
+        try:
+            height, width = self.stdscr.getmaxyx()
+        except Exception:
+            height, width = row + 1, col + self._display_width(text) + 1
+        if row < 0 or row >= height or col >= width:
+            return
+        safe_text = self._clip_to_width(str(text).expandtabs(4), max(width - col, 0))
+        if not safe_text:
+            return
+        try:
+            self.stdscr.addstr(row, col, safe_text, attr)
+            return
+        except curses.error:
+            pass
+        # Some curses implementations raise when a string reaches the right edge.
+        # Retry with progressively shorter whole strings instead of writing CJK
+        # characters one by one; per-character wide writes are unreliable in
+        # several terminal/ncurses combinations and can render as blanks.
+        while safe_text:
+            safe_text = safe_text[:-1]
+            if not safe_text:
+                return
             try:
-                self.stdscr.addstr(int(y), current_x, char, attr)
+                self.stdscr.addstr(row, col, safe_text, attr)
+                return
             except curses.error:
-                pass
-            current_x += char_width
+                continue
 
     def _wrap_lines(self, lines: List[str], width: int) -> List[str]:
         wrapped: List[str] = []
