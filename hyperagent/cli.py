@@ -75,8 +75,36 @@ def _txt(translator: Optional[Translator], key: str, default: str) -> str:
     return translator.t(key, default=default) if translator is not None else default
 
 
+def _parser_class(translator: Optional[Translator]):
+    class LocalizedArgumentParser(argparse.ArgumentParser):
+        def format_help(self) -> str:
+            return _localize_argparse_text(super().format_help(), translator)
+
+        def format_usage(self) -> str:
+            return _localize_argparse_text(super().format_usage(), translator)
+
+    return LocalizedArgumentParser
+
+
+def _localize_argparse_text(text: str, translator: Optional[Translator]) -> str:
+    if translator is None or translator.locale != "zh-CN":
+        return text
+    replacements = {
+        "usage:": "用法:",
+        "positional arguments:": "位置参数:",
+        "optional arguments:": "可选参数:",
+        "options:": "可选参数:",
+        "show this help message and exit": "显示此帮助信息并退出",
+    }
+    localized = text
+    for source, target in replacements.items():
+        localized = localized.replace(source, target)
+    return localized
+
+
 def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser_cls = _parser_class(translator)
+    parser = parser_cls(
         description=_txt(
             translator,
             "cli.description",
@@ -92,7 +120,11 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
             "Interface language, for example zh-CN or en.",
         ),
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        parser_class=parser_cls,
+    )
 
     audit = subparsers.add_parser(
         "audit",

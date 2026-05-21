@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from hyperagent.runtime.i18n import I18nStore
 from hyperagent.runtime.tui import HyperAgentTui
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 
@@ -69,6 +70,31 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertIn("reasoning: expanded", lines)
         self.assertIn("mouse: interactive", lines)
         self.assertNotIn("thinking: on", "\n".join(lines))
+
+    def test_panel_translates_common_status_labels_to_chinese(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            translator = I18nStore(Path(tmp)).translator("zh-CN")
+            tui = HyperAgentTui(
+                workspace=None,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+                translator=translator,
+            )
+            tui.repl = SimpleNamespace(
+                session_id="session-1",
+                _reasoning_display_mode=lambda: "expanded",
+            )
+
+            text = "\n".join(tui._panel_lines())
+
+            self.assertIn("会话: session-1", text)
+            self.assertIn("思考显示: 展开", text)
+            self.assertIn("鼠标: 交互", text)
+            self.assertIn("活跃子智能体:", text)
+            self.assertIn("命令建议:", text)
+            self.assertNotIn("reasoning:", text)
+            self.assertNotIn("mouse:", text)
 
     def test_main_prompt_uses_cwd_and_hyperagent_marker(self):
         tui = self._tui()

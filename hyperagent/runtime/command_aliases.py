@@ -231,8 +231,17 @@ Canonical commands remain available:
   HyperAgent channel-run --host 0.0.0.0 --port 8765
 """
     if translator is None:
-        return default + "\nRegistered slash commands:\n" + grouped_help()
-    return translator.t("launcher.help", default=default) + "\nRegistered slash commands:\n" + grouped_help()
+        heading = "Registered slash commands"
+        return default + f"\n{heading}:\n" + grouped_help()
+    heading = translator.t(
+        "launcher.registered_commands",
+        default="Registered slash commands",
+    )
+    return (
+        translator.t("launcher.help", default=default)
+        + f"\n{heading}:\n"
+        + grouped_help(translator=translator)
+    )
 
 
 def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:

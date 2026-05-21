@@ -1,7 +1,7 @@
 """Central slash command registry shared by launcher, REPL, TUI, and channels."""
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -101,16 +101,43 @@ def gateway_command_names() -> List[str]:
     return sorted(command.name for command in public_commands() if command.gateway_allowed)
 
 
-def grouped_help(commands: Iterable[SlashCommandDef] = ()) -> str:
+def grouped_help(
+    commands: Iterable[SlashCommandDef] = (),
+    translator: Optional[Any] = None,
+) -> str:
     selected = list(commands) or public_commands()
     by_category: Dict[str, List[SlashCommandDef]] = {}
     for command in selected:
         by_category.setdefault(command.category, []).append(command)
     lines: List[str] = []
     for category in sorted(by_category):
-        lines.append(f"{category}:")
+        category_label = _translate(
+            translator,
+            f"slash.category.{category}",
+            category,
+        )
+        lines.append(f"{category_label}:")
         for command in sorted(by_category[category], key=lambda item: item.name):
-            alias = f" aliases={','.join(command.aliases)}" if command.aliases else ""
-            hint = f" {command.args_hint}" if command.args_hint else ""
-            lines.append(f"  /{command.name}{hint} - {command.description}{alias}")
+            alias = ""
+            if command.aliases:
+                alias_label = _translate(translator, "slash.aliases", "aliases")
+                alias = f" {alias_label}={','.join(command.aliases)}"
+            hint_text = _translate(
+                translator,
+                f"slash.command.{command.name}.args_hint",
+                command.args_hint,
+            )
+            description = _translate(
+                translator,
+                f"slash.command.{command.name}.description",
+                command.description,
+            )
+            hint = f" {hint_text}" if hint_text else ""
+            lines.append(f"  /{command.name}{hint} - {description}{alias}")
     return "\n".join(lines)
+
+
+def _translate(translator: Optional[Any], key: str, default: str) -> str:
+    if translator is None:
+        return default
+    return str(translator.t(key, default=default))

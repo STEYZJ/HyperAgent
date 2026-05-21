@@ -299,14 +299,17 @@ class HyperAgentTui:
         reasoning = "collapsed"
         if self.repl is not None:
             reasoning = self.repl._reasoning_display_mode()
+        reasoning_label = self._reasoning_label(reasoning)
+        mouse_label = self._mouse_label(self.mouse_mode)
         status = (
-            f" HyperAgent TUI | provider={self.provider} "
-            f"| permission={self.permission_policy} | reasoning={reasoning} "
+            f" HyperAgent TUI | {self._t('tui.status.provider', 'provider')}={self.provider} "
+            f"| {self._t('tui.status.permission', 'permission')}={self.permission_policy} "
+            f"| {self._t('tui.status.reasoning', 'reasoning')}={reasoning_label} "
             f"| /help /exit "
         )
         if self.wait_status:
             status += f"| {self.wait_status} "
-        status += f"| mouse={self.mouse_mode} "
+        status += f"| {self._t('tui.status.mouse', 'mouse')}={mouse_label} "
         self._addstr(
             0,
             0,
@@ -372,23 +375,27 @@ class HyperAgentTui:
         if self.repl is not None:
             reasoning = self.repl._reasoning_display_mode()
         lines = [
-            f"session: {session or ''}",
-            f"mode: {self.mode}",
-            f"model: {self.model or 'profile/default'}",
-            f"permission: {self.permission_policy}",
-            f"reasoning: {reasoning}",
-            f"mouse: {self.mouse_mode}",
+            self._panel_kv("session", "session", session or ""),
+            self._panel_kv("mode", "mode", self.mode),
+            self._panel_kv(
+                "model",
+                "model",
+                self.model or self._t("tui.value.profile_default", "profile/default"),
+            ),
+            self._panel_kv("permission", "permission", self.permission_policy),
+            self._panel_kv("reasoning", "reasoning", self._reasoning_label(reasoning)),
+            self._panel_kv("mouse", "mouse", self._mouse_label(self.mouse_mode)),
         ]
         if self.repl is not None:
             try:
                 usage = self.repl.usage.summarize()
                 lines.extend(
                     [
-                        f"llm_requests: {usage['request_count']}",
-                        f"tokens: {usage['total_tokens']}",
-                        f"cache_hit: {usage['cache_hit_ratio']}",
-                        f"loop: {self.repl.action_loop_mode}",
-                        f"budget: {self.repl.action_token_budget}",
+                        self._panel_kv("llm_requests", "llm_requests", usage["request_count"]),
+                        self._panel_kv("tokens", "tokens", usage["total_tokens"]),
+                        self._panel_kv("cache_hit", "cache_hit", usage["cache_hit_ratio"]),
+                        self._panel_kv("loop", "loop", self.repl.action_loop_mode),
+                        self._panel_kv("budget", "budget", self.repl.action_token_budget),
                     ]
                 )
             except Exception:
@@ -413,6 +420,21 @@ class HyperAgentTui:
         ]
         lines.extend(artifact_lines[-10:] or [self._t("tui.panel.none", "none")])
         return lines
+
+    def _panel_kv(self, key: str, default: str, value: object) -> str:
+        return f"{self._t(f'tui.panel.{key}', default)}: {value}"
+
+    def _reasoning_label(self, value: str) -> str:
+        normalized = str(value).strip().lower()
+        if normalized == "expanded":
+            return self._t("tui.value.expanded", "expanded")
+        return self._t("tui.value.collapsed", "collapsed")
+
+    def _mouse_label(self, value: str) -> str:
+        normalized = str(value).strip().lower()
+        if normalized == "selection":
+            return self._t("tui.value.selection", "selection")
+        return self._t("tui.value.interactive", "interactive")
 
     def _todo_panel_lines(self, owner: str) -> List[str]:
         if self.repl is None:

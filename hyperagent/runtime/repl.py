@@ -1181,7 +1181,7 @@ class HyperAgentRepl:
         )
 
     def _help(self) -> str:
-        return self._t(
+        help_text = self._t(
             "repl.help",
             (
             "HyperAgent REPL commands:\n"
@@ -1232,7 +1232,12 @@ class HyperAgentRepl:
             "/exit                 quit\n"
             "Plain text sends a persistent agent-chat turn."
             ),
-        ) + "\n\nCentral command registry:\n" + grouped_help()
+        )
+        heading = self._t(
+            "repl.central_command_registry",
+            "Central command registry",
+        )
+        return help_text + f"\n\n{heading}:\n" + grouped_help(translator=self.translator)
 
     def _t(self, key: str, default: str, **kwargs) -> str:
         if self.translator is None:
