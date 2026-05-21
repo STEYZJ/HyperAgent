@@ -30,6 +30,10 @@ HyperAgent demo --synthetic
 
 The demo writes artifacts under `experiments/synthetic_demo/` and appends a worklog entry under `logs/worklog/`.
 
+## Secret Handling
+
+Store API keys only in environment variables or the local `.env` file, which is ignored by git. Do not paste raw API keys into README files, worklogs, config examples, prompts, or committed conversation artifacts. HyperAgent redacts obvious secret shapes before writing worklogs, and the test suite includes a tracked-file secret scan.
+
 The verified environment path is:
 
 ```bash
