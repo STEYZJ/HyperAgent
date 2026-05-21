@@ -34,6 +34,10 @@ The demo writes artifacts under `experiments/synthetic_demo/` and appends a work
 
 Store API keys only in environment variables or the local `.env` file, which is ignored by git. Do not paste raw API keys into README files, worklogs, config examples, prompts, or committed conversation artifacts. HyperAgent redacts obvious secret shapes before writing worklogs, and the test suite includes a tracked-file secret scan.
 
+## Third-Party Licenses
+
+Known open-source dependencies and reference projects are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Update that file before adding new runtime dependencies or copying any third-party source code.
+
 The verified environment path is:
 
 ```bash

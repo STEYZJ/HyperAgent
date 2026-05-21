@@ -31,6 +31,10 @@ HyperAgent demo --synthetic
 
 API key 只能放在环境变量或本地 `.env` 文件中，`.env` 已被 git 忽略。不要把原始 API key 粘贴到 README、worklog、配置示例、prompt 或已提交的会话记录里。HyperAgent 写入 worklog 前会自动脱敏明显的密钥形态，测试套件也会扫描已跟踪文件中的疑似密钥。
 
+## 第三方许可证
+
+已知开源依赖和参考项目记录在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。新增运行时依赖、复制第三方源码或准备发布二进制/Docker 镜像前，需要同步更新该文件并做许可证复查。
+
 ## 常用命令
 
 ```bash
