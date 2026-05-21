@@ -70,40 +70,38 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertIn("mouse: interactive", lines)
         self.assertNotIn("thinking: on", "\n".join(lines))
 
-    def test_shell_prompt_uses_env_user_host_and_cwd(self):
+    def test_main_prompt_uses_cwd_and_hyperagent_marker(self):
         tui = self._tui()
 
-        with patch.dict("os.environ", {"CONDA_DEFAULT_ENV": "HyperAgent"}, clear=True), patch(
-            "hyperagent.runtime.tui.getpass.getuser",
-            return_value="lzj",
-        ), patch(
-            "hyperagent.runtime.tui.socket.gethostname",
-            return_value="nwafu-406.example",
-        ), patch(
+        with patch(
             "hyperagent.runtime.tui.Path.cwd",
             return_value=Path("/data2/lzj/HyperAgent"),
         ):
             self.assertEqual(
                 tui._main_prompt(),
-                "(HyperAgent) lzj@nwafu-406:/data2/lzj/HyperAgent$ ",
+                "/data2/lzj/HyperAgent HyperAgent > ",
             )
 
-    def test_shell_prompt_left_elides_cwd_when_narrow(self):
+    def test_main_prompt_left_elides_cwd_when_narrow(self):
         tui = self._tui()
-        prompt = "(HyperAgent) lzj@nwafu-406:/data2/lzj/some/deep/HyperAgent$ "
+        prompt = "/data2/lzj/some/deep/HyperAgent HyperAgent > "
 
         fitted = tui._fit_input_prompt(prompt, width=42)
 
         self.assertLessEqual(tui._display_width(fitted), 41)
         self.assertIn("...", fitted)
-        self.assertTrue(fitted.endswith("$ "))
+        self.assertTrue(fitted.endswith("HyperAgent > "))
 
-    def test_shell_prompt_falls_back_for_tiny_width(self):
+    def test_main_prompt_falls_back_for_tiny_width(self):
         tui = self._tui()
 
         self.assertEqual(
-            tui._fit_input_prompt("(HyperAgent) user@host:/very/long/path$ ", width=4),
-            "$ ",
+            tui._fit_input_prompt("/very/long/path HyperAgent > ", width=14),
+            "HyperAgent > ",
+        )
+        self.assertEqual(
+            tui._fit_input_prompt("/very/long/path HyperAgent > ", width=4),
+            "> ",
         )
 
     def test_non_shell_prompt_is_clipped_not_replaced(self):
@@ -170,7 +168,7 @@ class HyperAgentTuiTest(unittest.TestCase):
                 providers=None,
                 prompt_library=None,
             )
-            prompt = "(HyperAgent) user@host:/tmp/project$ "
+            prompt = "/tmp/project HyperAgent > "
 
             tui._record_history(prompt, "/status")
             tui._record_history("allow? [y/N] ", "y")
@@ -232,6 +230,7 @@ class HyperAgentTuiTest(unittest.TestCase):
                 ).SlashCommandStore(root, workspace.workspace_dir),
             )
 
+            self.assertIn("/help", tui._suggest_commands("/"))
             suggestions = tui._suggest_commands("/fea")
 
             self.assertIn("/feature-dev", suggestions)

@@ -1,11 +1,8 @@
 """Stdlib curses fullscreen interface for HyperAgent."""
 
-import getpass
 import json
 import os
 from pathlib import Path
-import socket
-import sys
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 
@@ -92,7 +89,7 @@ class HyperAgentTui:
         self.history_path = self._history_path()
         self.command_history = self._load_history()
         self.mouse_mode = "interactive"
-        self._main_prompt_suffix = "$ "
+        self._main_prompt_suffix = "HyperAgent > "
         self.command_suggestions: List[str] = []
 
     def run(self) -> int:
@@ -234,23 +231,7 @@ class HyperAgentTui:
                 self._reset_history_browse()
 
     def _main_prompt(self) -> str:
-        return f"({self._environment_name()}) {self._user_name()}@{self._host_name()}:{Path.cwd()}$ "
-
-    def _environment_name(self) -> str:
-        env_name = os.environ.get("CONDA_DEFAULT_ENV", "").strip()
-        if env_name:
-            return env_name
-        prefix_name = Path(sys.prefix).name if sys.prefix else ""
-        if prefix_name and prefix_name not in {"", "usr", "local"}:
-            return prefix_name
-        return "HyperAgent"
-
-    def _user_name(self) -> str:
-        return getpass.getuser() or "user"
-
-    def _host_name(self) -> str:
-        hostname = socket.gethostname().split(".", 1)[0].strip()
-        return hostname or "localhost"
+        return f"{Path.cwd()} {self._main_prompt_suffix}"
 
     def _fit_input_prompt(
         self,
@@ -262,6 +243,17 @@ class HyperAgentTui:
         prompt_budget = max(int(width) - max(int(min_input_width), 0), 1)
         if self._display_width(prompt) <= prompt_budget:
             return prompt
+        if prompt.endswith(self._main_prompt_suffix):
+            cwd_text = prompt[: -len(self._main_prompt_suffix)].rstrip()
+            suffix = self._main_prompt_suffix
+            cwd_budget = prompt_budget - self._display_width(" " + suffix)
+            if cwd_budget > 0:
+                candidate = f"{self._left_ellipsis(cwd_text, cwd_budget)} {suffix}"
+                if self._display_width(candidate) <= prompt_budget:
+                    return candidate
+            for fallback in (suffix, "HyperAgent> ", "> ", ">"):
+                if self._display_width(fallback) <= prompt_budget:
+                    return fallback
         if not (prompt.endswith("$ ") and ":" in prompt):
             return self._clip_to_width(prompt, prompt_budget)
         if prompt.endswith("$ ") and ":" in prompt:
@@ -298,7 +290,7 @@ class HyperAgentTui:
             current_width += char_width
         return marker + "".join(reversed(suffix))
 
-    def _draw(self, prompt_line: str = "HyperAgent> ", cursor_x: Optional[int] = None) -> None:
+    def _draw(self, prompt_line: str = "HyperAgent > ", cursor_x: Optional[int] = None) -> None:
         assert self.stdscr is not None
         self.stdscr.erase()
         height, width = self.stdscr.getmaxyx()
@@ -467,9 +459,14 @@ class HyperAgentTui:
         text = buffer.strip()
         if not text.startswith("/"):
             return []
-        query = text[1:].split()[0].lower()
         builtins = command_names(include_aliases=True) + ["mouse", "act", "plan"]
         custom = [command.name for command in self.repl.command_store.discover()]
+        body = text[1:].strip()
+        if not body:
+            common = ["help", "status", "agents", "commands", "todos", "doctor", "exit", "hsi"]
+            available = set(builtins + custom)
+            return ["/" + name for name in common if name in available][:8]
+        query = body.split()[0].lower()
         matches = sorted({name for name in builtins + custom if name.startswith(query)})
         return ["/" + name for name in matches[:8]]
 
