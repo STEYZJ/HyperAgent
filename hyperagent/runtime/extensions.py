@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+import yaml
+
 from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.workspace import utc_now
 
@@ -17,7 +19,9 @@ class RuntimeExtensionStore:
         self.rewind_dir = workspace_dir / "rewind"
 
     def list_subagents(self) -> List[Dict[str, object]]:
-        return self._list(self.subagents_path, "subagents")
+        items = self._list(self.subagents_path, "subagents")
+        items.extend(self._markdown_subagents())
+        return items
 
     def add_subagent(
         self,
@@ -112,3 +116,41 @@ class RuntimeExtensionStore:
 
     def _new_id(self, prefix: str) -> str:
         return f"{prefix}-{uuid4().hex[:8]}"
+
+    def _markdown_subagents(self) -> List[Dict[str, object]]:
+        roots = [Path(__file__).resolve().parents[1] / "agent_definitions", self.root.parent / "agents"]
+        plugins_root = self.root.parent / "plugins"
+        if plugins_root.exists():
+            roots.extend(path / "agents" for path in sorted(plugins_root.iterdir()))
+        items: List[Dict[str, object]] = []
+        for agents_dir in roots:
+            if not agents_dir.exists():
+                continue
+            for path in sorted(agents_dir.glob("*.md")):
+                text = path.read_text(encoding="utf-8")
+                metadata: Dict[str, object] = {}
+                body = text
+                if text.startswith("---"):
+                    parts = text.split("---", 2)
+                    if len(parts) >= 3:
+                        raw = yaml.safe_load(parts[1]) or {}
+                        metadata = raw if isinstance(raw, dict) else {}
+                        body = parts[2].strip()
+                tools = metadata.get("tools", [])
+                if isinstance(tools, str):
+                    tools = [item.strip() for item in tools.split(",") if item.strip()]
+                item = {
+                    "id": str(metadata.get("id") or f"md-agent-{path.stem}"),
+                    "name": str(metadata.get("name") or path.stem),
+                    "role": str(metadata.get("role") or metadata.get("description") or path.stem),
+                    "description": str(metadata.get("description", "")),
+                    "tools": tools if isinstance(tools, list) else [],
+                    "model": str(metadata.get("model", "")),
+                    "profile": str(metadata.get("profile", "")),
+                    "color": str(metadata.get("color", "")),
+                    "prompt": body,
+                    "source": str(path),
+                    "created_at": "",
+                }
+                items.append(item)
+        return items

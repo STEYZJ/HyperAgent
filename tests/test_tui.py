@@ -214,6 +214,28 @@ class HyperAgentTuiTest(unittest.TestCase):
 
         self.assertEqual(tui.main_scroll_offset, 0)
 
+    def test_tui_suggests_builtin_and_markdown_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            tui = HyperAgentTui(
+                workspace=workspace,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+            )
+            tui.repl = SimpleNamespace(
+                command_store=__import__(
+                    "hyperagent.runtime.commands",
+                    fromlist=["SlashCommandStore"],
+                ).SlashCommandStore(root, workspace.workspace_dir),
+            )
+
+            suggestions = tui._suggest_commands("/fea")
+
+            self.assertIn("/feature-dev", suggestions)
+
 
 if __name__ == "__main__":
     unittest.main()

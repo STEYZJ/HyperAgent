@@ -8,6 +8,7 @@ from uuid import uuid4
 from hyperagent.core.io import write_json
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
@@ -27,6 +28,8 @@ Allowed tools:
 - search_code: {"query": "text", "path": ".", "max_results": 30}
 - run_command: {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_sec": 60}
 - run_experiment: {"plan_path": "experiments/demo/experiment.yaml", "seeds": [42, 43], "output_dir": "experiments/demo_suite"}
+- task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2}
+- todo_write: {"owner": "project", "items": [{"content": "inspect tests", "status": "in_progress", "priority": "high"}]}
 - check_patch: {"patch_text": "unified diff"}
 - apply_patch: {"patch_text": "unified diff"}
 
@@ -57,11 +60,16 @@ class AgentActionLoop:
         self.llm_store = llm_store
         self.workspace = workspace
         self.llm_client = llm_client or LLMClient()
+        self.permission_policy = permission_policy
+        self.permission_callback = permission_callback
+        self._active_provider = ""
+        self._active_model: Optional[str] = None
         self.tool_executor = tool_executor or SafeAgentToolExecutor(
             workspace.project_root,
             workspace.workspace_dir,
             permission_policy=permission_policy,
             permission_callback=permission_callback,
+            hook_engine=HookEngine(workspace.workspace_dir),
         )
 
     def run(
@@ -86,6 +94,8 @@ class AgentActionLoop:
     ) -> AgentActionRun:
         self.llm_store.ensure_defaults()
         spec = self.llm_store.get(provider)
+        self._active_provider = provider
+        self._active_model = model
         run_id = f"{utc_now().replace(':', '').replace('-', '')}-{uuid4().hex[:6]}"
         run_dir = self.workspace.workspace_dir / "agent_action_runs" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -335,6 +345,58 @@ class AgentActionLoop:
                     if args.get("suite_name") in {None, ""}
                     else str(args.get("suite_name"))
                 ),
+                run_id=run_id,
+            )
+        if tool_name == "task":
+            from hyperagent.runtime.multi_agent import MultiAgentTaskRunner
+
+            agents = args.get("agents", [])
+            if isinstance(agents, str):
+                normalized_agents = [agents]
+            elif isinstance(agents, list):
+                normalized_agents = [str(agent) for agent in agents]
+            else:
+                normalized_agents = []
+            runner = MultiAgentTaskRunner(
+                self.workspace,
+                self.session_store,
+                self.llm_store,
+                llm_client=self.llm_client,
+                permission_policy=self.permission_policy,
+                permission_callback=self.permission_callback,
+            )
+            task_run = runner.run(
+                session_id=self.session_store.new("subagent task").session_id,
+                provider=str(args.get("provider", "")) or self._active_provider or "deepseek",
+                instruction=str(args.get("instruction", "")),
+                agents=normalized_agents,
+                model=(
+                    self._active_model
+                    if args.get("model") in {None, ""}
+                    else str(args.get("model"))
+                ),
+                profile=str(args.get("profile", "")),
+                mode=str(args.get("mode", "sequential")),
+                max_steps=int(args.get("max_steps", 2)),
+                llm_kwargs={},
+            )
+            status = "ok" if task_run.status == "completed" else "error"
+            return AgentToolResult(
+                call_id=f"{utc_now().replace(':', '').replace('-', '')}-{uuid4().hex[:6]}",
+                tool_name=tool_name,
+                status=status,
+                created_at=utc_now(),
+                content=task_run.aggregate_response,
+                artifact_path=str(Path(task_run.run_dir) / "multi_agent_run.json"),
+                warnings=task_run.warnings,
+            )
+        if tool_name == "todo_write":
+            items = args.get("items", [])
+            if not isinstance(items, list):
+                items = []
+            return self.tool_executor.todo_write(
+                [dict(item) for item in items if isinstance(item, dict)],
+                owner=str(args.get("owner", "project")),
                 run_id=run_id,
             )
         if tool_name == "check_patch":

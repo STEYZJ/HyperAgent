@@ -35,6 +35,10 @@ EXISTING_COMMANDS = {
     "agent-act",
     "agent-run",
     "agent-tool",
+    "command-list",
+    "command-render",
+    "todos",
+    "doctor",
     "tui",
     "session-new",
     "session-add",
@@ -138,6 +142,12 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["llm-profile"] + rest
     if alias == "usage":
         return global_options + ["llm-usage"] + rest
+    if alias in {"commands", "command"}:
+        return global_options + ["command-list"] + rest
+    if alias == "todos":
+        return global_options + ["todos"] + rest
+    if alias == "doctor":
+        return global_options + ["doctor"] + rest
     if alias == "language":
         return global_options + ["language-list"] + rest
     if alias in {"channels", "channel"}:
@@ -164,6 +174,9 @@ Slash-style aliases:
   HyperAgent /model
   HyperAgent /reasonix
   HyperAgent /usage
+  HyperAgent /commands
+  HyperAgent /todos
+  HyperAgent /doctor
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
@@ -191,8 +204,10 @@ Canonical commands remain available:
 
 def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     alias = command.lower()
-    if alias in {"help", "commands"}:
+    if alias == "help":
         return ["hyperagent-commands"]
+    if alias in {"commands", "command"}:
+        return ["command-list"] + list(rest)
     if alias == "repl":
         return ["repl"] + list(rest)
     if alias == "tui":
@@ -211,6 +226,12 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["llm-profile"] + list(rest)
     if alias == "usage":
         return ["llm-usage"] + list(rest)
+    if alias in {"commands", "command"}:
+        return ["command-list"] + list(rest)
+    if alias == "todos":
+        return ["todos"] + list(rest)
+    if alias == "doctor":
+        return ["doctor"] + list(rest)
     if alias == "mcp":
         return ["mcp-list"] + list(rest)
     if alias in {"skills", "skill"}:

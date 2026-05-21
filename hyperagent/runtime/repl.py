@@ -7,9 +7,11 @@ from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermissionRequest
 from hyperagent.runtime.coding_agent import CodingAgent
+from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.general_agent import GeneralAgentRunner
+from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
@@ -22,6 +24,7 @@ from hyperagent.runtime.deepseek_reasonix import (
     reasonix_cache_guidance,
 )
 from hyperagent.runtime.skills import SkillStore
+from hyperagent.runtime.todos import TodoStore
 from hyperagent.runtime.tool_panel import (
     render_action_run,
     render_tool_catalog,
@@ -84,6 +87,9 @@ class HyperAgentRepl:
         self.wait_indicator_factory = wait_indicator_factory
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
+        self.command_store = SlashCommandStore(workspace.project_root, workspace.workspace_dir)
+        self.hooks = HookEngine(workspace.workspace_dir)
+        self.todos = TodoStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
@@ -91,6 +97,7 @@ class HyperAgentRepl:
 
     def run(self) -> int:
         self.output(self._banner())
+        self._emit_hook_messages("SessionStart", {"session_id": self.session_id})
         while True:
             try:
                 raw = self.input("HyperAgent> ")
@@ -105,9 +112,19 @@ class HyperAgentRepl:
 
     def handle_line(self, line: str) -> bool:
         if line in {"/exit", "/quit", "exit", "quit"}:
+            self._emit_hook_messages("Stop", {"session_id": self.session_id})
             self.output(self._t("repl.bye", "bye"))
             return False
         try:
+            hook_result = self.hooks.run(
+                "UserPromptSubmit",
+                {"line": line, "session_id": self.session_id},
+            )
+            for warning in hook_result.warnings:
+                self.output(f"hook warning: {warning}")
+            if hook_result.blocked:
+                self.output("blocked by hook")
+                return True
             if line.startswith("/"):
                 return self._handle_command(line)
             self._chat(line)
@@ -175,6 +192,16 @@ class HyperAgentRepl:
             self._agents(args)
         elif command == "/hooks":
             self._hooks(args)
+        elif command in {"/commands", "/command"}:
+            self._commands(args)
+        elif command == "/todos":
+            self._todos(args)
+        elif command == "/permissions":
+            self._permissions()
+        elif command == "/export":
+            self._export(args)
+        elif command == "/doctor":
+            self._doctor()
         elif command in {"/plugin", "/plugins"}:
             self._plugins(args)
         elif command == "/rewind":
@@ -207,13 +234,14 @@ class HyperAgentRepl:
         elif command in {"/exit", "/quit"}:
             return False
         else:
-            self.output(
-                self._t(
-                    "repl.unknown_command",
-                    "unknown command: {command}",
-                    command=command,
+            if not self._custom_command(command, args):
+                self.output(
+                    self._t(
+                        "repl.unknown_command",
+                        "unknown command: {command}",
+                        command=command,
+                    )
                 )
-            )
         return True
 
     def _chat(self, message: str) -> None:
@@ -267,6 +295,7 @@ class HyperAgentRepl:
                 permission_policy=self.permission_policy,
                 permission_callback=self._confirm_permission,
                 session_permission_cache=self.permission_cache,
+                hook_engine=self.hooks,
             ),
         ).run(
             session_id=self.session_id,
@@ -486,14 +515,14 @@ class HyperAgentRepl:
 
     def _hooks(self, args: List[str]) -> None:
         if not args or args[0] == "list":
-            hooks = self.extensions.list_hooks()
+            hooks = [rule.to_dict() for rule in self.hooks.list_rules()]
             if not hooks:
                 self.output("no hooks")
                 return
             for hook in hooks:
                 self.output(
                     f"{hook.get('id')}\t{hook.get('event')}\t"
-                    f"{hook.get('name')}\t{hook.get('command')}"
+                    f"{hook.get('enabled')}\t{hook.get('name')}\t{hook.get('action')}"
                 )
             return
         if args[0] == "add":
@@ -503,7 +532,133 @@ class HyperAgentRepl:
             item = self.extensions.add_hook(args[1], args[2], " ".join(args[3:]))
             self.output(f"hook added: {item['id']}")
             return
-        self.output("usage: /hooks [list|add <name> <event> <command>]")
+        if args[0] in {"enable", "disable"}:
+            if len(args) < 2:
+                self.output("usage: /hooks enable|disable <id|name>")
+                return
+            matched = self.hooks.set_enabled(args[1], args[0] == "enable")
+            self.output("hook updated" if matched else "hook not found")
+            return
+        if args[0] == "test":
+            event = args[1] if len(args) > 1 else "UserPromptSubmit"
+            text = " ".join(args[2:])
+            result = self.hooks.run(event, {"line": text, "tool_name": text})
+            self.output(
+                f"blocked={result.blocked} matched={','.join(result.matched_rules)}"
+            )
+            for warning in result.warnings:
+                self.output(f"warning: {warning}")
+            return
+        self.output("usage: /hooks [list|add <name> <event> <command>|enable <id>|disable <id>|test <event> <text>]")
+
+    def _commands(self, args: List[str]) -> None:
+        if args and args[0] == "render":
+            if len(args) < 2:
+                self.output("usage: /commands render <name> [arguments]")
+                return
+            rendered = self.command_store.render(args[1], " ".join(args[2:]))
+            self.output(rendered.prompt)
+            return
+        commands = self.command_store.discover()
+        if not commands:
+            self.output("no slash commands")
+            return
+        for command in commands:
+            tools = ",".join(command.allowed_tools)
+            hint = f" {command.argument_hint}" if command.argument_hint else ""
+            self.output(f"/{command.name}{hint}\t{command.source}\t{tools}\t{command.description}")
+
+    def _custom_command(self, command: str, args: List[str]) -> bool:
+        name = command.lstrip("/")
+        spec = self.command_store.get(name)
+        if spec is None:
+            return False
+        executor = SafeAgentToolExecutor(
+            self.workspace.project_root,
+            self.workspace.workspace_dir,
+            permission_policy=self.permission_policy,
+            permission_callback=self._confirm_permission,
+            session_permission_cache=self.permission_cache,
+            hook_engine=self.hooks,
+        )
+        rendered = self.command_store.render(
+            name,
+            " ".join(args),
+            expand_shell=True,
+            executor=executor,
+        )
+        for warning in rendered.warnings:
+            self.output(f"warning: {warning}")
+        if spec.allowed_tools:
+            self._act(rendered.prompt)
+        else:
+            self._chat(rendered.prompt)
+        return True
+
+    def _todos(self, args: List[str]) -> None:
+        owner = self.session_id
+        if args and args[0] == "clear":
+            todo_list = self.todos.clear(owner)
+            self.output(f"todos cleared: {todo_list.owner}")
+            return
+        if args and args[0] == "export":
+            output = Path(args[1]) if len(args) > 1 else None
+            path = self.todos.export_markdown(owner, output)
+            self.output(f"todos exported: {path}")
+            return
+        if args and args[0] == "set":
+            content = " ".join(args[1:]).strip()
+            if not content:
+                self.output("usage: /todos set <content>")
+                return
+            todo_list = self.todos.replace(owner, [{"content": content, "status": "pending"}])
+            self.output(f"todos updated: {len(todo_list.items)}")
+            return
+        todo_list = self.todos.load(owner)
+        if not todo_list.items:
+            self.output("no todos")
+            return
+        for item in todo_list.items:
+            self.output(f"{item.id}\t{item.status}\t{item.priority}\t{item.content}")
+
+    def _permissions(self) -> None:
+        self.output(f"permission_policy: {self.permission_policy}")
+        self.output("session grants:")
+        if not self.permission_cache:
+            self.output("  none")
+            return
+        for key, allowed in sorted(self.permission_cache.items()):
+            self.output(f"  {key}: {allowed}")
+
+    def _export(self, args: List[str]) -> None:
+        session = self.conversations.load(self.session_id)
+        output = (
+            Path(args[0])
+            if args
+            else self.workspace.workspace_dir / "exports" / f"{self.session_id}.md"
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        lines = [f"# HyperAgent Session Export - {session.session_id}", ""]
+        for message in session.messages:
+            lines.append(f"## {message.role}")
+            lines.append(message.content)
+            lines.append("")
+        output.write_text("\n".join(lines), encoding="utf-8")
+        self.output(f"exported: {output}")
+
+    def _doctor(self) -> None:
+        status = self.workspace.status()
+        lines = [
+            "HyperAgent doctor:",
+            f"- initialized: {status.initialized}",
+            f"- workspace: {status.workspace_dir}",
+            f"- permission_policy: {self.permission_policy}",
+            f"- providers: {len(self.providers.ensure_defaults())}",
+            f"- commands: {len(self.command_store.discover())}",
+            f"- subagents: {len(self.extensions.list_subagents())}",
+            f"- hooks: {len(self.hooks.list_rules())}",
+        ]
+        self.output("\n".join(lines))
 
     def _plugins(self, args: List[str]) -> None:
         if not args or args[0] == "list":
@@ -645,6 +800,7 @@ class HyperAgentRepl:
             permission_policy=self.permission_policy,
             permission_callback=self._confirm_permission,
             session_permission_cache=self.permission_cache,
+            hook_engine=self.hooks,
         )
         tool = args[0]
         rest = args[1:]
@@ -671,6 +827,10 @@ class HyperAgentRepl:
             result = executor.check_patch(self._read_text_arg(rest))
         elif tool == "apply-patch":
             result = executor.apply_patch(self._read_text_arg(rest))
+        elif tool in {"todo", "todo-write", "todo_write"}:
+            content = " ".join(rest).strip()
+            items = [{"content": content, "status": "pending"}] if content else []
+            result = executor.todo_write(items, owner=self.session_id)
         else:
             self.output(f"unknown tool: {tool}")
             return
@@ -700,7 +860,15 @@ class HyperAgentRepl:
         return answer in {"y", "yes"}
 
     def _tool_names(self) -> List[str]:
-        return ["read", "search", "run", "run-experiment", "check-patch", "apply-patch"]
+        return [
+            "read",
+            "search",
+            "run",
+            "run-experiment",
+            "check-patch",
+            "apply-patch",
+            "todo-write",
+        ]
 
     def _tool_usage(self) -> str:
         return (
@@ -710,7 +878,8 @@ class HyperAgentRepl:
             "  /tool run <argv...>\n"
             "  /tool run-experiment <experiment_yaml> [seed1,seed2]\n"
             "  /tool check-patch <patch_file_or_text>\n"
-            "  /tool apply-patch <patch_file_or_text>"
+            "  /tool apply-patch <patch_file_or_text>\n"
+            "  /tool todo-write <todo content>"
         )
 
     def _help(self) -> str:
@@ -732,7 +901,12 @@ class HyperAgentRepl:
             "/init                 create project HyperAgent.md memory\n"
             "/memory ...           list/show/add memory entries\n"
             "/agents ...           list/add/run project subagents\n"
-            "/hooks ...            list/add project hooks\n"
+            "/commands ...         list/render Markdown slash commands\n"
+            "/todos ...            list/clear/export TodoWrite state\n"
+            "/hooks ...            list/add/enable/disable/test project hooks\n"
+            "/permissions          show current permission policy and session grants\n"
+            "/export [path]        export current session as Markdown\n"
+            "/doctor               run a local workspace self-check\n"
             "/plugin ...           list/add project plugins\n"
             "/rewind [save]        list or save rewind snapshots\n"
             "/reasonix [profile]   show DeepSeek Reasonix-inspired profiles\n"
@@ -757,3 +931,10 @@ class HyperAgentRepl:
             except (KeyError, ValueError):
                 return default
         return self.translator.t(key, default=default, **kwargs)
+
+    def _emit_hook_messages(self, event: str, payload: Dict[str, object]) -> None:
+        result = self.hooks.run(event, payload)
+        for message in result.system_messages:
+            self.output(f"hook: {message}")
+        for warning in result.warnings:
+            self.output(f"hook warning: {warning}")

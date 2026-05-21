@@ -4,7 +4,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
 from hyperagent.core.io import read_yaml, write_json
@@ -50,6 +50,7 @@ class SafeAgentToolExecutor:
         permission_callback: Optional[Callable[[ToolPermissionRequest], bool]] = None,
         session_permission_cache: Optional[Dict[str, bool]] = None,
         allow_arbitrary_commands: bool = False,
+        hook_engine: Optional[Any] = None,
     ) -> None:
         self.project_root = project_root.resolve()
         self.workspace_dir = workspace_dir.resolve()
@@ -60,6 +61,7 @@ class SafeAgentToolExecutor:
             session_permission_cache if session_permission_cache is not None else {}
         )
         self.allow_arbitrary_commands = allow_arbitrary_commands
+        self.hook_engine = hook_engine
 
     def read_file(
         self,
@@ -77,6 +79,9 @@ class SafeAgentToolExecutor:
             },
             run_id=run_id,
         )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
         try:
             target = self._resolve_safe_path(path)
         except ValueError as exc:
@@ -121,6 +126,9 @@ class SafeAgentToolExecutor:
             {"query": query, "path": path, "max_results": max_results},
             run_id=run_id,
         )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
         if not query.strip():
             return self._record(
                 call,
@@ -175,6 +183,9 @@ class SafeAgentToolExecutor:
             {"argv": list(argv), "timeout_sec": timeout_sec},
             run_id=run_id,
         )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
         allowed, reason = self._command_allowed(argv)
         if not allowed:
             return self._record(
@@ -247,6 +258,9 @@ class SafeAgentToolExecutor:
             },
             run_id=run_id,
         )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
         try:
             target = self._resolve_safe_path(plan_path)
         except ValueError as exc:
@@ -355,6 +369,9 @@ class SafeAgentToolExecutor:
     ) -> AgentToolResult:
         tool_name = "apply_patch" if apply else "check_patch"
         call = self._call(tool_name, {"apply": apply}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
         if not patch_text.strip():
             return self._record(
                 call,
@@ -397,6 +414,40 @@ class SafeAgentToolExecutor:
             content or ("patch applied" if apply else "patch check passed"),
             exit_code=completed.returncode,
         )
+
+    def todo_write(
+        self,
+        items: Sequence[Dict[str, object]],
+        owner: str = "project",
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "todo_write",
+            {"owner": owner, "items": list(items)},
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        try:
+            from hyperagent.runtime.todos import TodoStore
+
+            store = TodoStore(self.workspace_dir)
+            todo_list = store.replace(owner, items)
+            path = store.path_for(todo_list.owner)
+            return self._record(
+                call,
+                "ok",
+                json.dumps(todo_list.to_dict(), ensure_ascii=False, indent=2),
+                warnings=[f"artifact: {path}"],
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["todo_write failed"],
+            )
 
     def _call(
         self,
@@ -474,6 +525,27 @@ class SafeAgentToolExecutor:
             warnings=["invalid permission policy"],
         )
 
+    def _pre_tool_check(self, call: AgentToolCall) -> Optional[AgentToolResult]:
+        if self.hook_engine is None:
+            return None
+        result = self.hook_engine.run(
+            "PreToolUse",
+            {
+                "tool_name": call.tool_name,
+                "args": call.args,
+                "run_id": call.run_id or "",
+            },
+        )
+        if result.blocked:
+            return self._record(
+                call,
+                "blocked",
+                "\n".join(result.warnings) or f"Hook blocked tool: {call.tool_name}",
+                warnings=result.warnings
+                + [f"hook matched: {rule}" for rule in result.matched_rules],
+            )
+        return None
+
     def _record(
         self,
         call: AgentToolCall,
@@ -495,6 +567,17 @@ class SafeAgentToolExecutor:
         path = self.tool_runs_dir / f"{call.call_id}-{call.tool_name}.json"
         result.artifact_path = str(path)
         write_json(path, {"call": call.to_dict(), "result": result.to_dict()})
+        if self.hook_engine is not None:
+            hook_result = self.hook_engine.run(
+                "PostToolUse",
+                {
+                    "tool_name": call.tool_name,
+                    "status": status,
+                    "artifact_path": str(path),
+                    "run_id": call.run_id or "",
+                },
+            )
+            result.warnings.extend(hook_result.warnings)
         return result
 
     def _resolve_safe_path(self, path: str) -> Path:

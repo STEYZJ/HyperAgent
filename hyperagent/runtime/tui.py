@@ -90,6 +90,7 @@ class HyperAgentTui:
         self.command_history = self._load_history()
         self.mouse_mode = "interactive"
         self._main_prompt_suffix = "$ "
+        self.command_suggestions: List[str] = []
 
     def run(self) -> int:
         if curses is None:
@@ -167,6 +168,7 @@ class HyperAgentTui:
                 cursor_index,
                 max(width - 1, 1),
             )
+            self.command_suggestions = self._suggest_commands(buffer)
             self._draw(prompt_line, cursor_x=cursor_x)
             key = self.stdscr.get_wch()
             if key in ("\n", "\r"):
@@ -378,11 +380,20 @@ class HyperAgentTui:
             f"session: {session or ''}",
             f"mode: {self.mode}",
             f"model: {self.model or 'profile/default'}",
+            f"permission: {self.permission_policy}",
             f"reasoning: {reasoning}",
             f"mouse: {self.mouse_mode}",
             "",
-            self._t("tui.panel.recent_artifacts", "recent artifacts:"),
+            self._t("tui.panel.commands", "command suggestions:"),
         ]
+        lines.extend(self.command_suggestions[:6] or [self._t("tui.panel.none", "none")])
+        lines.append("")
+        lines.append(self._t("tui.panel.todos", "todos:"))
+        lines.extend(self._todo_panel_lines(session or "project"))
+        lines.extend([
+            "",
+            self._t("tui.panel.recent_artifacts", "recent artifacts:"),
+        ])
         artifact_lines = [
             line
             for line in self.lines[-80:]
@@ -390,6 +401,49 @@ class HyperAgentTui:
         ]
         lines.extend(artifact_lines[-10:] or [self._t("tui.panel.none", "none")])
         return lines
+
+    def _todo_panel_lines(self, owner: str) -> List[str]:
+        if self.repl is None:
+            return [self._t("tui.panel.none", "none")]
+        try:
+            todo_list = self.repl.todos.load(owner)
+        except Exception:
+            return [self._t("tui.panel.none", "none")]
+        if not todo_list.items:
+            return [self._t("tui.panel.none", "none")]
+        return [
+            f"- {item.status}: {item.content}"
+            for item in todo_list.items[:6]
+        ]
+
+    def _suggest_commands(self, buffer: str) -> List[str]:
+        if self.repl is None:
+            return []
+        text = buffer.strip()
+        if not text.startswith("/"):
+            return []
+        query = text[1:].split()[0].lower()
+        builtins = [
+            "help",
+            "status",
+            "context",
+            "usage",
+            "agents",
+            "commands",
+            "todos",
+            "hooks",
+            "permissions",
+            "export",
+            "doctor",
+            "tool",
+            "act",
+            "plan",
+            "mouse",
+            "exit",
+        ]
+        custom = [command.name for command in self.repl.command_store.discover()]
+        matches = sorted({name for name in builtins + custom if name.startswith(query)})
+        return ["/" + name for name in matches[:8]]
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
         assert self.stdscr is not None

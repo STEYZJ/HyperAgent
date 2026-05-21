@@ -178,12 +178,30 @@ HyperAgent /sessions
 HyperAgent /model
 HyperAgent /reasonix
 HyperAgent /usage
+HyperAgent /commands
+HyperAgent /todos
+HyperAgent /doctor
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/hooks`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
+
+## Commands, Agents, Hooks, and Todos
+
+HyperAgent supports Claude-Code-inspired Markdown commands and built-in research subagents without copying Claude Code source. Built-in commands include `/feature-dev`, `/code-review`, `/review-experiment`, `/commit`, `/commit-push-pr`, `/doctor`, `/permissions`, `/export`, and `/bug`.
+
+```bash
+HyperAgent command-list
+HyperAgent command-render --name feature-dev --arguments "add a result reviewer"
+HyperAgent agent-run --agent code-reviewer --instruction "review the current diff"
+HyperAgent agent-tool todo-write --owner project --item "inspect experiment report"
+HyperAgent todos --owner project
+HyperAgent doctor
+```
+
+Project commands can be added under `.hyperagent/commands/*.md`; project agents can be added under `.hyperagent/agents/*.md`; hooks can be added through `/hooks add` or `.hyperagent/hooks/*.md`. External Bot channels remain chat/query only and cannot trigger shell, training, write, or general agent tools.
 
 `experiment-cycle` now uses an executable multi-agent council by default. It
 writes `council_run.json` plus the compatible `council_decision.json`; pass

@@ -269,3 +269,157 @@ class GeneralAgentRun:
             tool_artifacts=[str(v) for v in data.get("tool_artifacts", [])],
             warnings=[str(v) for v in data.get("warnings", [])],
         )
+
+
+@dataclass
+class TodoItem:
+    id: str
+    content: str
+    status: str = "pending"
+    priority: str = "normal"
+    owner: str = "project"
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TodoItem":
+        return cls(
+            id=str(data["id"]),
+            content=str(data["content"]),
+            status=str(data.get("status", "pending")),
+            priority=str(data.get("priority", "normal")),
+            owner=str(data.get("owner", "project")),
+            created_at=str(data.get("created_at", "")),
+            updated_at=str(data.get("updated_at", "")),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass
+class TodoList:
+    owner: str
+    updated_at: str = ""
+    items: List[TodoItem] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TodoList":
+        return cls(
+            owner=str(data.get("owner", "project")),
+            updated_at=str(data.get("updated_at", "")),
+            items=[
+                TodoItem.from_dict(dict(item))
+                for item in data.get("items", [])
+                if isinstance(item, dict)
+            ],
+        )
+
+
+@dataclass
+class MultiAgentRoleRun:
+    agent_id: str
+    agent_name: str
+    role: str
+    instruction: str
+    status: str
+    action_run_path: Optional[str] = None
+    final_response: str = ""
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MultiAgentRoleRun":
+        return cls(
+            agent_id=str(data.get("agent_id", "")),
+            agent_name=str(data.get("agent_name", "")),
+            role=str(data.get("role", "")),
+            instruction=str(data.get("instruction", "")),
+            status=str(data.get("status", "")),
+            action_run_path=data.get("action_run_path"),
+            final_response=str(data.get("final_response", "")),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
+class MultiAgentTaskRun:
+    run_id: str
+    session_id: str
+    provider: str
+    model: str
+    instruction: str
+    mode: str
+    created_at: str
+    run_dir: str
+    status: str = "running"
+    role_runs: List[MultiAgentRoleRun] = field(default_factory=list)
+    aggregate_response: str = ""
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MultiAgentTaskRun":
+        return cls(
+            run_id=str(data["run_id"]),
+            session_id=str(data.get("session_id", "")),
+            provider=str(data["provider"]),
+            model=str(data["model"]),
+            instruction=str(data["instruction"]),
+            mode=str(data.get("mode", "sequential")),
+            created_at=str(data["created_at"]),
+            run_dir=str(data["run_dir"]),
+            status=str(data.get("status", "running")),
+            role_runs=[
+                MultiAgentRoleRun.from_dict(dict(item))
+                for item in data.get("role_runs", [])
+                if isinstance(item, dict)
+            ],
+            aggregate_response=str(data.get("aggregate_response", "")),
+            warnings=[str(v) for v in data.get("warnings", [])],
+        )
+
+
+@dataclass
+class SlashCommandSpec:
+    name: str
+    path: str
+    body: str
+    description: str = ""
+    argument_hint: str = ""
+    allowed_tools: List[str] = field(default_factory=list)
+    model: str = ""
+    profile: str = ""
+    hidden: bool = False
+    source: str = "builtin"
+    namespace: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SlashCommandSpec":
+        return cls(
+            name=str(data["name"]),
+            path=str(data.get("path", "")),
+            body=str(data.get("body", "")),
+            description=str(data.get("description", "")),
+            argument_hint=str(data.get("argument_hint", "")),
+            allowed_tools=[str(v) for v in data.get("allowed_tools", [])],
+            model=str(data.get("model", "")),
+            profile=str(data.get("profile", "")),
+            hidden=bool(data.get("hidden", False)),
+            source=str(data.get("source", "builtin")),
+            namespace=str(data.get("namespace", "")),
+            metadata=dict(data.get("metadata", {})),
+        )

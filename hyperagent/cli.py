@@ -16,10 +16,14 @@ from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.channels import ChannelConfigStore, ChannelRouter
 from hyperagent.runtime.channels.gateway import create_channel_app
+from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.general_agent import GeneralAgentRunner
+from hyperagent.runtime.hooks import HookEngine
+from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.tui import HyperAgentTui
+from hyperagent.runtime.todos import TodoStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.env import load_env_file
@@ -559,6 +563,31 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     tool_apply_patch.add_argument("--patch-file", required=True)
     tool_apply_patch.add_argument("--run-id", default=None)
     tool_apply_patch.add_argument("--json", action="store_true")
+
+    tool_todo = agent_tool_sub.add_parser("todo-write", help="Replace TodoWrite items")
+    tool_todo.add_argument("--owner", default="project")
+    tool_todo.add_argument("--item", action="append", default=[])
+    tool_todo.add_argument("--run-id", default=None)
+    tool_todo.add_argument("--json", action="store_true")
+
+    command_list = subparsers.add_parser("command-list", help="List Markdown slash commands")
+    command_list.add_argument("--include-hidden", action="store_true")
+    command_list.add_argument("--json", action="store_true")
+
+    command_render = subparsers.add_parser("command-render", help="Render a Markdown slash command")
+    command_render.add_argument("--name", required=True)
+    command_render.add_argument("--arguments", default="")
+    command_render.add_argument("--expand-shell", action="store_true")
+    command_render.add_argument("--json", action="store_true")
+
+    todos = subparsers.add_parser("todos", help="List, clear, or export TodoWrite state")
+    todos.add_argument("--owner", default="project")
+    todos.add_argument("--clear", action="store_true")
+    todos.add_argument("--export", default=None)
+    todos.add_argument("--json", action="store_true")
+
+    doctor = subparsers.add_parser("doctor", help="Run a local HyperAgent self-check")
+    doctor.add_argument("--json", action="store_true")
 
     session_new = subparsers.add_parser("session-new", help="Create a saved conversation session")
     session_new.add_argument("--title", required=True)
@@ -1577,6 +1606,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         elif args.tool_command == "apply-patch":
             patch_text = Path(args.patch_file).read_text(encoding="utf-8")
             result = executor.apply_patch(patch_text, run_id=args.run_id)
+        elif args.tool_command == "todo-write":
+            result = executor.todo_write(
+                [{"content": item, "status": "pending"} for item in args.item],
+                owner=args.owner,
+                run_id=args.run_id,
+            )
         else:
             raise ValueError(f"Unsupported agent tool: {args.tool_command}")
         append_worklog(
@@ -1600,6 +1635,92 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"warning: {warning}")
             if result.content:
                 print(result.content)
+        return 0
+
+    if args.command == "command-list":
+        commands = SlashCommandStore(workspace.project_root, workspace.workspace_dir).discover(
+            include_hidden=args.include_hidden
+        )
+        if args.json:
+            print_json({"commands": [command.to_dict() for command in commands]})
+        else:
+            for command in commands:
+                tools = ",".join(command.allowed_tools)
+                hint = f" {command.argument_hint}" if command.argument_hint else ""
+                print(f"/{command.name}{hint}\t{command.source}\t{tools}\t{command.description}")
+        return 0
+
+    if args.command == "command-render":
+        executor = SafeAgentToolExecutor(
+            workspace.project_root,
+            workspace.workspace_dir,
+            permission_policy="auto",
+            hook_engine=HookEngine(workspace.workspace_dir),
+        )
+        rendered = SlashCommandStore(workspace.project_root, workspace.workspace_dir).render(
+            args.name,
+            args.arguments,
+            expand_shell=args.expand_shell,
+            executor=executor,
+        )
+        payload = {
+            "command": rendered.spec.to_dict(),
+            "arguments": rendered.arguments,
+            "prompt": rendered.prompt,
+            "warnings": rendered.warnings,
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            for warning in rendered.warnings:
+                print(f"warning: {warning}")
+            print(rendered.prompt)
+        return 0
+
+    if args.command == "todos":
+        store = TodoStore(workspace.workspace_dir)
+        if args.clear:
+            todo_list = store.clear(args.owner)
+        else:
+            todo_list = store.load(args.owner)
+        if args.export:
+            path = store.export_markdown(args.owner, Path(args.export))
+            if not args.json:
+                print(f"exported: {path}")
+        if args.json:
+            print_json(todo_list.to_dict())
+        else:
+            if not todo_list.items:
+                print("no todos")
+            for item in todo_list.items:
+                print(f"{item.id}\t{item.status}\t{item.priority}\t{item.content}")
+        return 0
+
+    if args.command == "doctor":
+        status = workspace.status()
+        payload = {
+            "initialized": status.initialized,
+            "workspace": status.workspace_dir,
+            "dataset_root": status.dataset_root,
+            "providers": [
+                {
+                    "name": provider.name,
+                    "model": provider.default_model,
+                    "api_key_env": provider.api_key_env,
+                    "api_key_configured": bool(os.environ.get(provider.api_key_env)),
+                }
+                for provider in llm_store.ensure_defaults()
+            ],
+            "commands": len(SlashCommandStore(workspace.project_root, workspace.workspace_dir).discover()),
+            "subagents": len(RuntimeExtensionStore(workspace.workspace_dir).list_subagents()),
+            "hooks": len(HookEngine(workspace.workspace_dir).list_rules()),
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print("HyperAgent doctor:")
+            for key, value in payload.items():
+                print(f"- {key}: {value}")
         return 0
 
     if args.command == "session-new":

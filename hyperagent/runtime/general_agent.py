@@ -10,6 +10,7 @@ from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.deepseek_reasonix import get_reasonix_profile
 from hyperagent.runtime.extensions import RuntimeExtensionStore
+from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
 from hyperagent.schemas import GeneralAgentRun
@@ -101,6 +102,7 @@ class GeneralAgentRunner:
             permission_callback=self.permission_callback,
             session_permission_cache=self.session_permission_cache,
             allow_arbitrary_commands=True,
+            hook_engine=HookEngine(self.workspace.workspace_dir),
         )
         action_loop = AgentActionLoop(
             self.conversations,
@@ -150,10 +152,13 @@ class GeneralAgentRunner:
 
     def _role_instruction(self, agent: Dict[str, object], instruction: str) -> str:
         tools = ", ".join(str(v) for v in agent.get("tools", [])) or "unspecified"
+        prompt = str(agent.get("prompt", "")).strip()
+        prompt_block = f"\nAgent prompt:\n{prompt}\n" if prompt else ""
         return (
             f"You are HyperAgent subagent `{agent.get('name')}`.\n"
             f"Role: {agent.get('role')}.\n"
             f"Declared tools: {tools}.\n"
+            f"{prompt_block}"
             "Act only on the user's instruction, use tools when useful, and stop "
             "with a concise final answer when the task is handled.\n\n"
             f"User instruction:\n{instruction}"

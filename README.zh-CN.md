@@ -78,6 +78,9 @@ HyperAgent act "检查 reports 并选择下一条安全命令"
 HyperAgent /help
 HyperAgent /tui
 HyperAgent /language
+HyperAgent /commands
+HyperAgent /todos
+HyperAgent /doctor
 ```
 
 ## TUI / REPL
@@ -92,6 +95,21 @@ HyperAgent /language
 - `/thinking on|off|toggle|status` 展开或折叠模型返回的思考内容。
 
 `HyperAgent repl` 复用同一套会话、工具权限和 Agent 逻辑，适合普通终端使用。
+
+## 命令、Agents、Hooks 与 Todos
+
+HyperAgent 支持 Claude Code 风格的 Markdown 命令和内置科研 subagent，但不复制 Claude Code 源码。内置命令包括 `/feature-dev`、`/code-review`、`/review-experiment`、`/commit`、`/commit-push-pr`、`/doctor`、`/permissions`、`/export` 和 `/bug`。
+
+```bash
+HyperAgent command-list
+HyperAgent command-render --name feature-dev --arguments "增加一个结果评审 Agent"
+HyperAgent agent-run --agent code-reviewer --instruction "审查当前 diff"
+HyperAgent agent-tool todo-write --owner project --item "检查实验报告"
+HyperAgent todos --owner project
+HyperAgent doctor
+```
+
+项目级命令可以放到 `.hyperagent/commands/*.md`，项目级 agent 可以放到 `.hyperagent/agents/*.md`，hook 可以通过 `/hooks add` 或 `.hyperagent/hooks/*.md` 管理。外部 Bot 渠道仍然只允许聊天/查询，不能触发 shell、训练、写文件或通用 agent 工具。
 
 ## DeepSeek / Reasonix
 
