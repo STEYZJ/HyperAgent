@@ -223,6 +223,44 @@ class HyperAgentTuiTest(unittest.TestCase):
         buffer, cursor = tui._delete_text(buffer, cursor)
         self.assertEqual((buffer, cursor), ("abd", 2))
 
+        buffer, cursor = tui._delete_previous_word("alpha beta  gamma", 18)
+        self.assertEqual((buffer, cursor), ("alpha beta  ", 12))
+
+        buffer, cursor = tui._delete_previous_word("中文 实验", 5)
+        self.assertEqual((buffer, cursor), ("中文 ", 3))
+
+    def test_read_line_ctrl_u_clears_current_input(self):
+        tui = self._tui()
+
+        class FakeWindow:
+            def __init__(self):
+                self.keys = list("abc") + ["\x15"] + list("中文") + ["\n"]
+
+            def getmaxyx(self):
+                return (10, 80)
+
+            def get_wch(self):
+                return self.keys.pop(0)
+
+            def erase(self):
+                pass
+
+            def refresh(self):
+                pass
+
+            def move(self, y, x):
+                pass
+
+            def addstr(self, y, x, text, attr=0):
+                pass
+
+        tui.stdscr = FakeWindow()
+
+        line = tui._read_line("/tmp/project HyperAgent > ")
+
+        self.assertEqual(line, "中文")
+        self.assertEqual(tui.lines[-1], "/tmp/project HyperAgent > 中文")
+
     def test_input_click_maps_wide_char_columns_to_cursor_index(self):
         tui = self._tui()
         prompt = "P> "

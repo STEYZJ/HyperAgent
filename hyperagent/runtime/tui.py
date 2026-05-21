@@ -198,6 +198,25 @@ class HyperAgentTui:
                 return buffer
             if key in ("\x1b",):
                 return "/exit"
+            if key == "\x01":  # Ctrl-A
+                cursor_index = 0
+                continue
+            if key == "\x05":  # Ctrl-E
+                cursor_index = len(buffer)
+                continue
+            if key == "\x0b":  # Ctrl-K
+                buffer = buffer[:cursor_index]
+                self._reset_history_browse()
+                continue
+            if key == "\x15":  # Ctrl-U
+                buffer = ""
+                cursor_index = 0
+                self._reset_history_browse()
+                continue
+            if key == "\x17":  # Ctrl-W
+                buffer, cursor_index = self._delete_previous_word(buffer, cursor_index)
+                self._reset_history_browse()
+                continue
             if key in ("\b", "\x7f") or key == curses.KEY_BACKSPACE:
                 buffer, cursor_index = self._backspace_text(buffer, cursor_index)
                 self._reset_history_browse()
@@ -670,6 +689,17 @@ class HyperAgentTui:
         if cursor >= len(buffer):
             return buffer, cursor
         return buffer[:cursor] + buffer[cursor + 1 :], cursor
+
+    def _delete_previous_word(self, buffer: str, cursor_index: int) -> Tuple[str, int]:
+        cursor = max(0, min(int(cursor_index), len(buffer)))
+        if cursor <= 0:
+            return buffer, 0
+        index = cursor
+        while index > 0 and buffer[index - 1].isspace():
+            index -= 1
+        while index > 0 and not buffer[index - 1].isspace():
+            index -= 1
+        return buffer[:index] + buffer[cursor:], index
 
     def _visible_lines(
         self,
