@@ -2,6 +2,8 @@
 
 from typing import Iterable, List, Sequence, Tuple
 
+from hyperagent.runtime.slash_registry import grouped_help
+
 
 EXISTING_COMMANDS = {
     "audit",
@@ -35,6 +37,10 @@ EXISTING_COMMANDS = {
     "agent-plan",
     "agent-act",
     "agent-run",
+    "agent-status",
+    "agent-pause",
+    "agent-resume",
+    "agent-stop",
     "agent-tool",
     "command-list",
     "command-render",
@@ -56,6 +62,10 @@ EXISTING_COMMANDS = {
     "session-delete",
     "session-compress",
     "skill-list",
+    "skill-search",
+    "skill-inspect",
+    "skill-install",
+    "skill-bundles",
     "skill-run",
     "mcp-add",
     "mcp-list",
@@ -147,7 +157,7 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
     if alias == "mcp":
         return global_options + ["mcp-list"] + rest
     if alias in {"skills", "skill"}:
-        return global_options + ["skill-list"] + rest
+        return global_options + _skills_command(rest)
     if alias in {"prompts", "prompt"}:
         return global_options + ["prompt-list"] + rest
     if alias == "model":
@@ -170,6 +180,8 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["language-list"] + rest
     if alias in {"channels", "channel"}:
         return global_options + ["channel-list"] + rest
+    if alias == "agents":
+        return global_options + _agents_command(rest)
 
     return global_options + _prompt_command("agent-chat", "--message", args)
 
@@ -219,8 +231,8 @@ Canonical commands remain available:
   HyperAgent channel-run --host 0.0.0.0 --port 8765
 """
     if translator is None:
-        return default
-    return translator.t("launcher.help", default=default)
+        return default + "\nRegistered slash commands:\n" + grouped_help()
+    return translator.t("launcher.help", default=default) + "\nRegistered slash commands:\n" + grouped_help()
 
 
 def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
@@ -249,6 +261,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["llm-usage"] + list(rest)
     if alias == "cost":
         return ["llm-usage"] + list(rest)
+    if alias in {"rollback", "snapshot"}:
+        return ["checkpoint"] + list(rest)
     if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
         return [alias] + list(rest)
     if alias in {"commands", "command"}:
@@ -260,13 +274,19 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias == "mcp":
         return ["mcp-list"] + list(rest)
     if alias in {"skills", "skill"}:
-        return ["skill-list"] + list(rest)
+        return _skills_command(rest)
     if alias in {"prompts", "prompt"}:
         return ["prompt-list"] + list(rest)
     if alias == "language":
         return ["language-list"] + list(rest)
     if alias in {"channels", "channel"}:
         return ["channel-list"] + list(rest)
+    if alias == "platforms":
+        return ["channel-list"] + list(rest)
+    if alias == "agents":
+        return _agents_command(rest)
+    if alias == "hsi":
+        return _hsi_command(rest)
     if alias in {"chat", "ask"}:
         return _prompt_command("agent-chat", "--message", rest)
     if alias == "plan":
@@ -274,6 +294,64 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias in {"act", "do"}:
         return _prompt_command("agent-act", "--message", rest)
     return _prompt_command("agent-chat", "--message", ["/" + command] + list(rest))
+
+
+def _agents_command(rest: Sequence[str]) -> List[str]:
+    if not rest:
+        return ["agent-status"]
+    action = rest[0].lower()
+    tail = list(rest[1:])
+    if action == "status":
+        return ["agent-status"] + tail
+    if action == "pause":
+        return ["agent-pause"] + tail
+    if action == "resume":
+        return ["agent-resume"] + tail
+    if action == "stop":
+        return ["agent-stop"] + tail
+    return ["agent-status"] + list(rest)
+
+
+def _skills_command(rest: Sequence[str]) -> List[str]:
+    if not rest:
+        return ["skill-list"]
+    action = rest[0].lower()
+    tail = list(rest[1:])
+    if action in {"browse", "list"}:
+        return ["skill-list"] + tail
+    if action == "search":
+        return ["skill-search"] + tail
+    if action == "inspect":
+        return ["skill-inspect"] + tail
+    if action == "install":
+        return ["skill-install"] + tail
+    if action == "bundles":
+        return ["skill-bundles"] + tail
+    if action == "run":
+        return ["skill-run"] + tail
+    return ["skill-search"] + list(rest)
+
+
+def _hsi_command(rest: Sequence[str]) -> List[str]:
+    if not rest:
+        return ["hyperagent-commands"]
+    action = rest[0].lower()
+    tail = list(rest[1:])
+    mapping = {
+        "audit": "audit",
+        "plan": "plan",
+        "run-baseline": "run-baseline",
+        "experiment-cycle": "experiment-cycle",
+        "review-experiment": "command-render",
+        "literature": "literature",
+        "materialize-module": "materialize-module",
+    }
+    target = mapping.get(action)
+    if target is None:
+        return _prompt_command("agent-chat", "--message", [" ".join(["/hsi"] + list(rest))])
+    if action == "review-experiment":
+        return [target, "review-experiment"] + tail
+    return [target] + tail
 
 
 def _extract_global_options(args: List[str]) -> Tuple[List[str], List[str]]:

@@ -8,8 +8,10 @@ from typing import Callable, Dict, Optional
 from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.channels.config import ChannelConfigStore
-from hyperagent.runtime.channels.feishu import FeishuAdapter
-from hyperagent.runtime.channels.qq import QQAdapter
+from hyperagent.runtime.channels.registry import (
+    ChannelPlatformRegistry,
+    register_builtin_channel_platforms,
+)
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
@@ -78,6 +80,7 @@ class ChannelRouter:
         providers: LLMProviderStore,
         prompt_library: Optional[PromptLibrary] = None,
         config_store: Optional[ChannelConfigStore] = None,
+        platform_registry: Optional[ChannelPlatformRegistry] = None,
         responder: Optional[AgentResponder] = None,
     ) -> None:
         self.workspace = workspace
@@ -85,6 +88,7 @@ class ChannelRouter:
         self.providers = providers
         self.prompt_library = prompt_library
         self.config_store = config_store or ChannelConfigStore(workspace.workspace_dir)
+        self.platform_registry = platform_registry or register_builtin_channel_platforms()
         self.session_store = ChannelSessionStore(workspace.workspace_dir)
         self.responder = responder
 
@@ -97,14 +101,21 @@ class ChannelRouter:
         *,
         dry_run_agent: bool = False,
     ) -> ChannelEventResult:
-        config = self.config_store.get(provider)
+        try:
+            config = self.config_store.get(provider)
+            adapter = self._adapter(config)
+        except (KeyError, ValueError) as exc:
+            return ChannelEventResult(
+                provider=provider,
+                status="error",
+                error=str(exc),
+            )
         if not config.enabled:
             return ChannelEventResult(
                 provider=provider,
                 status="error",
                 error=f"channel provider is disabled: {provider}",
             )
-        adapter = self._adapter(config)
         parsed = adapter.handle_webhook(dict(payload), headers, body)
         if parsed.status != "received" or parsed.inbound is None:
             return parsed
@@ -166,8 +177,4 @@ class ChannelRouter:
         return result.response.content, result
 
     def _adapter(self, config: ChannelBotConfig):
-        if config.provider == "feishu":
-            return FeishuAdapter(config)
-        if config.provider == "qq":
-            return QQAdapter(config)
-        raise ValueError(f"Unsupported channel provider: {config.provider}")
+        return self.platform_registry.create_adapter(config)

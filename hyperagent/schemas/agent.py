@@ -342,6 +342,12 @@ class MultiAgentRoleRun:
     role: str
     instruction: str
     status: str
+    subagent_id: str = ""
+    parent_id: str = ""
+    depth: int = 0
+    delegation_role: str = "leaf"
+    started_at: str = ""
+    completed_at: str = ""
     action_run_path: Optional[str] = None
     final_response: str = ""
     warnings: List[str] = field(default_factory=list)
@@ -357,6 +363,12 @@ class MultiAgentRoleRun:
             role=str(data.get("role", "")),
             instruction=str(data.get("instruction", "")),
             status=str(data.get("status", "")),
+            subagent_id=str(data.get("subagent_id", "")),
+            parent_id=str(data.get("parent_id", "")),
+            depth=int(data.get("depth", 0)),
+            delegation_role=str(data.get("delegation_role", "leaf")),
+            started_at=str(data.get("started_at", "")),
+            completed_at=str(data.get("completed_at", "")),
             action_run_path=data.get("action_run_path"),
             final_response=str(data.get("final_response", "")),
             warnings=[str(v) for v in data.get("warnings", [])],
@@ -374,6 +386,10 @@ class MultiAgentTaskRun:
     created_at: str
     run_dir: str
     status: str = "running"
+    max_depth: int = 1
+    max_concurrent: int = 4
+    paused: bool = False
+    active_registry_path: str = ""
     role_runs: List[MultiAgentRoleRun] = field(default_factory=list)
     aggregate_response: str = ""
     warnings: List[str] = field(default_factory=list)
@@ -393,6 +409,10 @@ class MultiAgentTaskRun:
             created_at=str(data["created_at"]),
             run_dir=str(data["run_dir"]),
             status=str(data.get("status", "running")),
+            max_depth=int(data.get("max_depth", 1)),
+            max_concurrent=int(data.get("max_concurrent", 4)),
+            paused=bool(data.get("paused", False)),
+            active_registry_path=str(data.get("active_registry_path", "")),
             role_runs=[
                 MultiAgentRoleRun.from_dict(dict(item))
                 for item in data.get("role_runs", [])

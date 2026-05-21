@@ -34,7 +34,7 @@ Allowed tools:
 - search_code: {"query": "text", "path": ".", "max_results": 30}
 - run_command: {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_sec": 60}
 - run_experiment: {"plan_path": "experiments/demo/experiment.yaml", "seeds": [42, 43], "output_dir": "experiments/demo_suite"}
-- task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2}
+- task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2, "max_depth": 1, "max_concurrent": 3, "role": "leaf"}
 - run_skill: {"name": "review-experiment", "instruction": "review reports/result.json", "max_steps": 2}
 - todo_write: {"owner": "project", "items": [{"content": "inspect tests", "status": "in_progress", "priority": "high"}]}
 - check_patch: {"patch_text": "unified diff"}
@@ -585,6 +585,9 @@ class AgentActionLoop:
                 profile=str(args.get("profile", "")),
                 mode=str(args.get("mode", "sequential")),
                 max_steps=int(args.get("max_steps", 2)),
+                max_depth=int(args.get("max_depth", 1)),
+                max_concurrent=int(args.get("max_concurrent", 4)),
+                delegation_role=str(args.get("role", "leaf")),
                 llm_kwargs={},
             )
             status = "ok" if task_run.status == "completed" else "error"

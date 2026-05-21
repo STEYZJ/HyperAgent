@@ -235,6 +235,7 @@ class HyperAgentTuiTest(unittest.TestCase):
             suggestions = tui._suggest_commands("/fea")
 
             self.assertIn("/feature-dev", suggestions)
+            self.assertIn("/background", tui._suggest_commands("/back"))
 
 
 if __name__ == "__main__":

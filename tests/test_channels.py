@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 
 from hyperagent.core.io import read_yaml
-from hyperagent.runtime.channels import ChannelConfigStore, ChannelRouter
+from hyperagent.runtime.channels import (
+    ChannelConfigStore,
+    ChannelRouter,
+    register_builtin_channel_platforms,
+)
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
@@ -221,6 +225,30 @@ class ChannelGatewayTest(unittest.TestCase):
         self.assertNotIn("AgentActionLoop", text)
         self.assertNotIn("SafeAgentToolExecutor", text)
         self.assertNotIn("GeneralAgentRunner", text)
+
+    def test_channel_platform_registry_creates_builtin_adapters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ChannelConfigStore(Path(tmp) / ".hyperagent")
+            registry = register_builtin_channel_platforms()
+            providers = [entry.provider for entry in registry.list()]
+
+            self.assertEqual(providers, ["feishu", "qq"])
+            config = store.init_provider("feishu")
+            adapter = registry.create_adapter(config)
+            self.assertEqual(adapter.provider, "feishu")
+
+    def test_unknown_channel_provider_returns_structured_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            router, _store, _conversations = self._router(Path(tmp))
+            result = router.handle_webhook(
+                "unknown",
+                {},
+                headers={},
+                body=b"{}",
+            )
+
+            self.assertEqual(result.status, "error")
+            self.assertIn("Unknown channel provider", result.error)
 
     def test_fastapi_app_registers_expected_routes(self):
         with tempfile.TemporaryDirectory() as tmp:

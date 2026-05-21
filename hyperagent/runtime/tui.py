@@ -10,10 +10,13 @@ import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.background_jobs import BackgroundJobStore
 from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
+from hyperagent.runtime.slash_registry import command_names
+from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.runtime.wait_indicator import WaitIndicator
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 
@@ -398,6 +401,10 @@ class HyperAgentTui:
                 )
             except Exception:
                 pass
+        lines.extend(["", self._t("tui.panel.subagents", "active subagents:")])
+        lines.extend(self._subagent_panel_lines())
+        lines.extend(["", self._t("tui.panel.jobs", "background jobs:")])
+        lines.extend(self._job_panel_lines())
         lines.extend(["", self._t("tui.panel.commands", "command suggestions:")])
         lines.extend(self.command_suggestions[:6] or [self._t("tui.panel.none", "none")])
         lines.append("")
@@ -429,6 +436,31 @@ class HyperAgentTui:
             for item in todo_list.items[:6]
         ]
 
+    def _subagent_panel_lines(self) -> List[str]:
+        try:
+            registry = SubagentRuntimeRegistry(self.workspace.workspace_dir)
+            active = registry.list(include_completed=False)
+        except Exception:
+            return [self._t("tui.panel.none", "none")]
+        if not active:
+            return [self._t("tui.panel.none", "none")]
+        return [
+            f"- d{item.depth} {item.status}: {item.agent_name} {item.subagent_id}"
+            for item in active[:6]
+        ]
+
+    def _job_panel_lines(self) -> List[str]:
+        try:
+            jobs = BackgroundJobStore(self.workspace.workspace_dir).list()
+        except Exception:
+            return [self._t("tui.panel.none", "none")]
+        if not jobs:
+            return [self._t("tui.panel.none", "none")]
+        return [
+            f"- {job.status}: {job.kind} {job.job_id}"
+            for job in jobs[-6:]
+        ]
+
     def _suggest_commands(self, buffer: str) -> List[str]:
         if self.repl is None:
             return []
@@ -436,32 +468,7 @@ class HyperAgentTui:
         if not text.startswith("/"):
             return []
         query = text[1:].split()[0].lower()
-        builtins = [
-            "help",
-            "status",
-            "context",
-            "usage",
-            "agents",
-            "commands",
-            "todos",
-            "hooks",
-            "permissions",
-            "export",
-            "doctor",
-            "tool",
-            "act",
-            "plan",
-            "cost",
-            "stats",
-            "skill",
-            "checkpoint",
-            "restore",
-            "budget",
-            "pro",
-            "logs",
-            "mouse",
-            "exit",
-        ]
+        builtins = command_names(include_aliases=True) + ["mouse", "act", "plan"]
         custom = [command.name for command in self.repl.command_store.discover()]
         matches = sorted({name for name in builtins + custom if name.startswith(query)})
         return ["/" + name for name in matches[:8]]

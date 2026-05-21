@@ -5,11 +5,22 @@ from pathlib import Path
 from hyperagent.core.io import write_json
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
+from hyperagent.runtime.background_jobs import BackgroundJobStore
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.llm import LLMProviderStore
+from hyperagent.runtime.multi_agent import MultiAgentTaskRunner
+from hyperagent.runtime.slash_registry import (
+    command_names,
+    gateway_command_names,
+    grouped_help,
+    resolve_command,
+)
+from hyperagent.runtime.command_aliases import normalize_hyperagent_args
+from hyperagent.runtime.skills import SkillStore
+from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.runtime.todos import TodoStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.schemas import LLMResponse, MultiAgentTaskRun
@@ -28,6 +39,23 @@ class _FakeLLMClient:
 
 
 class ClaudeParityRuntimeTest(unittest.TestCase):
+    def test_central_slash_registry_drives_help_and_gateway_allowlist(self):
+        self.assertIn("agents", command_names())
+        self.assertIn("background", command_names())
+        self.assertEqual(resolve_command("channels").cli_command, "channel-list")
+        self.assertIn("status", gateway_command_names())
+        help_text = grouped_help()
+        self.assertIn("/hsi", help_text)
+        self.assertIn("/snapshot", help_text)
+        self.assertEqual(
+            normalize_hyperagent_args(["/agents", "pause", "maintenance"]),
+            ["agent-pause", "maintenance"],
+        )
+        self.assertEqual(
+            normalize_hyperagent_args(["/skills", "bundles"]),
+            ["skill-bundles"],
+        )
+
     def test_slash_command_discovery_and_argument_rendering(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -53,6 +81,33 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
             rendered = store.render("demo", "spectral bands")
             self.assertEqual(rendered.prompt, "Investigate spectral bands.")
             self.assertEqual(rendered.spec.allowed_tools, ["read_file"])
+
+    def test_skill_store_search_bundles_and_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source" / "spectral-reviewer"
+            source.mkdir(parents=True)
+            (source / "SKILL.md").write_text(
+                "---\n"
+                "name: spectral-reviewer\n"
+                "description: Review HSI spectral bands\n"
+                "bundle: hsi\n"
+                "runAs: subagent\n"
+                "allowed-tools: [read_file]\n"
+                "---\n"
+                "Inspect $ARGUMENTS for spectral redundancy.",
+                encoding="utf-8",
+            )
+            store = SkillStore([root / "source"])
+
+            self.assertEqual(store.search("redundancy")[0].name, "spectral-reviewer")
+            self.assertIn("hsi", store.bundles())
+
+            installed = store.install(source, root / "installed")
+            self.assertEqual(installed.run_as, "subagent")
+            self.assertTrue(
+                (root / "installed" / "spectral-reviewer" / "SKILL.md").exists()
+            )
 
     def test_todo_store_roundtrip_and_export(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -150,8 +205,88 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
             self.assertIn("subagent reviewed", run.steps[0].tool_result.content)
             task_path = Path(run.steps[0].tool_result.artifact_path)
             self.assertTrue(task_path.exists())
-            loaded = MultiAgentTaskRun.from_dict(__import__("json").loads(task_path.read_text(encoding="utf-8")))
+            loaded = MultiAgentTaskRun.from_dict(
+                __import__("json").loads(task_path.read_text(encoding="utf-8"))
+            )
             self.assertEqual(loaded.role_runs[0].agent_name, "reviewer")
+            self.assertEqual(loaded.max_depth, 1)
+            self.assertTrue(loaded.active_registry_path.endswith("active_subagents.json"))
+
+    def test_subagent_registry_pause_stop_and_depth_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            session = conversations.new("parent")
+            providers = LLMProviderStore(workspace.workspace_dir)
+            RuntimeExtensionStore(workspace.workspace_dir).add_subagent(
+                "reviewer",
+                "code_review",
+                tools=["read_file"],
+            )
+            registry = SubagentRuntimeRegistry(workspace.workspace_dir)
+            registry.pause("maintenance")
+
+            paused = MultiAgentTaskRunner(workspace, conversations, providers).run(
+                session_id=session.session_id,
+                provider="deepseek",
+                instruction="review",
+                agents=["reviewer"],
+            )
+
+            self.assertEqual(paused.status, "blocked")
+            self.assertTrue(paused.paused)
+            self.assertIn("paused", paused.warnings[0].lower())
+
+            registry.resume()
+            depth_blocked = MultiAgentTaskRunner(
+                workspace,
+                conversations,
+                providers,
+            ).run(
+                session_id=session.session_id,
+                provider="deepseek",
+                instruction="review",
+                agents=["reviewer"],
+                depth=1,
+                max_depth=0,
+            )
+            self.assertEqual(depth_blocked.status, "blocked")
+            self.assertIn("max_depth", depth_blocked.warnings[0])
+
+            state = registry.register(
+                subagent_id="sa-test",
+                agent_name="reviewer",
+                role="code_review",
+                instruction="review",
+                run_id="run-1",
+            )
+            self.assertEqual(state.status, "running")
+            registry.stop("sa-test")
+            stopped = registry.list(include_completed=True)[-1]
+            self.assertEqual(stopped.status, "stopped")
+            self.assertTrue(registry.should_stop("sa-test"))
+
+    def test_background_job_store_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            store = BackgroundJobStore(workspace.workspace_dir)
+
+            job = store.create(
+                kind="prompt",
+                instruction="review experiments",
+                session_id="session-1",
+            )
+            store.update(job.job_id, status="running", run_path="runs/1.json")
+            store.update(job.job_id, warning="still in progress")
+
+            loaded = store.list()[0]
+            self.assertEqual(loaded.status, "running")
+            self.assertEqual(loaded.run_path, "runs/1.json")
+            self.assertEqual(loaded.warnings, ["still in progress"])
 
 
 if __name__ == "__main__":

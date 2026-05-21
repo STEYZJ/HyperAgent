@@ -1,6 +1,7 @@
 """Skill discovery and rendering compatible with SKILL.md style directories."""
 
 import re
+import shutil
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -31,6 +32,57 @@ class SkillStore:
             if skill.name.lower() == normalized:
                 return skill
         return None
+
+    def search(self, query: str) -> List[SkillSpec]:
+        needle = str(query).strip().lower()
+        if not needle:
+            return self.list()
+        matches = []
+        for skill in self.list():
+            haystack = "\n".join(
+                [
+                    skill.name,
+                    skill.description,
+                    skill.body,
+                    " ".join(skill.allowed_tools),
+                    skill.run_as,
+                ]
+            ).lower()
+            if needle in haystack:
+                matches.append(skill)
+        return matches
+
+    def bundles(self) -> Dict[str, List[SkillSpec]]:
+        grouped: Dict[str, List[SkillSpec]] = {}
+        for skill in self.list():
+            bundle = str(
+                skill.metadata.get("bundle")
+                or skill.metadata.get("category")
+                or Path(skill.source).name
+                or "local"
+            )
+            grouped.setdefault(bundle, []).append(skill)
+        return grouped
+
+    def install(self, source: Path, install_root: Path, *, name: str = "") -> SkillSpec:
+        source = Path(source)
+        install_root = Path(install_root)
+        skill_file = source if source.name == "SKILL.md" else source / "SKILL.md"
+        if not skill_file.exists():
+            raise FileNotFoundError(f"SKILL.md not found: {source}")
+        skill = self._load(skill_file, source=str(source.parent))
+        target_name = name.strip() or skill.name or skill_file.parent.name
+        target_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", target_name).strip("-")
+        if not target_name:
+            raise ValueError("skill name is empty")
+        target_dir = install_root / target_name
+        install_root.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, target_dir, dirs_exist_ok=True)
+        else:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(skill_file, target_dir / "SKILL.md")
+        return self._load(target_dir / "SKILL.md", source=str(install_root))
 
     def render(self, name: str, arguments: str = "") -> SkillSpec:
         skill = self.get(name)

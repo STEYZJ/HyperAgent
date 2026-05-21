@@ -15,7 +15,11 @@ from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, tool_catalog
-from hyperagent.runtime.channels import ChannelConfigStore, ChannelRouter
+from hyperagent.runtime.channels import (
+    ChannelConfigStore,
+    ChannelRouter,
+    register_builtin_channel_platforms,
+)
 from hyperagent.runtime.channels.gateway import create_channel_app
 from hyperagent.runtime.checkpoints import CheckpointStore
 from hyperagent.runtime.commands import SlashCommandStore
@@ -58,6 +62,7 @@ from hyperagent.schemas import (
     ModelRecommendation,
     SpectralReport,
 )
+from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.tools.module_materializer import ModuleMaterializer
 from hyperagent.training.experiment_suite import ExperimentSuiteRunner
 
@@ -544,6 +549,30 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     )
     add_llm_runtime_args(agent_run, translator)
 
+    agent_status = subparsers.add_parser(
+        "agent-status",
+        help="Show active and recent subagent runtime state",
+    )
+    agent_status.add_argument("--json", action="store_true")
+
+    agent_pause = subparsers.add_parser(
+        "agent-pause",
+        help="Pause new subagent spawning in this workspace",
+    )
+    agent_pause.add_argument("--reason", default="")
+    agent_pause.add_argument("reason_text", nargs="*")
+
+    subparsers.add_parser(
+        "agent-resume",
+        help="Resume subagent spawning in this workspace",
+    )
+
+    agent_stop = subparsers.add_parser(
+        "agent-stop",
+        help="Request stop for a running subagent",
+    )
+    agent_stop.add_argument("subagent_id")
+
     agent_tool = subparsers.add_parser(
         "agent-tool",
         help="Run a controlled Claude-Code-like local tool",
@@ -687,6 +716,25 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
     skills = subparsers.add_parser("skill-list", help="List compatible SKILL.md skills")
     skills.add_argument("--json", action="store_true")
+
+    skill_search = subparsers.add_parser("skill-search", help="Search compatible SKILL.md skills")
+    skill_search.add_argument("query", nargs="?", default="")
+    skill_search.add_argument("--json", action="store_true")
+
+    skill_inspect = subparsers.add_parser("skill-inspect", help="Inspect a SKILL.md skill")
+    skill_inspect.add_argument("--name", required=True)
+    skill_inspect.add_argument("--json", action="store_true")
+
+    skill_install = subparsers.add_parser(
+        "skill-install",
+        help="Install a local SKILL.md directory into this workspace",
+    )
+    skill_install.add_argument("--path", required=True)
+    skill_install.add_argument("--name", default="")
+    skill_install.add_argument("--json", action="store_true")
+
+    skill_bundles = subparsers.add_parser("skill-bundles", help="List skill bundles")
+    skill_bundles.add_argument("--json", action="store_true")
 
     skill_run = subparsers.add_parser("skill-run", help="Render or run a SKILL.md skill")
     skill_run.add_argument("--name", required=True)
@@ -985,6 +1033,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "channel-list":
         configs = channel_store.ensure_defaults()
+        registry = register_builtin_channel_platforms()
+        env_summary = channel_store.env_summary()
         payload = {
             "channels": [
                 {
@@ -994,11 +1044,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "default_llm_provider": item.default_llm_provider,
                     "default_model": item.default_model,
                     "default_mode": item.default_mode,
-                    "env_vars": channel_store.env_summary().get(item.provider, []),
+                    "env_vars": env_summary.get(item.provider, []),
                     "chat_query_only": True,
                 }
                 for item in configs
-            ]
+            ],
+            "platforms": [entry.to_dict() for entry in registry.list()],
         }
         if args.json:
             print_json(payload)
@@ -1009,6 +1060,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"llm={item['default_llm_provider']}\tmode={item['default_mode']}"
                 )
                 print(f"  env: {', '.join(item['env_vars'])}")
+            print("platforms:")
+            for item in payload["platforms"]:
+                print(
+                    f"  {item['provider']}\tchat_query_only={item['chat_query_only']}\t"
+                    f"webhook={item['supports_webhook']}"
+                )
         return 0
 
     if args.command == "channel-run":
@@ -1606,6 +1663,47 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"warning: {warning}")
         return 0
 
+    if args.command == "agent-status":
+        registry = SubagentRuntimeRegistry(workspace.workspace_dir)
+        states = registry.list(include_completed=True)
+        payload = {
+            "control": registry.control(),
+            "subagents": [state.to_dict() for state in states],
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            control = payload["control"]
+            print(f"paused: {control.get('paused', False)}")
+            stop_ids = control.get("stop_ids", [])
+            if stop_ids:
+                print(f"stop_ids: {', '.join(stop_ids)}")
+            for state in states[-20:]:
+                print(
+                    f"{state.subagent_id}\t{state.status}\t{state.agent_name}\t"
+                    f"role={state.role}\tdepth={state.depth}"
+                )
+        return 0
+
+    if args.command == "agent-pause":
+        registry = SubagentRuntimeRegistry(workspace.workspace_dir)
+        reason = args.reason or " ".join(args.reason_text)
+        registry.pause(reason)
+        print("subagent spawning paused")
+        return 0
+
+    if args.command == "agent-resume":
+        registry = SubagentRuntimeRegistry(workspace.workspace_dir)
+        registry.resume()
+        print("subagent spawning resumed")
+        return 0
+
+    if args.command == "agent-stop":
+        registry = SubagentRuntimeRegistry(workspace.workspace_dir)
+        registry.stop(args.subagent_id)
+        print(f"stop requested: {args.subagent_id}")
+        return 0
+
     if args.command == "agent-run":
         llm_store.ensure_defaults()
         session_id = args.session_id
@@ -2066,6 +2164,84 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             for skill in skills:
                 print(f"{skill.name}\t{skill.path}\t{skill.description}")
+        return 0
+
+    if args.command == "skill-search":
+        roots = [
+            PACKAGE_ROOT / "skills",
+            Path("skills"),
+            workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        if codex_home:
+            roots.append(Path(codex_home) / "skills")
+        skills = SkillStore(roots).search(args.query)
+        if args.json:
+            print_json({"skills": [skill.to_dict() for skill in skills]})
+        else:
+            for skill in skills:
+                print(f"{skill.name}\t{skill.path}\t{skill.description}")
+        return 0
+
+    if args.command == "skill-inspect":
+        roots = [
+            PACKAGE_ROOT / "skills",
+            Path("skills"),
+            workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        if codex_home:
+            roots.append(Path(codex_home) / "skills")
+        skill = SkillStore(roots).get(args.name)
+        if skill is None:
+            raise KeyError(f"skill not found: {args.name}")
+        if args.json:
+            print_json(skill.to_dict())
+        else:
+            print(f"name: {skill.name}")
+            print(f"path: {skill.path}")
+            print(f"run_as: {skill.run_as}")
+            print(f"allowed_tools: {', '.join(skill.allowed_tools)}")
+            print(f"description: {skill.description}")
+        return 0
+
+    if args.command == "skill-install":
+        store = SkillStore([Path(args.path)])
+        skill = store.install(
+            Path(args.path),
+            workspace.workspace_dir / "skills",
+            name=args.name,
+        )
+        if args.json:
+            print_json(skill.to_dict())
+        else:
+            print(f"installed: {skill.name}")
+            print(f"path: {skill.path}")
+        return 0
+
+    if args.command == "skill-bundles":
+        roots = [
+            PACKAGE_ROOT / "skills",
+            Path("skills"),
+            workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        if codex_home:
+            roots.append(Path(codex_home) / "skills")
+        bundles = SkillStore(roots).bundles()
+        payload = {
+            "bundles": {
+                name: [skill.to_dict() for skill in skills]
+                for name, skills in bundles.items()
+            }
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            for name, skills in sorted(bundles.items()):
+                print(f"{name}\t{len(skills)}")
+                for skill in skills:
+                    print(f"  {skill.name}\t{skill.description}")
         return 0
 
     if args.command == "skill-run":

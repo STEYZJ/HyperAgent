@@ -6,6 +6,7 @@ from typing import Callable, Dict, List, Optional
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermissionRequest
+from hyperagent.runtime.background_jobs import BackgroundJobStore
 from hyperagent.runtime.checkpoints import CheckpointStore
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.commands import SlashCommandStore
@@ -20,12 +21,14 @@ from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.slash_registry import grouped_help
 from hyperagent.runtime.deepseek_reasonix import (
     get_reasonix_profile,
     list_reasonix_profiles,
     reasonix_cache_guidance,
 )
 from hyperagent.runtime.skills import SkillStore
+from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.runtime.todos import TodoStore
 from hyperagent.runtime.tool_panel import (
     render_action_run,
@@ -37,7 +40,7 @@ from hyperagent.runtime.wait_indicator import (
     WaitIndicator,
     run_with_wait_indicator,
 )
-from hyperagent.runtime.workspace import HyperAgentWorkspace
+from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
 from hyperagent.schemas import LLMMessage
 
 
@@ -92,6 +95,8 @@ class HyperAgentRepl:
         self.command_store = SlashCommandStore(workspace.project_root, workspace.workspace_dir)
         self.hooks = HookEngine(workspace.workspace_dir)
         self.todos = TodoStore(workspace.workspace_dir)
+        self.subagents = SubagentRuntimeRegistry(workspace.workspace_dir)
+        self.jobs = BackgroundJobStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
@@ -171,6 +176,8 @@ class HyperAgentRepl:
             self._status()
         elif command == "/session":
             self.output(f"session: {self.session_id}")
+        elif command in {"/background", "/bg"}:
+            self._background(args)
         elif command == "/btw":
             self._btw(args)
         elif command == "/sessions":
@@ -179,6 +186,8 @@ class HyperAgentRepl:
             title = " ".join(args) or "HyperAgent REPL"
             self.session_id = self.conversations.new(title).session_id
             self.output(f"new session: {self.session_id}")
+        elif command in {"/undo", "/branch", "/fork", "/queue", "/steer", "/goal", "/subgoal"}:
+            self._session_flow_command(command, args)
         elif command == "/resume":
             self._resume(args)
         elif command in {"/compact", "/compress"}:
@@ -242,7 +251,7 @@ class HyperAgentRepl:
         elif command == "/restore":
             self._restore(args)
         elif command == "/jobs":
-            self.output("background jobs are not active in this runtime slice")
+            self._jobs(args)
         elif command == "/logs":
             self._logs(args)
         elif command == "/tools":
@@ -429,6 +438,111 @@ class HyperAgentRepl:
         if response.content:
             self.output(response.content)
 
+    def _background(self, args: List[str]) -> None:
+        text = " ".join(args).strip()
+        if not text:
+            self.output("usage: /background <prompt>")
+            return
+        job = self.jobs.create(
+            kind="prompt",
+            instruction=text,
+            session_id=self.session_id,
+            status="queued",
+        )
+        self.output(f"background job queued: {job.job_id}")
+        self.output("run /jobs to inspect queued work")
+
+    def _session_flow_command(self, command: str, args: List[str]) -> None:
+        session = self.conversations.load(self.session_id)
+        canonical = command.lstrip("/")
+        if canonical == "fork":
+            canonical = "branch"
+        if canonical == "undo":
+            if not session.messages:
+                self.output("nothing to undo")
+                return
+            removed = 0
+            while session.messages and removed < 2:
+                session.messages.pop()
+                removed += 1
+                if removed == 1 and session.messages and session.messages[-1].role != "assistant":
+                    break
+            self.conversations.save(session)
+            self.output(f"undone messages: {removed}")
+            return
+        if canonical == "branch":
+            title = " ".join(args).strip() or f"{session.title} branch"
+            branch = self.conversations.new(title)
+            branch.messages = list(session.messages)
+            branch.summaries = list(session.summaries)
+            branch.metadata.update(session.metadata)
+            branch.metadata["branched_from"] = self.session_id
+            self.conversations.save(branch)
+            self.session_id = branch.session_id
+            self.output(f"branched: {branch.session_id}")
+            return
+        if canonical in {"queue", "steer"}:
+            text = " ".join(args).strip()
+            if not text:
+                self.output(f"usage: /{canonical} <prompt>")
+                return
+            key = "queued_prompts" if canonical == "queue" else "steering_notes"
+            values = list(session.metadata.get(key, []))
+            values.append({"created_at": utc_now(), "text": text})
+            session.metadata[key] = values
+            self.conversations.save(session)
+            self.output(f"{canonical} saved")
+            return
+        if canonical in {"goal", "subgoal"}:
+            self._goal_command(canonical, args, session)
+            return
+
+    def _goal_command(self, canonical: str, args: List[str], session) -> None:
+        if canonical == "goal":
+            action = args[0] if args else "status"
+            if action == "status":
+                self.output(str(session.metadata.get("goal", "no active goal")))
+                return
+            if action == "clear":
+                session.metadata.pop("goal", None)
+                self.conversations.save(session)
+                self.output("goal cleared")
+                return
+            if action in {"pause", "resume"}:
+                goal = dict(session.metadata.get("goal", {}))
+                goal["status"] = "paused" if action == "pause" else "active"
+                session.metadata["goal"] = goal
+                self.conversations.save(session)
+                self.output(f"goal {goal['status']}")
+                return
+            text = " ".join(args).strip()
+            session.metadata["goal"] = {"status": "active", "text": text}
+            self.conversations.save(session)
+            self.output("goal set")
+            return
+        subgoals = list(session.metadata.get("subgoals", []))
+        if args and args[0] == "clear":
+            session.metadata["subgoals"] = []
+            self.conversations.save(session)
+            self.output("subgoals cleared")
+            return
+        if args and args[0] == "remove" and len(args) > 1:
+            index = max(int(args[1]) - 1, 0)
+            if index < len(subgoals):
+                subgoals.pop(index)
+            session.metadata["subgoals"] = subgoals
+            self.conversations.save(session)
+            self.output("subgoal removed")
+            return
+        text = " ".join(args).strip()
+        if not text:
+            self.output("\n".join(f"{i + 1}. {v}" for i, v in enumerate(subgoals)) or "no subgoals")
+            return
+        subgoals.append(text)
+        session.metadata["subgoals"] = subgoals
+        self.conversations.save(session)
+        self.output("subgoal added")
+
     def _compact(self, args: List[str]) -> None:
         keep_last = int(args[0]) if args else self.keep_last
         session = self.conversations.compress(self.session_id, keep_last=keep_last)
@@ -515,6 +629,37 @@ class HyperAgentRepl:
         self.output("usage: /memory [list|show <scope>|add <scope> <text>]")
 
     def _agents(self, args: List[str]) -> None:
+        if args and args[0] == "status":
+            control = self.subagents.control()
+            self.output(
+                f"subagent_control: paused={control.get('paused')} "
+                f"stop_ids={','.join(control.get('stop_ids', []))}"
+            )
+            states = self.subagents.list(include_completed=True)
+            if not states:
+                self.output("no subagent runs")
+                return
+            for state in states[-20:]:
+                self.output(
+                    f"{state.subagent_id}\tdepth={state.depth}\t{state.status}\t"
+                    f"{state.agent_name}\tparent={state.parent_id or '-'}"
+                )
+            return
+        if args and args[0] == "pause":
+            control = self.subagents.pause(" ".join(args[1:]))
+            self.output(f"subagent spawning paused: {control.get('reason', '')}")
+            return
+        if args and args[0] == "resume":
+            self.subagents.resume()
+            self.output("subagent spawning resumed")
+            return
+        if args and args[0] == "stop":
+            if len(args) < 2:
+                self.output("usage: /agents stop <subagent_id>")
+                return
+            self.subagents.stop(args[1])
+            self.output(f"stop requested: {args[1]}")
+            return
         if not args or args[0] == "list":
             agents = self.extensions.list_subagents()
             if not agents:
@@ -561,7 +706,7 @@ class HyperAgentRepl:
             for warning in run.warnings:
                 self.output(f"warning: {warning}")
             return
-        self.output("usage: /agents [list|add <name> <role> [tools]|run <name|id> <instruction>]")
+        self.output("usage: /agents [list|add|run|status|pause|resume|stop]")
 
     def _hooks(self, args: List[str]) -> None:
         if not args or args[0] == "list":
@@ -928,6 +1073,21 @@ class HyperAgentRepl:
                 f"{event.message[:160]}"
             )
 
+    def _jobs(self, args: List[str]) -> None:
+        jobs = self.jobs.list()
+        if args and args[0] == "clear":
+            self.jobs.save_all([])
+            self.output("jobs cleared")
+            return
+        if not jobs:
+            self.output("no background jobs")
+            return
+        for job in jobs[-20:]:
+            self.output(
+                f"{job.job_id}\t{job.status}\t{job.kind}\t"
+                f"session={job.session_id or '-'}\t{job.instruction[:120]}"
+            )
+
     def _manual_tool(self, args: List[str]) -> None:
         if not args:
             self.output(self._tool_usage())
@@ -1072,7 +1232,7 @@ class HyperAgentRepl:
             "/exit                 quit\n"
             "Plain text sends a persistent agent-chat turn."
             ),
-        )
+        ) + "\n\nCentral command registry:\n" + grouped_help()
 
     def _t(self, key: str, default: str, **kwargs) -> str:
         if self.translator is None:
