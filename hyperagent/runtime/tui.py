@@ -1,6 +1,7 @@
 """Stdlib curses fullscreen interface for HyperAgent."""
 
 import json
+import locale
 import os
 from pathlib import Path
 import unicodedata
@@ -91,6 +92,7 @@ class HyperAgentTui:
         self.mouse_mode = "interactive"
         self._main_prompt_suffix = "HyperAgent > "
         self.command_suggestions: List[str] = []
+        self.locale_warning = ""
 
     def run(self) -> int:
         if curses is None:
@@ -101,7 +103,26 @@ class HyperAgentTui:
                 )
             )
             return 2
+        self.locale_warning = self._init_locale()
         return curses.wrapper(self._run)
+
+    def _init_locale(self) -> str:
+        try:
+            locale.setlocale(locale.LC_ALL, "")
+        except locale.Error as exc:
+            return self._t(
+                "tui.locale.set_failed",
+                "locale initialization failed: {error}",
+                error=str(exc),
+            )
+        encoding = locale.getpreferredencoding(False)
+        if "UTF" not in encoding.upper():
+            return self._t(
+                "tui.locale.non_utf8",
+                "terminal locale is not UTF-8: {encoding}",
+                encoding=encoding,
+            )
+        return ""
 
     def _run(self, stdscr) -> int:
         self.stdscr = stdscr
@@ -309,6 +330,8 @@ class HyperAgentTui:
         )
         if self.wait_status:
             status += f"| {self.wait_status} "
+        if self.locale_warning:
+            status += f"| {self.locale_warning} "
         status += f"| {self._t('tui.status.mouse', 'mouse')}={mouse_label} "
         self._addstr(
             0,
@@ -494,10 +517,16 @@ class HyperAgentTui:
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
         assert self.stdscr is not None
-        try:
-            self.stdscr.addstr(y, x, text, attr)
-        except curses.error:
-            pass
+        current_x = max(int(x), 0)
+        for char in str(text).expandtabs(4):
+            char_width = self._char_width(char)
+            if char_width <= 0:
+                continue
+            try:
+                self.stdscr.addstr(int(y), current_x, char, attr)
+            except curses.error:
+                pass
+            current_x += char_width
 
     def _wrap_lines(self, lines: List[str], width: int) -> List[str]:
         wrapped: List[str] = []

@@ -57,6 +57,8 @@
     "repl.permission_requested": "请求权限: {tool_name} 风险={risk_level} 原因={reason}",
     "repl.allow_prompt": "允许？[y/N] ",
     "tui.curses_missing": "错误: 当前平台不可用 Python curses 模块。",
+    "tui.locale.set_failed": "终端语言环境初始化失败: {error}",
+    "tui.locale.non_utf8": "终端语言环境不是 UTF-8: {encoding}",
     "tui.panel.title": "智能体/工具面板",
     "tui.panel.recent_artifacts": "最近工件:",
     "tui.panel.session": "会话",

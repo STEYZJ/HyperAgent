@@ -39,6 +39,60 @@ class HyperAgentTuiTest(unittest.TestCase):
         self.assertEqual(tui._clip_to_width("中文abc", 4), "中文")
         self.assertEqual(tui._clip_to_width("中文abc", 5), "中文a")
 
+    def test_addstr_writes_wide_chars_at_display_columns(self):
+        tui = self._tui()
+
+        class FakeWindow:
+            def __init__(self):
+                self.calls = []
+
+            def addstr(self, y, x, text, attr=0):
+                self.calls.append((y, x, text, attr))
+
+        fake = FakeWindow()
+        tui.stdscr = fake
+
+        tui._addstr(1, 3, "你好A")
+
+        self.assertEqual([call[1] for call in fake.calls], [3, 5, 7])
+        self.assertEqual("".join(call[2] for call in fake.calls), "你好A")
+
+    def test_wrap_and_render_keeps_chinese_content(self):
+        tui = self._tui()
+        paragraph = (
+            "你好！我是HyperAgent，一个专注于高光谱图像分类的持续性研究代理。"
+            "请提供任务ID、数据集、目标和目的。"
+        )
+
+        class FakeWindow:
+            def __init__(self):
+                self.calls = []
+
+            def addstr(self, y, x, text, attr=0):
+                self.calls.append((y, x, text, attr))
+
+        wrapped = tui._wrap_lines([paragraph], width=30)
+        fake = FakeWindow()
+        tui.stdscr = fake
+        for row, line in enumerate(wrapped):
+            tui._addstr(row, 0, tui._clip_to_width(line, 30))
+
+        rendered = "".join(call[2] for call in fake.calls)
+        self.assertEqual(rendered, "".join(wrapped))
+        self.assertIn("高光谱图像分类", rendered)
+        self.assertIn("持续性研究代理", rendered)
+
+    def test_init_locale_warns_for_non_utf8_terminal(self):
+        tui = self._tui()
+
+        with patch("hyperagent.runtime.tui.locale.setlocale"), patch(
+            "hyperagent.runtime.tui.locale.getpreferredencoding",
+            return_value="ANSI_X3.4-1968",
+        ):
+            warning = tui._init_locale()
+
+        self.assertIn("UTF-8", warning)
+
     def test_scroll_visible_lines_and_clamp(self):
         tui = self._tui()
         lines = [f"line {index}" for index in range(10)]

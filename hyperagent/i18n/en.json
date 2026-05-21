@@ -57,6 +57,8 @@
     "repl.permission_requested": "permission requested: {tool_name} risk={risk_level} reason={reason}",
     "repl.allow_prompt": "allow? [y/N] ",
     "tui.curses_missing": "error: Python curses module is not available on this platform.",
+    "tui.locale.set_failed": "locale initialization failed: {error}",
+    "tui.locale.non_utf8": "terminal locale is not UTF-8: {encoding}",
     "tui.panel.title": "Agent/Tool Panel",
     "tui.panel.recent_artifacts": "recent artifacts:",
     "tui.panel.session": "session",
