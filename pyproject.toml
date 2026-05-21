@@ -3,6 +3,11 @@ name = "hyperagent"
 version = "0.1.0"
 description = "Decoupled MVP framework for agent-assisted hyperspectral image classification research"
 requires-python = ">=3.8"
+dependencies = [
+  "fastapi>=0.110",
+  "httpx>=0.28",
+  "uvicorn>=0.27",
+]
 
 [project.scripts]
 HyperAgent = "hyperagent.launcher:main"

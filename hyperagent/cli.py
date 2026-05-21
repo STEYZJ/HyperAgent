@@ -14,6 +14,8 @@ from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
+from hyperagent.runtime.channels import ChannelConfigStore, ChannelRouter
+from hyperagent.runtime.channels.gateway import create_channel_app
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.repo_context import RepoContextBuilder
@@ -36,6 +38,7 @@ from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.schemas import (
+    ChannelInboundMessage,
     DatasetAudit,
     ExperimentCycle,
     ExperimentPlan,
@@ -623,6 +626,65 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     materialize.add_argument("--ablation-output", default=None)
     materialize.add_argument("--force", action="store_true")
 
+    channel_init = subparsers.add_parser(
+        "channel-init",
+        help=_txt(
+            translator,
+            "cli.command.channel_init.help",
+            "Initialize Feishu or QQ bot channel config without storing secrets",
+        ),
+    )
+    channel_init.add_argument("--provider", required=True, choices=["feishu", "qq"])
+
+    channel_list = subparsers.add_parser(
+        "channel-list",
+        help=_txt(
+            translator,
+            "cli.command.channel_list.help",
+            "List configured external bot channels",
+        ),
+    )
+    channel_list.add_argument("--json", action="store_true")
+
+    channel_run = subparsers.add_parser(
+        "channel-run",
+        help=_txt(
+            translator,
+            "cli.command.channel_run.help",
+            "Run the FastAPI Feishu/QQ bot webhook gateway",
+        ),
+    )
+    channel_run.add_argument("--host", default="0.0.0.0")
+    channel_run.add_argument("--port", type=int, default=8765)
+    channel_run.add_argument(
+        "--reload",
+        action="store_true",
+        help=_txt(translator, "cli.arg.channel_reload.help", "Enable uvicorn reload mode."),
+    )
+
+    channel_test = subparsers.add_parser(
+        "channel-test",
+        help=_txt(
+            translator,
+            "cli.command.channel_test.help",
+            "Test a channel route with a synthetic text message",
+        ),
+    )
+    channel_test.add_argument("--provider", required=True, choices=["feishu", "qq"])
+    channel_test.add_argument("--text", required=True)
+    channel_test.add_argument("--chat-id", default="test-chat")
+    channel_test.add_argument("--user-id", default="test-user")
+    channel_test.add_argument(
+        "--send",
+        action="store_true",
+        help=_txt(
+            translator,
+            "cli.arg.channel_send.help",
+            "Call the configured LLM instead of using dry-run echo.",
+        ),
+    )
+    channel_test.add_argument("--json", action="store_true")
+
     language_list = subparsers.add_parser(
         "language-list",
         help=_txt(
@@ -702,6 +764,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     agent = CoordinatorAgent()
     llm_store = LLMProviderStore(workspace.workspace_dir)
     session_store = ConversationStore(workspace.workspace_dir)
+    channel_store = ChannelConfigStore(workspace.workspace_dir)
     mcp_store = MCPServerStore(workspace.workspace_dir)
     obsidian_store = ObsidianVaultIndex(workspace.workspace_dir)
     prompt_library = PromptLibrary([PACKAGE_ROOT / "prompts", workspace.workspace_dir / "prompts"])
@@ -780,6 +843,118 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"{translator.t('cli.output.language_exported', default='language exported')}: "
             f"{path}"
         )
+        return 0
+
+    if args.command == "channel-init":
+        config = channel_store.init_provider(args.provider)
+        append_worklog(
+            "初始化 Bot 渠道配置",
+            "HyperAgent 已具备会话和 LLM provider 运行时。",
+            f"初始化 provider={config.provider} 的外部 Bot 渠道配置。",
+            "渠道配置只保存环境变量名，不保存真实密钥，避免把平台 token 写入仓库。",
+            f"配置已写入 {channel_store.path}，需要的环境变量包括 {', '.join(channel_store.env_summary()[config.provider])}。",
+            "Bot 渠道配置已生成，可接入 FastAPI webhook 网关。",
+            "下一步在飞书或 QQ 官方平台配置回调 URL，并用 channel-run 启动服务。",
+        )
+        print(f"provider: {config.provider}")
+        print(f"config: {channel_store.path}")
+        print("env_vars:")
+        for name in channel_store.env_summary()[config.provider]:
+            print(f"  {name}")
+        return 0
+
+    if args.command == "channel-list":
+        configs = channel_store.ensure_defaults()
+        payload = {
+            "channels": [
+                {
+                    "provider": item.provider,
+                    "enabled": item.enabled,
+                    "display_name": item.display_name,
+                    "default_llm_provider": item.default_llm_provider,
+                    "default_model": item.default_model,
+                    "default_mode": item.default_mode,
+                    "env_vars": channel_store.env_summary().get(item.provider, []),
+                    "chat_query_only": True,
+                }
+                for item in configs
+            ]
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            for item in payload["channels"]:
+                print(
+                    f"{item['provider']}\tenabled={item['enabled']}\t"
+                    f"llm={item['default_llm_provider']}\tmode={item['default_mode']}"
+                )
+                print(f"  env: {', '.join(item['env_vars'])}")
+        return 0
+
+    if args.command == "channel-run":
+        channel_store.ensure_defaults()
+        router = ChannelRouter(
+            workspace,
+            session_store,
+            llm_store,
+            prompt_library=prompt_library,
+            config_store=channel_store,
+        )
+        app = create_channel_app(router, channel_store)
+        try:
+            import uvicorn
+        except ImportError as exc:
+            raise RuntimeError(
+                "uvicorn is not installed. Install the HyperAgent environment "
+                "dependencies or run `python -m pip install uvicorn`."
+            ) from exc
+        append_worklog(
+            "启动 Bot 渠道 FastAPI 网关",
+            "Feishu/QQ channel 配置和 FastAPI app factory 已实现。",
+            f"启动 host={args.host} port={args.port} 的 Bot webhook 服务。",
+            "Bot 网关只允许聊天/查询路径，不接入 shell、训练或写入工具，降低外部平台触发本地操作的风险。",
+            "服务将暴露 /health、/channels、/webhooks/feishu 和 /webhooks/qq。",
+            "FastAPI 服务开始运行。",
+            "下一步在飞书或 QQ 官方 Bot 平台把 webhook URL 指向对应路径。",
+        )
+        uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
+        return 0
+
+    if args.command == "channel-test":
+        config = channel_store.init_provider(args.provider)
+        if not args.send:
+            config.dry_run = True
+            config.send_enabled = False
+        inbound = ChannelInboundMessage(
+            provider=args.provider,
+            channel_user_id=args.user_id,
+            chat_id=args.chat_id,
+            message_id="test-message",
+            text=args.text,
+            chat_type="group" if args.provider == "qq" else "p2p",
+            metadata={"source": "channel-test"},
+        )
+        router = ChannelRouter(
+            workspace,
+            session_store,
+            llm_store,
+            prompt_library=prompt_library,
+            config_store=channel_store,
+        )
+        result = router.handle_message(
+            inbound,
+            config,
+            dry_run_agent=not args.send,
+        )
+        if args.json:
+            print_json(result.to_dict())
+        else:
+            print(f"status: {result.status}")
+            print(f"session_id: {result.session_id}")
+            if result.outbound:
+                print(f"reply: {result.outbound.text}")
+            for warning in result.warnings:
+                print(f"warning: {warning}")
         return 0
 
     if args.command == "status":

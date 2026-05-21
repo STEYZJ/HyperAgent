@@ -35,6 +35,27 @@ API key 只能放在环境变量或本地 `.env` 文件中，`.env` 已被 git �
 
 已知开源依赖和参考项目记录在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。新增运行时依赖、复制第三方源码或准备发布二进制/Docker 镜像前，需要同步更新该文件并做许可证复查。
 
+## Bot 渠道接入
+
+HyperAgent 可以启动 FastAPI webhook 网关，接入官方飞书 Bot 和 QQ 官方 Bot。第一版渠道只允许聊天/查询：外部消息会进入持久化 AgentLoop，但不会暴露 shell、训练、写文件或通用 agent 工具。微信适配器暂不接入，后续单独扩展。
+
+```bash
+HyperAgent channel-init --provider feishu
+HyperAgent channel-init --provider qq
+HyperAgent channel-list
+HyperAgent channel-test --provider feishu --text "规划下一轮 HSI 实验"
+HyperAgent channel-run --host 0.0.0.0 --port 8765
+```
+
+在本地 `.env` 或环境变量中配置平台凭据，然后在飞书/QQ 官方平台把回调 URL 指向：
+
+```text
+POST /webhooks/feishu
+POST /webhooks/qq
+```
+
+生成的 `.hyperagent/channels.yaml` 只保存环境变量名，不保存真实密钥。
+
 ## 常用命令
 
 ```bash
@@ -45,6 +66,7 @@ HyperAgent tui
 HyperAgent repl --permission ask
 HyperAgent agent-run --agent reviewer --instruction "检查最近一次实验报告"
 HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json
+HyperAgent channel-run --host 0.0.0.0 --port 8765
 ```
 
 Claude Code 风格入口也可用：

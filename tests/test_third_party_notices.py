@@ -15,6 +15,9 @@ class ThirdPartyNoticesTest(unittest.TestCase):
             "PyYAML",
             "PyTorch",
             "tifffile",
+            "FastAPI",
+            "Uvicorn",
+            "HTTPX",
         ]:
             self.assertIn(name, text)
 

@@ -10,6 +10,12 @@ from hyperagent.schemas.agent import (
     RepoFileContext,
     RepoSnapshot,
 )
+from hyperagent.schemas.channels import (
+    ChannelBotConfig,
+    ChannelEventResult,
+    ChannelInboundMessage,
+    ChannelOutboundMessage,
+)
 from hyperagent.schemas.dataset import DatasetAudit
 from hyperagent.schemas.conversation import (
     ConversationMessage,
@@ -73,6 +79,10 @@ __all__ = [
     "AgentToolResult",
     "AutoExperimentAgenda",
     "CodingAgentRun",
+    "ChannelBotConfig",
+    "ChannelEventResult",
+    "ChannelInboundMessage",
+    "ChannelOutboundMessage",
     "GeneralAgentRun",
     "ConversationMessage",
     "ConversationSession",

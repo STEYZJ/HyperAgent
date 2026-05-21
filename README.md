@@ -34,6 +34,27 @@ The demo writes artifacts under `experiments/synthetic_demo/` and appends a work
 
 Store API keys only in environment variables or the local `.env` file, which is ignored by git. Do not paste raw API keys into README files, worklogs, config examples, prompts, or committed conversation artifacts. HyperAgent redacts obvious secret shapes before writing worklogs, and the test suite includes a tracked-file secret scan.
 
+## Bot Channels
+
+HyperAgent can run a FastAPI webhook gateway for official Feishu and QQ bots. The v1 channel path is chat/query only: it routes text messages into the persistent AgentLoop and does not expose shell, training, file-writing, or general agent tools to external platforms. WeChat is intentionally reserved for a later adapter.
+
+```bash
+HyperAgent channel-init --provider feishu
+HyperAgent channel-init --provider qq
+HyperAgent channel-list
+HyperAgent channel-test --provider feishu --text "Plan the next HSI experiment"
+HyperAgent channel-run --host 0.0.0.0 --port 8765
+```
+
+Configure platform credentials through local environment variables or `.env`, then point the official platform callback URL at:
+
+```text
+POST /webhooks/feishu
+POST /webhooks/qq
+```
+
+The generated `.hyperagent/channels.yaml` stores only environment variable names, never secret values.
+
 ## Third-Party Licenses
 
 Known open-source dependencies and reference projects are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Update that file before adding new runtime dependencies or copying any third-party source code.
@@ -102,6 +123,7 @@ HyperAgent obsidian-search --query "spectral gate"
 HyperAgent /prompts
 HyperAgent prompt-render --name hsi_research_copilot --var dataset=Indian_pines --var objective=OA
 HyperAgent materialize-module --proposal reports/indian_pines/module_proposal.json --base-plan reports/indian_pines/experiment.yaml --ablation-output configs/ablations/indian_pines_evidence_adapter --force
+HyperAgent channel-run --host 0.0.0.0 --port 8765
 ```
 
 The local dataset root used in this workspace is recorded in `configs/hyperagent_local.yaml`:

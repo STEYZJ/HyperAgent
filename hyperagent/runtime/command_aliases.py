@@ -52,6 +52,10 @@ EXISTING_COMMANDS = {
     "prompt-list",
     "prompt-render",
     "materialize-module",
+    "channel-init",
+    "channel-list",
+    "channel-run",
+    "channel-test",
     "language-list",
     "language-set",
     "language-install",
@@ -136,6 +140,8 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["llm-usage"] + rest
     if alias == "language":
         return global_options + ["language-list"] + rest
+    if alias in {"channels", "channel"}:
+        return global_options + ["channel-list"] + rest
 
     return global_options + _prompt_command("agent-chat", "--message", args)
 
@@ -161,6 +167,7 @@ Slash-style aliases:
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
+  HyperAgent /channels
   HyperAgent /tui
   HyperAgent /repl
 
@@ -175,6 +182,7 @@ Provider options can be mixed into prompt commands:
 Canonical commands remain available:
   HyperAgent demo --synthetic
   HyperAgent run-suite --config configs/experiment.yaml --seeds 42,43,44
+  HyperAgent channel-run --host 0.0.0.0 --port 8765
 """
     if translator is None:
         return default
@@ -211,6 +219,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["prompt-list"] + list(rest)
     if alias == "language":
         return ["language-list"] + list(rest)
+    if alias in {"channels", "channel"}:
+        return ["channel-list"] + list(rest)
     if alias in {"chat", "ask"}:
         return _prompt_command("agent-chat", "--message", rest)
     if alias == "plan":

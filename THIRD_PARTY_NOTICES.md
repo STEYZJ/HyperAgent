@@ -19,6 +19,9 @@ These packages are imported by HyperAgent source code or are required by the sup
 | PyYAML | 6.0.2 | MIT | YAML config, experiment plans, workspace config. | Include MIT notice in source/binary redistributions. |
 | PyTorch | 2.3.1+cu118 | BSD License | MLP baseline and generated model factories. | Keep notices; review CUDA/NVIDIA terms if redistributing GPU-enabled binaries or images. |
 | tifffile | 2023.7.10 | BSD License | Optional TIFF hyperspectral reader. | Keep copyright/license notices when redistributing. |
+| FastAPI | environment-managed | MIT | Feishu/QQ bot webhook gateway HTTP app. | Include MIT notice when redistributing. |
+| Uvicorn | environment-managed | BSD-3-Clause | ASGI server for the bot channel gateway. | Keep copyright/license notices when redistributing. |
+| HTTPX | environment-managed | BSD-3-Clause | FastAPI TestClient dependency for gateway tests. | Keep copyright/license notices when redistributing. |
 
 ## Environment Snapshot and Transitive Dependencies
 

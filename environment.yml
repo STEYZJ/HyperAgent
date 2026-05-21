@@ -13,4 +13,7 @@ dependencies:
   - pyyaml=6.0
   - pytorch=2.3
   - pytorch-cuda=11.8
+  - fastapi
+  - httpx
+  - uvicorn
   - pip
