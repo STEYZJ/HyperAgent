@@ -208,7 +208,7 @@ class AgentLoopTest(unittest.TestCase):
                             0,
                         )
                 output = buffer.getvalue()
-                self.assertIn("session_id:", output)
+                self.assertIn("会话 ID:", output)
                 self.assertIn("cli answer", output)
             finally:
                 os.chdir(old_cwd)

@@ -74,8 +74,8 @@ class ExperimentSuiteTest(unittest.TestCase):
                         0,
                     )
                 output = buffer.getvalue()
-                self.assertIn("Wrote suite:", output)
-                self.assertIn("oa_mean:", output)
+                self.assertIn("已写入实验套件", output)
+                self.assertIn("OA 均值:", output)
                 self.assertTrue((root / "cli_suite" / "suite.json").exists())
             finally:
                 os.chdir(old_cwd)

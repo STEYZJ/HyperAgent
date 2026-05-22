@@ -258,7 +258,7 @@ class AgentToolsTest(unittest.TestCase):
                         ),
                         0,
                     )
-                self.assertIn("status: ok", buffer.getvalue())
+                self.assertIn("状态: ok", buffer.getvalue())
             finally:
                 os.chdir(old_cwd)
 

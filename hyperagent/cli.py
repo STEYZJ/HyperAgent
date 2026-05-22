@@ -78,10 +78,44 @@ from hyperagent.training.experiment_suite import ExperimentSuiteRunner
 
 DEFAULT_DATASET_ROOT = "/data2/lzj/lab/Mamba_test/dataset"
 PACKAGE_ROOT = Path(__file__).resolve().parent
+_ACTIVE_TRANSLATOR: Optional[Translator] = None
 
 
-def _txt(translator: Optional[Translator], key: str, default: str) -> str:
-    return translator.t(key, default=default) if translator is not None else default
+def _txt(translator: Optional[Translator], key: str, default: str, **kwargs) -> str:
+    if translator is not None:
+        return translator.t(key, default=default, **kwargs)
+    try:
+        return default.format(**kwargs)
+    except (KeyError, ValueError):
+        return default
+
+
+def _label(translator: Optional[Translator], name: str, default: str) -> str:
+    return _txt(translator, f"cli.label.{name}", default)
+
+
+def _value(translator: Optional[Translator], value) -> str:
+    if isinstance(value, bool):
+        return _txt(translator, "cli.value.true", "true") if value else _txt(translator, "cli.value.false", "false")
+    if value is None or value == "":
+        return _txt(translator, "cli.value.none", "none")
+    return str(value)
+
+
+def _configured(translator: Optional[Translator], is_configured: bool) -> str:
+    return (
+        _txt(translator, "cli.value.configured", "configured")
+        if is_configured
+        else _txt(translator, "cli.value.missing", "missing")
+    )
+
+
+def _kv(translator: Optional[Translator], name: str, default: str, value) -> str:
+    return f"{_label(translator, name, default)}: {_value(translator, value)}"
+
+
+def _warning(translator: Optional[Translator], warning: str) -> str:
+    return f"{_label(translator, 'warning', 'warning')}: {warning}"
 
 
 def _parser_class(translator: Optional[Translator]):
@@ -92,7 +126,28 @@ def _parser_class(translator: Optional[Translator]):
         def format_usage(self) -> str:
             return _localize_argparse_text(super().format_usage(), translator)
 
+        def error(self, message: str) -> None:
+            if translator is not None and translator.locale == "zh-CN":
+                self.print_usage(sys.stderr)
+                localized = _localize_argparse_message(message)
+                self.exit(2, f"{self.prog}: 错误: {localized}\n")
+            super().error(message)
+
     return LocalizedArgumentParser
+
+
+def _localize_argparse_message(message: str) -> str:
+    replacements = {
+        "unrecognized arguments:": "无法识别的参数:",
+        "the following arguments are required:": "缺少必需参数:",
+        "invalid choice:": "无效选项:",
+        "expected one argument": "需要一个参数",
+        "argument": "参数",
+    }
+    localized = message
+    for source, target in replacements.items():
+        localized = localized.replace(source, target)
+    return localized
 
 
 def _localize_argparse_text(text: str, translator: Optional[Translator]) -> str:
@@ -1029,6 +1084,7 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    global _ACTIVE_TRANSLATOR
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     load_env_file(Path(".env"), override=False)
     workspace = HyperAgentWorkspace()
@@ -1036,6 +1092,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     translator = i18n_store.translator(i18n_store.resolve_locale(raw_argv))
     args = _build_parser(translator).parse_args(raw_argv)
     translator = i18n_store.translator(args.lang or translator.locale)
+    _ACTIVE_TRANSLATOR = translator
     agent = CoordinatorAgent()
     llm_store = LLMProviderStore(workspace.workspace_dir)
     session_store = ConversationStore(workspace.workspace_dir)
@@ -1062,7 +1119,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "HyperAgent 工作台已初始化。",
             "下一步可用 task-create 创建科研任务。",
         )
-        print(f"Initialized HyperAgent workspace: {workspace.workspace_dir}")
+        print(_txt(translator, "cli.output.initialized_workspace", "Initialized HyperAgent workspace: {path}", path=workspace.workspace_dir))
         return 0
 
     if args.command == "hyperagent-commands":
@@ -1088,7 +1145,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 }
             )
         else:
-            print(f"{translator.t('cli.output.current_locale', default='current_locale')}: {current}")
+            print(_kv(translator, "current_locale", "current_locale", current))
             for pack in packs:
                 marker = "*" if pack.locale == current else " "
                 print(f"{marker} {pack.locale}\t{pack.source}\t{pack.path}")
@@ -1100,7 +1157,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"{translator.t('cli.output.language_set', default='language set')}: "
             f"{args.locale}"
         )
-        print(f"config: {path}")
+        print(_kv(translator, "config", "config", path))
         return 0
 
     if args.command == "language-install":
@@ -1109,7 +1166,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"{translator.t('cli.output.language_installed', default='language installed')}: "
             f"{pack.locale}"
         )
-        print(f"path: {pack.path}")
+        print(_kv(translator, "path", "path", pack.path))
         return 0
 
     if args.command == "language-export":
@@ -1131,9 +1188,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Bot 渠道配置已生成，可接入 FastAPI webhook 网关。",
             "下一步在飞书或 QQ 官方平台配置回调 URL，并用 channel-run 启动服务。",
         )
-        print(f"provider: {config.provider}")
-        print(f"config: {channel_store.path}")
-        print("env_vars:")
+        print(_kv(translator, "provider", "provider", config.provider))
+        print(_kv(translator, "config", "config", channel_store.path))
+        print(f"{_label(translator, 'env_vars', 'env_vars')}:")
         for name in channel_store.env_summary()[config.provider]:
             print(f"  {name}")
         return 0
@@ -1165,16 +1222,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             for item in payload["channels"]:
                 print(
-                    f"{item['provider']}\tenabled={item['enabled']}\t"
+                    f"{item['provider']}\t{_label(translator, 'enabled', 'enabled')}={_value(translator, item['enabled'])}\t"
                     f"llm={item['default_llm_provider']}\tmode={item['default_mode']}"
                 )
-                print(f"  env: {', '.join(item['env_vars'])}")
+                print(f"  {_label(translator, 'env', 'env')}: {', '.join(item['env_vars'])}")
                 missing = [
                     name for name, configured in item["env_configured"].items() if not configured
                 ]
                 if missing:
-                    print(f"  missing_env: {', '.join(missing)}")
-            print("platforms:")
+                    print(f"  {_label(translator, 'missing_env', 'missing_env')}: {', '.join(missing)}")
+            print(f"{_label(translator, 'platforms', 'platforms')}:")
             for item in payload["platforms"]:
                 print(
                     f"  {item['provider']}\tchat_query_only={item['chat_query_only']}\t"
@@ -1240,12 +1297,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(result.to_dict())
         else:
-            print(f"status: {result.status}")
-            print(f"session_id: {result.session_id}")
+            print(_kv(translator, "status", "status", result.status))
+            print(_kv(translator, "session_id", "session_id", result.session_id))
             if result.outbound:
-                print(f"reply: {result.outbound.text}")
+                print(_kv(translator, "reply", "reply", result.outbound.text))
             for warning in result.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
         return 0
 
     if args.command == "status":
@@ -1253,11 +1310,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(status.to_dict())
         else:
-            print(f"{translator.t('cli.output.initialized', default='initialized')}: {status.initialized}")
-            print(f"{translator.t('cli.output.workspace', default='workspace')}: {status.workspace_dir}")
-            print(f"{translator.t('cli.output.dataset_root', default='dataset_root')}: {status.dataset_root}")
-            print(f"{translator.t('cli.output.tasks', default='tasks')}: {status.task_count}")
-            print(f"{translator.t('cli.output.tasks_by_status', default='tasks_by_status')}: {status.tasks_by_status}")
+            print(_kv(translator, "initialized", "initialized", status.initialized))
+            print(_kv(translator, "workspace", "workspace", status.workspace_dir))
+            print(_kv(translator, "dataset_root", "dataset_root", status.dataset_root))
+            print(_kv(translator, "tasks", "tasks", status.task_count))
+            print(_kv(translator, "tasks_by_status", "tasks_by_status", status.tasks_by_status))
         return 0
 
     if args.command == "task-create":
@@ -1318,11 +1375,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"矩阵已写入 {Path(args.reports_root) / 'benchmark_matrix.json'}。",
             "下一步可打开 benchmark_matrix.md，选择低分或失败数据集进入自动实验闭环。",
         )
-        print(f"Wrote matrix: {Path(args.reports_root) / 'benchmark_matrix.json'}")
-        print(f"report: {Path(args.reports_root) / 'benchmark_matrix.md'}")
-        print(f"completed: {completed}")
-        print(f"planned: {planned}")
-        print(f"failed: {failed}")
+        print(_kv(translator, "matrix", "matrix", Path(args.reports_root) / "benchmark_matrix.json"))
+        print(_kv(translator, "report", "report", Path(args.reports_root) / "benchmark_matrix.md"))
+        print(_kv(translator, "completed", "completed", completed))
+        print(_kv(translator, "planned", "planned", planned))
+        print(_kv(translator, "failed", "failed", failed))
         return 0
 
     if args.command == "task-list":
@@ -1339,13 +1396,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(task.to_dict())
         else:
-            print(f"task_id: {task.task_id}")
-            print(f"status: {task.status}")
-            print(f"dataset: {task.dataset}")
-            print(f"objective: {task.objective}")
-            print(f"goal: {task.goal}")
-            print(f"keywords: {', '.join(task.keywords)}")
-            print(f"artifacts: {task.artifacts}")
+            print(_kv(translator, "task_id", "task_id", task.task_id))
+            print(_kv(translator, "status", "status", task.status))
+            print(_kv(translator, "dataset", "dataset", task.dataset))
+            print(_kv(translator, "objective", "objective", task.objective))
+            print(_kv(translator, "goal", "goal", task.goal))
+            print(_kv(translator, "keywords", "keywords", ", ".join(task.keywords)))
+            print(_kv(translator, "artifacts", "artifacts", task.artifacts))
         return 0
 
     if args.command == "task-run":
@@ -1418,7 +1475,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "任务规划工作流已完成。",
             "下一步可查看 task-show 或选择候选实验运行 baseline。",
         )
-        print(f"Task run complete: {task.task_id}")
+        print(_txt(translator, "cli.output.task_run_complete", "Task run complete: {task_id}", task_id=task.task_id))
         return 0
 
     if args.command == "audit":
@@ -1432,7 +1489,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "审计 JSON 已生成。",
             "下一步可运行 plan 命令生成实验配置。",
         )
-        print(f"Wrote audit: {args.output}")
+        print(_txt(translator, "cli.output.wrote_audit", "Wrote audit: {path}", path=args.output))
         return 0
 
     if args.command == "llm-providers":
@@ -1451,7 +1508,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
         else:
             for provider in providers:
-                configured = "configured" if os.environ.get(provider.api_key_env) else "missing"
+                configured = _configured(translator, bool(os.environ.get(provider.api_key_env)))
                 print(
                     f"{provider.name}\t{provider.kind}\t{provider.default_model}\t"
                     f"{provider.api_key_env}\t{configured}"
@@ -1471,11 +1528,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             print_json(data)
         else:
             if args.profile:
-                print_profile(data)
+                print_profile(data, translator)
             else:
                 for profile in data["profiles"]:
-                    print_profile(profile)
-                print("cache rule: " + data["cache_guidance"]["rule"])
+                    print_profile(profile, translator)
+                print(f"{_label(translator, 'cache_rule', 'cache rule')}: {data['cache_guidance']['rule']}")
         return 0
 
     if args.command == "llm-usage":
@@ -1483,15 +1540,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(summary)
         else:
-            print(f"requests: {summary['request_count']}")
-            print(f"total_tokens: {summary['total_tokens']}")
-            print(f"prompt_tokens: {summary['prompt_tokens']}")
-            print(f"completion_tokens: {summary['completion_tokens']}")
-            print(f"prompt_cache_hit_tokens: {summary['prompt_cache_hit_tokens']}")
-            print(f"prompt_cache_miss_tokens: {summary['prompt_cache_miss_tokens']}")
-            print(f"cache_hit_ratio: {summary['cache_hit_ratio']}")
-            print(f"cost_estimate_usd: {summary['cost_estimate_usd']}")
-            print(f"ledger: {summary['ledger_path']}")
+            print(_kv(translator, "requests", "requests", summary["request_count"]))
+            print(_kv(translator, "total_tokens", "total_tokens", summary["total_tokens"]))
+            print(_kv(translator, "prompt_tokens", "prompt_tokens", summary["prompt_tokens"]))
+            print(_kv(translator, "completion_tokens", "completion_tokens", summary["completion_tokens"]))
+            print(_kv(translator, "prompt_cache_hit_tokens", "prompt_cache_hit_tokens", summary["prompt_cache_hit_tokens"]))
+            print(_kv(translator, "prompt_cache_miss_tokens", "prompt_cache_miss_tokens", summary["prompt_cache_miss_tokens"]))
+            print(_kv(translator, "cache_hit_ratio", "cache_hit_ratio", summary["cache_hit_ratio"]))
+            print(_kv(translator, "cost_estimate_usd", "cost_estimate_usd", summary["cost_estimate_usd"]))
+            print(_kv(translator, "ledger", "ledger", summary["ledger_path"]))
         return 0
 
     if args.command == "web":
@@ -1500,10 +1557,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.json:
                 print_json(payload)
             else:
-                print(f"search_configured: {payload['search_configured']}")
+                print(_kv(translator, "search_configured", "search_configured", payload["search_configured"]))
                 for name, configured in payload["providers"].items():
-                    print(f"{name}: {'configured' if configured else 'missing'}")
-                print("fetch_available: true")
+                    print(f"{name}: {_configured(translator, bool(configured))}")
+                print(_kv(translator, "fetch_available", "fetch_available", True))
             return 0
         executor = SafeAgentToolExecutor(
             workspace.project_root,
@@ -1536,11 +1593,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(result.to_dict())
         else:
-            print(f"tool: {result.tool_name}")
-            print(f"status: {result.status}")
-            print(f"artifact: {result.artifact_path}")
+            print(_kv(translator, "tool", "tool", result.tool_name))
+            print(_kv(translator, "status", "status", result.status))
+            print(_kv(translator, "artifact", "artifact", result.artifact_path))
             for warning in result.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
             if result.content:
                 print(result.content)
         return 0
@@ -1551,10 +1608,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.json:
                 print_json(payload)
             else:
-                print(f"provider: {payload['provider']}")
-                print(f"required_env: {payload['required_env']}")
-                print(f"configured: {payload['configured']}")
-                print(f"output_root: {payload['output_root']}")
+                print(_kv(translator, "provider", "provider", payload["provider"]))
+                print(_kv(translator, "required_env", "required_env", payload["required_env"]))
+                print(_kv(translator, "configured", "configured", payload["configured"]))
+                print(_kv(translator, "output_root", "output_root", payload["output_root"]))
             return 0
         executor = SafeAgentToolExecutor(
             workspace.project_root,
@@ -1576,11 +1633,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(result.to_dict())
         else:
-            print(f"tool: {result.tool_name}")
-            print(f"status: {result.status}")
-            print(f"artifact: {result.artifact_path}")
+            print(_kv(translator, "tool", "tool", result.tool_name))
+            print(_kv(translator, "status", "status", result.status))
+            print(_kv(translator, "artifact", "artifact", result.artifact_path))
             for warning in result.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
             if result.content:
                 print(result.content)
         return 0
@@ -1602,9 +1659,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"enabled: {payload.get('enabled')}")
-            print(f"open_files: {', '.join(payload.get('open_files', [])) or 'none'}")
-            print(f"updated_at: {payload.get('updated_at', '')}")
+            print(_kv(translator, "enabled", "enabled", payload.get("enabled")))
+            print(_kv(translator, "open_files", "open_files", ", ".join(payload.get("open_files", [])) or None))
+            print(_kv(translator, "updated_at", "updated_at", payload.get("updated_at", "")))
         return 0
 
     if args.command == "plan-mode":
@@ -1616,10 +1673,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"enabled: {payload.get('enabled')}")
+            print(_kv(translator, "enabled", "enabled", payload.get("enabled")))
             if payload.get("reason"):
-                print(f"reason: {payload.get('reason')}")
-            print(f"updated_at: {payload.get('updated_at', '')}")
+                print(_kv(translator, "reason", "reason", payload.get("reason")))
+            print(_kv(translator, "updated_at", "updated_at", payload.get("updated_at", "")))
         return 0
 
     if args.command == "personality":
@@ -1635,7 +1692,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(payload.get("text") or "no personality note")
+            print(payload.get("text") or _txt(translator, "cli.output.no_personality_note", "no personality note"))
         return 0
 
     if args.command == "feedback":
@@ -1645,12 +1702,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.json:
                 print_json(payload)
             else:
-                print("feedback recorded")
+                print(_txt(translator, "cli.output.feedback_recorded", "feedback recorded"))
             return 0
         items = store.list(limit=args.limit)
         if args.json:
             print_json({"feedback": items})
         else:
+            if not items:
+                print(_txt(translator, "cli.output.no_feedback", "no feedback"))
             for item in items:
                 print(f"{item.get('created_at', '')}\t{item.get('text', '')}")
         return 0
@@ -1660,12 +1719,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"branch: {payload['branch']}")
-            print(f"head: {payload['head']}")
-            print("dirty_files:")
-            for item in payload["dirty_files"] or ["none"]:
+            print(_kv(translator, "branch", "branch", payload["branch"]))
+            print(_kv(translator, "head", "head", payload["head"]))
+            print(f"{_label(translator, 'dirty_files', 'dirty_files')}:")
+            for item in payload["dirty_files"] or [_txt(translator, "cli.value.none", "none")]:
                 print(f"  {item}")
-            print("recent_commits:")
+            print(f"{_label(translator, 'recent_commits', 'recent_commits')}:")
             for item in payload["recent_commits"]:
                 print(f"  {item}")
         return 0
@@ -1712,13 +1771,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             write_json(Path(args.output), response)
         if response.warnings:
             for warning in response.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
         else:
             if response.reasoning_content:
-                print("reasoning_content:")
+                print(f"{_label(translator, 'reasoning_content', 'reasoning_content')}:")
                 print(response.reasoning_content)
             if response.tool_calls:
-                print("tool_calls:")
+                print(f"{_label(translator, 'tool_calls', 'tool_calls')}:")
                 print_json({"tool_calls": response.tool_calls})
             print(response.content)
         return 0
@@ -1760,18 +1819,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             "用户消息和模型回复已写回会话；LLM 调用结果已结构化返回。",
             "下一步可在同一 session 继续对话，或绑定 task-id 让回答读取实验 artifact。",
         )
-        print(f"session_id: {result.session_id}")
+        print(_kv(translator, "session_id", "session_id", result.session_id))
         if result.warnings:
             for warning in result.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
         if result.response.content:
             print(result.response.content)
         return 0
 
     if args.command == "run":
         if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
-            print("plan-mode is enabled; headless action-loop tool execution is paused.")
-            print("Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning.")
+            print(_txt(translator, "cli.output.plan_mode_run_paused", "plan-mode is enabled; headless action-loop tool execution is paused."))
+            print(_txt(translator, "cli.output.plan_mode_resume_hint", "Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning."))
             return 0
         llm_store.ensure_defaults()
         instruction = " ".join(args.instruction).strip()
@@ -1815,18 +1874,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"run 状态为 {run.status}。",
             "下一步可用 events/replay/stats 查看运行轨迹，或继续同一 session。",
         )
-        print(f"run_id: {run.run_id}")
-        print(f"session_id: {run.session_id}")
-        print(f"status: {run.status}")
-        print(f"action_run: {Path(run.run_dir) / 'action_run.json'}")
+        print(_kv(translator, "run_id", "run_id", run.run_id))
+        print(_kv(translator, "session_id", "session_id", run.session_id))
+        print(_kv(translator, "status", "status", run.status))
+        print(_kv(translator, "action_run", "action_run", Path(run.run_dir) / "action_run.json"))
         if run.stable_prefix_hash:
-            print(f"stable_prefix_hash: {run.stable_prefix_hash}")
+            print(_kv(translator, "stable_prefix_hash", "stable_prefix_hash", run.stable_prefix_hash))
         if run.event_log_path:
-            print(f"event_log: {run.event_log_path}")
+            print(_kv(translator, "event_log", "event_log", run.event_log_path))
         if run.final_response:
             print(run.final_response)
         for warning in run.warnings:
-            print(f"warning: {warning}")
+            print(_warning(translator, warning))
         return 0
 
     if args.command == "agent-context":
@@ -1839,7 +1898,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.format == "json":
             if args.output:
                 write_json(Path(args.output), snapshot)
-                print(f"Wrote repo context: {args.output}")
+                print(_txt(translator, "cli.output.wrote_repo_context", "Wrote repo context: {path}", path=args.output))
             else:
                 print_json(snapshot.to_dict())
         else:
@@ -1847,7 +1906,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.output:
                 Path(args.output).parent.mkdir(parents=True, exist_ok=True)
                 Path(args.output).write_text(markdown, encoding="utf-8")
-                print(f"Wrote repo context: {args.output}")
+                print(_txt(translator, "cli.output.wrote_repo_context", "Wrote repo context: {path}", path=args.output))
             else:
                 print(markdown)
         return 0
@@ -1949,12 +2008,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"run 状态为 {run.status}。",
             "下一步可依据 plan 进入受控补丁生成、实验执行或继续同一 session 追问。",
         )
-        print(f"run_id: {run.run_id}")
-        print(f"session_id: {run.session_id}")
-        print(f"plan: {run.plan_path}")
+        print(_kv(translator, "run_id", "run_id", run.run_id))
+        print(_kv(translator, "session_id", "session_id", run.session_id))
+        print(_kv(translator, "plan", "plan", run.plan_path))
         if run.warnings:
             for warning in run.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
         return 0
 
     if args.command == "agent-status":
@@ -1968,14 +2027,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             print_json(payload)
         else:
             control = payload["control"]
-            print(f"paused: {control.get('paused', False)}")
+            print(_kv(translator, "paused", "paused", control.get("paused", False)))
             stop_ids = control.get("stop_ids", [])
             if stop_ids:
-                print(f"stop_ids: {', '.join(stop_ids)}")
+                print(_kv(translator, "stop_ids", "stop_ids", ", ".join(stop_ids)))
             for state in states[-20:]:
                 print(
                     f"{state.subagent_id}\t{state.status}\t{state.agent_name}\t"
-                    f"role={state.role}\tdepth={state.depth}"
+                    f"{_label(translator, 'role', 'role')}={state.role}\t"
+                    f"{_label(translator, 'depth', 'depth')}={state.depth}"
                 )
         return 0
 
@@ -1983,25 +2043,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         registry = SubagentRuntimeRegistry(workspace.workspace_dir)
         reason = args.reason or " ".join(args.reason_text)
         registry.pause(reason)
-        print("subagent spawning paused")
+        print(_txt(translator, "cli.output.subagent_spawning_paused", "subagent spawning paused"))
         return 0
 
     if args.command == "agent-resume":
         registry = SubagentRuntimeRegistry(workspace.workspace_dir)
         registry.resume()
-        print("subagent spawning resumed")
+        print(_txt(translator, "cli.output.subagent_spawning_resumed", "subagent spawning resumed"))
         return 0
 
     if args.command == "agent-stop":
         registry = SubagentRuntimeRegistry(workspace.workspace_dir)
         registry.stop(args.subagent_id)
-        print(f"stop requested: {args.subagent_id}")
+        print(_txt(translator, "cli.output.stop_requested", "stop requested: {target}", target=args.subagent_id))
         return 0
 
     if args.command == "agent-run":
         if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
-            print("plan-mode is enabled; agent-run tool execution is paused.")
-            print("Use `HyperAgent plan-mode off` to resume tool execution.")
+            print(_txt(translator, "cli.output.plan_mode_agent_run_paused", "plan-mode is enabled; agent-run tool execution is paused."))
+            print(_txt(translator, "cli.output.plan_mode_off_hint", "Use `HyperAgent plan-mode off` to resume tool execution."))
             return 0
         llm_store.ensure_defaults()
         session_id = args.session_id
@@ -2043,22 +2103,22 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"run 状态为 {run.status}。",
             "下一步可查看 agent_run.json 和工具 artifact，或在同一 session 继续执行。",
         )
-        print(f"run_id: {run.run_id}")
-        print(f"status: {run.status}")
-        print(f"agent_run: {Path(run.run_dir) / 'agent_run.json'}")
-        print(f"session_id: {run.session_id}")
+        print(_kv(translator, "run_id", "run_id", run.run_id))
+        print(_kv(translator, "status", "status", run.status))
+        print(_kv(translator, "agent_run", "agent_run", Path(run.run_dir) / "agent_run.json"))
+        print(_kv(translator, "session_id", "session_id", run.session_id))
         if run.action_run_path:
-            print(f"action_run: {run.action_run_path}")
+            print(_kv(translator, "action_run", "action_run", run.action_run_path))
         for artifact in run.tool_artifacts:
-            print(f"artifact: {artifact}")
+            print(_kv(translator, "artifact", "artifact", artifact))
         for warning in run.warnings:
-            print(f"warning: {warning}")
+            print(_warning(translator, warning))
         return 0
 
     if args.command == "agent-act":
         if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
-            print("plan-mode is enabled; agent-act tool execution is paused.")
-            print("Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning.")
+            print(_txt(translator, "cli.output.plan_mode_agent_act_paused", "plan-mode is enabled; agent-act tool execution is paused."))
+            print(_txt(translator, "cli.output.plan_mode_resume_hint", "Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning."))
             return 0
         llm_store.ensure_defaults()
         if args.session_id:
@@ -2102,14 +2162,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             "action loop 结果已归档，工具调用也有独立审计记录。",
             "下一步可继续同一 session，或让 agent 读取 benchmark/suite 结果决定实验动作。",
         )
-        print(f"run_id: {run.run_id}")
-        print(f"session_id: {run.session_id}")
-        print(f"status: {run.status}")
-        print(f"action_run: {Path(run.run_dir) / 'action_run.json'}")
+        print(_kv(translator, "run_id", "run_id", run.run_id))
+        print(_kv(translator, "session_id", "session_id", run.session_id))
+        print(_kv(translator, "status", "status", run.status))
+        print(_kv(translator, "action_run", "action_run", Path(run.run_dir) / "action_run.json"))
         if run.final_response:
             print(run.final_response)
         for warning in run.warnings:
-            print(f"warning: {warning}")
+            print(_warning(translator, warning))
         return 0
 
     if args.command == "agent-tool":
@@ -2178,13 +2238,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(result.to_dict())
         else:
-            print(f"tool: {result.tool_name}")
-            print(f"status: {result.status}")
-            print(f"artifact: {result.artifact_path}")
+            print(_kv(translator, "tool", "tool", result.tool_name))
+            print(_kv(translator, "status", "status", result.status))
+            print(_kv(translator, "artifact", "artifact", result.artifact_path))
             if result.exit_code is not None:
-                print(f"exit_code: {result.exit_code}")
+                print(_kv(translator, "exit_code", "exit_code", result.exit_code))
             for warning in result.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
             if result.content:
                 print(result.content)
         return 0
@@ -2225,7 +2285,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print_json(payload)
         else:
             for warning in rendered.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
             print(rendered.prompt)
         return 0
 
@@ -2238,12 +2298,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.export:
             path = store.export_markdown(args.owner, Path(args.export))
             if not args.json:
-                print(f"exported: {path}")
+                print(_kv(translator, "exported", "exported", path))
         if args.json:
             print_json(todo_list.to_dict())
         else:
             if not todo_list.items:
-                print("no todos")
+                print(_txt(translator, "cli.output.no_todos", "no todos"))
             for item in todo_list.items:
                 print(f"{item.id}\t{item.status}\t{item.priority}\t{item.content}")
         return 0
@@ -2270,9 +2330,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print("HyperAgent doctor:")
+            print(_txt(translator, "cli.output.doctor_title", "HyperAgent doctor:"))
             for key, value in payload.items():
-                print(f"- {key}: {value}")
+                print(f"- {_label(translator, key, key)}: {_value(translator, value)}")
         return 0
 
     if args.command == "events":
@@ -2289,8 +2349,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             for event in events:
                 print(
                     f"{event.timestamp}\t{event.event_type}\t{event.status}\t"
-                    f"session={event.session_id or ''}\trun={event.run_id or ''}\t"
-                    f"tool={event.tool_name or ''}\t{event.message}"
+                    f"{_label(translator, 'session_id', 'session')}={event.session_id or ''}\t"
+                    f"{_label(translator, 'run_id', 'run')}={event.run_id or ''}\t"
+                    f"{_label(translator, 'tool', 'tool')}={event.tool_name or ''}\t{event.message}"
                 )
         return 0
 
@@ -2342,12 +2403,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print("Runtime stats:")
-            print(f"- events: {payload['events']['event_count']}")
-            print(f"- llm_requests: {payload['llm_usage']['request_count']}")
-            print(f"- llm_total_tokens: {payload['llm_usage']['total_tokens']}")
-            print(f"- cache_hit_ratio: {payload['llm_usage']['cache_hit_ratio']}")
-            print(f"- tools: {len(payload['tools'])}")
+            print(_txt(translator, "cli.output.runtime_stats_title", "Runtime stats:"))
+            print(f"- {_label(translator, 'events', 'events')}: {payload['events']['event_count']}")
+            print(f"- {_label(translator, 'llm_requests', 'llm_requests')}: {payload['llm_usage']['request_count']}")
+            print(f"- {_label(translator, 'llm_total_tokens', 'llm_total_tokens')}: {payload['llm_usage']['total_tokens']}")
+            print(f"- {_label(translator, 'cache_hit_ratio', 'cache_hit_ratio')}: {payload['llm_usage']['cache_hit_ratio']}")
+            print(f"- {_label(translator, 'tools', 'tools')}: {len(payload['tools'])}")
         return 0
 
     if args.command == "prune-sessions":
@@ -2365,10 +2426,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"archived: {len(archived)}")
-            print(f"deleted: {len(payload['deleted'])}")
+            print(_kv(translator, "archived", "archived", len(archived)))
+            print(_kv(translator, "deleted", "deleted", len(payload["deleted"])))
             if args.dry_run:
-                print("dry-run: no sessions deleted")
+                print(_txt(translator, "cli.output.dry_run_no_sessions_deleted", "dry-run: no sessions deleted"))
         return 0
 
     if args.command == "checkpoint":
@@ -2379,15 +2440,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print_json({"checkpoints": [item.to_dict() for item in checkpoints]})
             else:
                 for item in checkpoints[-30:]:
-                    print(f"{item.checkpoint_id}\t{item.created_at}\tfiles={len(item.files)}\t{item.reason}")
+                    print(f"{item.checkpoint_id}\t{item.created_at}\t{_label(translator, 'files', 'files')}={len(item.files)}\t{item.reason}")
             return 0
         checkpoint = store.create(args.path, reason=args.reason)
         if args.json:
             print_json(checkpoint.to_dict())
         else:
-            print(f"checkpoint_id: {checkpoint.checkpoint_id}")
-            print(f"manifest: {checkpoint.manifest_path}")
-            print(f"files: {len(checkpoint.files)}")
+            print(_kv(translator, "checkpoint_id", "checkpoint_id", checkpoint.checkpoint_id))
+            print(_kv(translator, "manifest", "manifest", checkpoint.manifest_path))
+            print(_kv(translator, "files", "files", len(checkpoint.files)))
         return 0
 
     if args.command == "restore":
@@ -2395,7 +2456,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(checkpoint.to_dict())
         else:
-            print(f"restored: {checkpoint.checkpoint_id}")
+            print(_kv(translator, "restored", "restored", checkpoint.checkpoint_id))
             for path in checkpoint.files:
                 print(f"  {path}")
         return 0
@@ -2407,7 +2468,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "session-add":
         session = session_store.add_message(args.session_id, args.role, args.content)
-        print(f"{session.session_id}\tmessages={len(session.messages)}")
+        print(f"{session.session_id}\t{_label(translator, 'messages', 'messages')}={len(session.messages)}")
         return 0
 
     if args.command == "session-list":
@@ -2424,22 +2485,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(session.to_dict())
         else:
-            print(f"session_id: {session.session_id}")
-            print(f"title: {session.title}")
-            print(f"status: {session.status}")
-            print(f"summaries: {len(session.summaries)}")
+            print(_kv(translator, "session_id", "session_id", session.session_id))
+            print(_kv(translator, "title", "title", session.title))
+            print(_kv(translator, "status", "status", session.status))
+            print(_kv(translator, "summaries", "summaries", len(session.summaries)))
             for message in session.messages:
                 print(f"{message.role}: {message.content}")
         return 0
 
     if args.command == "session-archive":
         session = session_store.archive(args.session_id)
-        print(f"archived: {session.session_id}")
+        print(_kv(translator, "archived", "archived", session.session_id))
         return 0
 
     if args.command == "session-delete":
         session_store.delete(args.session_id, hard=args.hard)
-        print(f"deleted: {args.session_id}")
+        print(_kv(translator, "deleted", "deleted", args.session_id))
         return 0
 
     if args.command == "session-compress":
@@ -2448,7 +2509,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             keep_last=args.keep_last,
             max_chars=args.max_chars,
         )
-        print(f"{session.session_id}\tmessages={len(session.messages)}\tsummaries={len(session.summaries)}")
+        print(
+            f"{session.session_id}\t{_label(translator, 'messages', 'messages')}={len(session.messages)}"
+            f"\t{_label(translator, 'summaries', 'summaries')}={len(session.summaries)}"
+        )
         return 0
 
     if args.command == "skill-list":
@@ -2496,15 +2560,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             roots.append(Path(codex_home) / "skills")
         skill = SkillStore(roots).get(args.name)
         if skill is None:
-            raise KeyError(f"skill not found: {args.name}")
+            raise KeyError(_txt(translator, "cli.error.skill_not_found", "skill not found: {name}", name=args.name))
         if args.json:
             print_json(skill.to_dict())
         else:
-            print(f"name: {skill.name}")
-            print(f"path: {skill.path}")
-            print(f"run_as: {skill.run_as}")
-            print(f"allowed_tools: {', '.join(skill.allowed_tools)}")
-            print(f"description: {skill.description}")
+            print(_kv(translator, "name", "name", skill.name))
+            print(_kv(translator, "path", "path", skill.path))
+            print(_kv(translator, "run_as", "run_as", skill.run_as))
+            print(_kv(translator, "allowed_tools", "allowed_tools", ", ".join(skill.allowed_tools)))
+            print(_kv(translator, "description", "description", skill.description))
         return 0
 
     if args.command == "skill-install":
@@ -2517,8 +2581,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(skill.to_dict())
         else:
-            print(f"installed: {skill.name}")
-            print(f"path: {skill.path}")
+            print(_kv(translator, "installed", "installed", skill.name))
+            print(_kv(translator, "path", "path", skill.path))
         return 0
 
     if args.command == "skill-bundles":
@@ -2593,13 +2657,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"skill: {skill.name}")
-            print(f"status: {run.status}")
-            print(f"action_run: {payload['action_run']}")
+            print(_kv(translator, "skill", "skill", skill.name))
+            print(_kv(translator, "status", "status", run.status))
+            print(_kv(translator, "action_run", "action_run", payload["action_run"]))
             if run.final_response:
                 print(run.final_response)
             for warning in run.warnings:
-                print(f"warning: {warning}")
+                print(_warning(translator, warning))
         return 0
 
     if args.command == "mcp-add":
@@ -2611,7 +2675,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             description=args.description,
         )
         mcp_store.upsert(server)
-        print(f"registered MCP server: {server.name}")
+        print(_txt(translator, "cli.output.registered_mcp_server", "registered MCP server: {name}", name=server.name))
         return 0
 
     if args.command == "mcp-list":
@@ -2627,7 +2691,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         payload = mcp_store.export_client_config()
         if args.output:
             write_json(Path(args.output), payload)
-            print(f"Wrote MCP config: {args.output}")
+            print(_txt(translator, "cli.output.wrote_mcp_config", "Wrote MCP config: {path}", path=args.output))
         else:
             print_json(payload)
         return 0
@@ -2639,7 +2703,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 matched = server
                 break
         if matched is None:
-            raise KeyError(f"MCP server not found: {args.name}")
+            raise KeyError(_txt(translator, "cli.error.mcp_server_not_found", "MCP server not found: {name}", name=args.name))
         payload = {
             **matched.to_dict(),
             "runtime_client": "not_connected",
@@ -2648,10 +2712,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"name: {matched.name}")
-            print(f"enabled: {matched.enabled}")
-            print(f"command: {matched.command} {' '.join(matched.args)}")
-            print("runtime_client: not_connected")
+            print(_kv(translator, "name", "name", matched.name))
+            print(_kv(translator, "enabled", "enabled", matched.enabled))
+            print(_kv(translator, "command", "command", f"{matched.command} {' '.join(matched.args)}"))
+            print(_kv(translator, "runtime_client", "runtime_client", _txt(translator, "cli.value.not_connected", "not_connected")))
         return 0
 
     if args.command == "mcp-health":
@@ -2670,7 +2734,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print_json(payload)
         else:
             if not payload["servers"]:
-                print("no MCP servers")
+                print(_txt(translator, "cli.output.no_mcp_servers", "no MCP servers"))
             for server in payload["servers"]:
                 print(f"{server['name']}\t{server['enabled']}\t{server['health']}\t{server['runtime_client']}")
         return 0
@@ -2690,14 +2754,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print_json(payload)
         else:
-            print(f"index: {store.path}")
-            print(f"documents: {len(payload['documents'])}")
-            print(f"engine: {payload['engine']}")
+            print(_kv(translator, "index", "index", store.path))
+            print(_kv(translator, "documents", "documents", len(payload["documents"])))
+            print(_kv(translator, "engine", "engine", payload["engine"]))
         return 0
 
     if args.command == "obsidian-index":
         notes = obsidian_store.index(Path(args.vault))
-        print(f"indexed notes: {len(notes)}")
+        print(_txt(translator, "cli.output.indexed_notes", "indexed notes: {count}", count=len(notes)))
         return 0
 
     if args.command == "obsidian-search":
@@ -2767,7 +2831,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "实验 YAML、光谱报告和推荐报告已生成。",
             "下一步可运行 run-baseline 命令执行训练。",
         )
-        print(f"Wrote plan: {args.output}")
+        print(_txt(translator, "cli.output.wrote_plan", "Wrote plan: {path}", path=args.output))
         return 0
 
     if args.command == "run-baseline":
@@ -2782,7 +2846,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"结果已写入 {result.experiment_dir}/result.json。",
             "下一步可运行 report 命令生成 Markdown 报告。",
         )
-        print(f"Wrote result: {Path(result.experiment_dir) / 'result.json'}")
+        print(_txt(translator, "cli.output.wrote_result", "Wrote result: {path}", path=Path(result.experiment_dir) / "result.json"))
         return 0
 
     if args.command == "run-suite":
@@ -2804,10 +2868,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"suite.json 已写入 {Path(suite.output_dir) / 'suite.json'}。",
             "下一步可把 suite 结果交给 experiment-cycle 或模块消融流程作为稳定性依据。",
         )
-        print(f"Wrote suite: {Path(suite.output_dir) / 'suite.json'}")
-        print(f"report: {Path(suite.output_dir) / 'suite_report.md'}")
-        print(f"oa_mean: {summary['mean']:.4f}")
-        print(f"oa_std: {summary['std']:.4f}")
+        print(_txt(translator, "cli.output.wrote_suite", "Wrote suite: {path}", path=Path(suite.output_dir) / "suite.json"))
+        print(_kv(translator, "report", "report", Path(suite.output_dir) / "suite_report.md"))
+        print(_kv(translator, "oa_mean", "oa_mean", f"{summary['mean']:.4f}"))
+        print(_kv(translator, "oa_std", "oa_std", f"{summary['std']:.4f}"))
         return 0
 
     if args.command == "report":
@@ -2823,7 +2887,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "端到端流程已形成可复现实验记录。",
             "下一步可扩展真实数据集和更多模型。",
         )
-        print(f"Wrote report: {report_path}")
+        print(_txt(translator, "cli.output.wrote_report", "Wrote report: {path}", path=report_path))
         return 0
 
     if args.command == "demo":
@@ -2850,7 +2914,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "audit、spectral report、recommendation、experiment YAML、result 和 report 均已生成。",
             "下一步运行单元测试与解耦性检查。",
         )
-        print(f"Demo complete: {report_path}")
+        print(_txt(translator, "cli.output.demo_complete", "Demo complete: {path}", path=report_path))
         return 0
 
     if args.command == "literature":
@@ -2871,7 +2935,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "文献 JSON 已生成。",
             "下一步可运行 propose-module 结合文献生成模块建议。",
         )
-        print(f"Wrote literature results: {args.output}")
+        print(_txt(translator, "cli.output.wrote_literature", "Wrote literature results: {path}", path=args.output))
         return 0
 
     if args.command == "auto-experiment":
@@ -2895,7 +2959,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "自动实验候选已生成。",
             "下一步可选择候选并 materialize 为具体 ExperimentPlan。",
         )
-        print(f"Wrote auto-experiment agenda: {args.output}")
+        print(_txt(translator, "cli.output.wrote_auto_experiment_agenda", "Wrote auto-experiment agenda: {path}", path=args.output))
         return 0
 
     if args.command == "tune-next":
@@ -2913,7 +2977,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "下一轮实验参数依据已生成。",
             "下一步可将建议应用到新的 ExperimentPlan。",
         )
-        print(f"Wrote tuning proposals: {args.output}")
+        print(_txt(translator, "cli.output.wrote_tuning_proposals", "Wrote tuning proposals: {path}", path=args.output))
         return 0
 
     if args.command == "experiment-cycle":
@@ -2970,24 +3034,24 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"cycle 状态为 {cycle.status}。",
             "下一步可查看 cycle.json、运行 next_experiment.yaml，或继续开启下一轮 experiment-cycle。",
         )
-        print(f"cycle_id: {cycle.cycle_id}")
-        print(f"status: {cycle.status}")
-        print(f"diagnosis: {cycle.diagnosis_path}")
-        print(f"proposals: {cycle.proposals_path}")
-        print(f"council: {cycle.council_path}")
+        print(_kv(translator, "cycle_id", "cycle_id", cycle.cycle_id))
+        print(_kv(translator, "status", "status", cycle.status))
+        print(_kv(translator, "diagnosis", "diagnosis", cycle.diagnosis_path))
+        print(_kv(translator, "proposals", "proposals", cycle.proposals_path))
+        print(_kv(translator, "council", "council", cycle.council_path))
         if cycle.council_run_path:
-            print(f"council_run: {cycle.council_run_path}")
-        print(f"next_plan: {cycle.next_plan_path}")
+            print(_kv(translator, "council_run", "council_run", cycle.council_run_path))
+        print(_kv(translator, "next_plan", "next_plan", cycle.next_plan_path))
         if cycle.pause_reason:
-            print(f"pause_reason: {cycle.pause_reason}")
+            print(_kv(translator, "pause_reason", "pause_reason", cycle.pause_reason))
             if cycle.pause_details:
-                print(f"pause_details: {cycle.pause_details}")
+                print(_kv(translator, "pause_details", "pause_details", cycle.pause_details))
         if cycle.next_result_path:
-            print(f"next_result: {cycle.next_result_path}")
+            print(_kv(translator, "next_result", "next_result", cycle.next_result_path))
         if cycle.report_path:
-            print(f"report: {cycle.report_path}")
+            print(_kv(translator, "report", "report", cycle.report_path))
         for warning in cycle.warnings:
-            print(f"warning: {warning}")
+            print(_warning(translator, warning))
         return 0
 
     if args.command == "propose-module":
@@ -3010,7 +3074,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "模块设计依据已结构化保存。",
             "下一步可按建议新增模型 factory 并做消融实验。",
         )
-        print(f"Wrote module proposal: {args.output}")
+        print(_txt(translator, "cli.output.wrote_module_proposal", "Wrote module proposal: {path}", path=args.output))
         return 0
 
     raise ValueError(f"Unsupported command: {args.command}")
@@ -3136,16 +3200,17 @@ def resolve_llm_model(args: argparse.Namespace) -> Optional[str]:
     return profile.model if profile else None
 
 
-def print_profile(profile: dict) -> None:
+def print_profile(profile: dict, translator: Optional[Translator] = None) -> None:
     print(
-        f"{profile['name']}: model={profile['model']} "
-        f"thinking={profile['thinking']} effort={profile['reasoning_effort']}"
+        f"{profile['name']}: {_label(translator, 'model', 'model')}={profile['model']} "
+        f"{_label(translator, 'thinking', 'thinking')}={profile['thinking']} "
+        f"{_label(translator, 'reasoning_effort', 'effort')}={profile['reasoning_effort']}"
     )
-    print(f"  intent: {profile['intent']}")
+    print(f"  {_label(translator, 'intent', 'intent')}: {profile['intent']}")
     if profile.get("use_cases"):
-        print("  use_cases: " + ", ".join(profile["use_cases"]))
+        print(f"  {_label(translator, 'use_cases', 'use_cases')}: " + ", ".join(profile["use_cases"]))
     if profile.get("cache_policy"):
-        print("  cache_policy: " + " | ".join(profile["cache_policy"]))
+        print(f"  {_label(translator, 'cache_policy', 'cache_policy')}: " + " | ".join(profile["cache_policy"]))
 
 
 def parse_json_object(value: Optional[str], flag_name: str) -> dict:
@@ -3158,11 +3223,18 @@ def parse_json_object(value: Optional[str], flag_name: str) -> dict:
 
 
 def confirm_tool_permission(request) -> bool:
+    translator = _ACTIVE_TRANSLATOR
     print(
-        f"permission requested: {request.tool_name} "
-        f"risk={request.risk_level} reason={request.reason}"
+        _txt(
+            translator,
+            "cli.output.permission_requested",
+            "permission requested: {tool_name} risk={risk_level} reason={reason}",
+            tool_name=request.tool_name,
+            risk_level=request.risk_level,
+            reason=request.reason,
+        )
     )
-    answer = input("allow? [y/N] ").strip().lower()
+    answer = input(_txt(translator, "cli.output.allow_prompt", "allow? [y/N] ")).strip().lower()
     return answer in {"y", "yes"}
 
 

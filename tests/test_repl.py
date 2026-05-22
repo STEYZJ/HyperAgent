@@ -39,7 +39,7 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertEqual(repl.run(), 0)
             text = "\n".join(outputs)
             self.assertIn("HyperAgent interactive mode", text)
-            self.assertIn("initialized: True", text)
+            self.assertIn("initialized: true", text)
             self.assertIn("should_compress:", text)
             self.assertIn("Available local tools", text)
 

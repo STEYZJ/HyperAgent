@@ -144,8 +144,8 @@ class CodingAgentTest(unittest.TestCase):
                             0,
                         )
                 output = buffer.getvalue()
-                self.assertIn("run_id:", output)
-                self.assertIn("plan:", output)
+                self.assertIn("运行 ID:", output)
+                self.assertIn("计划:", output)
             finally:
                 os.chdir(old_cwd)
 
