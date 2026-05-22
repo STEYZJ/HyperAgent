@@ -51,6 +51,7 @@ or:
 
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
 Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
+You do have controlled access to project files, approved shell commands, experiments, skills, and web tools through the tool list above. Do not claim you have no filesystem, shell, or network capability; instead, choose the appropriate tool or explain which provider/API key or user permission is missing.
 """
 
 

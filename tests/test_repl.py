@@ -10,7 +10,7 @@ from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.runtime.wait_indicator import NullWaitIndicator
 from hyperagent.runtime.workspace import HyperAgentWorkspace
-from hyperagent.schemas import AgentTurnResult, AgentTurnTiming, LLMResponse
+from hyperagent.schemas import AgentActionRun, AgentTurnResult, AgentTurnTiming, LLMResponse
 
 
 PROMPT_ROOT = Path(__file__).resolve().parents[1] / "hyperagent" / "prompts"
@@ -133,6 +133,108 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertIn("permission requested: run_command", text)
             self.assertIn("status: blocked", text)
             self.assertIn("permission denied by user", text)
+
+    def test_plain_chat_auto_routes_tool_intent_to_action_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+            calls = []
+
+            class FakeActionLoop:
+                def __init__(self, *args, **kwargs):
+                    calls.append({"init": kwargs})
+
+                def run(self, session_id, provider, instruction, **kwargs):
+                    calls.append(
+                        {
+                            "session_id": session_id,
+                            "provider": provider,
+                            "instruction": instruction,
+                            "kwargs": kwargs,
+                        }
+                    )
+                    return AgentActionRun(
+                        run_id="run-1",
+                        session_id=session_id,
+                        provider=provider,
+                        model="deepseek-chat",
+                        instruction=instruction,
+                        created_at="2026-05-22T00:00:00Z",
+                        run_dir=str(workspace.workspace_dir / "agent_action_runs" / "run-1"),
+                        status="completed",
+                        final_response="已通过受控工具闭环处理。",
+                    )
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                permission_policy="session-ask",
+                output_func=outputs.append,
+                wait_indicator_factory=NullWaitIndicator,
+            )
+
+            with patch("hyperagent.runtime.repl.AgentActionLoop", FakeActionLoop):
+                repl._chat("请联网搜索最新高光谱分类论文")
+
+            text = "\n".join(outputs)
+            self.assertIn("Detected a tool-capable request", text)
+            self.assertIn("[action-run] run-1", text)
+            self.assertEqual(calls[1]["instruction"], "请联网搜索最新高光谱分类论文")
+            self.assertTrue(calls[0]["init"]["tool_executor"].allow_arbitrary_commands)
+
+    def test_plain_chat_without_tool_intent_uses_text_agent_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+            calls = []
+
+            class FakeAgentLoop:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def run(self, **kwargs):
+                    calls.append(kwargs)
+                    return AgentTurnResult(
+                        session_id=kwargs["session_id"],
+                        provider="deepseek",
+                        model="deepseek-chat",
+                        mode="research",
+                        task_id=None,
+                        response=LLMResponse(
+                            provider="deepseek",
+                            model="deepseek-chat",
+                            content="普通回答",
+                            reasoning_content="",
+                        ),
+                        context_message_count=2,
+                        context_chars=12,
+                    )
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                output_func=outputs.append,
+                wait_indicator_factory=NullWaitIndicator,
+            )
+
+            with patch("hyperagent.runtime.repl.AgentLoop", FakeAgentLoop):
+                repl._chat("解释一下 OA 和 Kappa 的区别")
+
+            self.assertEqual(len(calls), 1)
+            self.assertIn("普通回答", "\n".join(outputs))
+            self.assertNotIn("controlled action loop", "\n".join(outputs))
 
     def test_context_status_triggers_compression(self):
         with tempfile.TemporaryDirectory() as tmp:

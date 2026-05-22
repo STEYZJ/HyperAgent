@@ -312,6 +312,16 @@ class HyperAgentRepl:
 
     def _chat(self, message: str) -> None:
         self.last_user_message = message
+        if self._should_auto_action(message):
+            self._emit(
+                "system",
+                self._t(
+                    "repl.auto_action_route",
+                    "Detected a tool-capable request; switching to the controlled action loop.",
+                ),
+            )
+            self._act(message)
+            return
 
         def turn():
             return AgentLoop(
@@ -349,6 +359,52 @@ class HyperAgentRepl:
         if result.response.content:
             self._emit("assistant", result.response.content)
 
+    def _should_auto_action(self, message: str) -> bool:
+        text = str(message or "").strip().lower()
+        if not text:
+            return False
+        triggers = [
+            "http://",
+            "https://",
+            "联网",
+            "上网",
+            "网页",
+            "搜索",
+            "检索",
+            "爬取",
+            "下载",
+            "安装",
+            "读取文件",
+            "读文件",
+            "查看文件",
+            "文件系统",
+            "执行 shell",
+            "执行命令",
+            "运行命令",
+            "终端",
+            "shell",
+            "bash",
+            "git ",
+            "pip ",
+            "conda ",
+            "npm ",
+            "运行测试",
+            "跑测试",
+            "运行实验",
+            "跑实验",
+            "run experiment",
+            "run tests",
+            "read file",
+            "search web",
+            "web search",
+            "fetch url",
+            "install ",
+            "download ",
+            "execute ",
+            "run command",
+        ]
+        return any(trigger in text for trigger in triggers)
+
     def _act(self, instruction: str) -> None:
         if not instruction:
             self.output(self._t("repl.usage.act", "usage: /act <instruction>"))
@@ -366,6 +422,7 @@ class HyperAgentRepl:
                 permission_policy=self.permission_policy,
                 permission_callback=self._confirm_permission,
                 session_permission_cache=self.permission_cache,
+                allow_arbitrary_commands=self.permission_policy in {"ask", "session-ask"},
                 hook_engine=self.hooks,
             ),
         ).run(
