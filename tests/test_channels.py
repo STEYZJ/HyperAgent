@@ -174,6 +174,24 @@ class ChannelGatewayTest(unittest.TestCase):
             self.assertEqual(result.status, "error")
             self.assertIn("token", result.error)
 
+    def test_missing_feishu_verification_token_env_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.environ.pop("FEISHU_VERIFICATION_TOKEN", None)
+            try:
+                router, _store, _conversations = self._router(Path(tmp))
+                payload = _feishu_event("hello", token="token")
+                result = router.handle_webhook(
+                    "feishu",
+                    payload,
+                    headers={},
+                    body=json.dumps(payload).encode("utf-8"),
+                )
+                self.assertEqual(result.status, "error")
+                self.assertIn("FEISHU_VERIFICATION_TOKEN", result.error)
+            finally:
+                if old is not None:
+                    os.environ["FEISHU_VERIFICATION_TOKEN"] = old
+
     def test_disabled_provider_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             router, store, _conversations = self._router(Path(tmp))
@@ -216,6 +234,24 @@ class ChannelGatewayTest(unittest.TestCase):
             self.assertIn("QQ_BOT_TOKEN", text)
             self.assertNotIn("secret-token-value", text)
             self.assertEqual(data["channels"][1]["access_token_env"], "QQ_BOT_TOKEN")
+
+    def test_env_configured_summary_reports_only_booleans(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_token = os.environ.get("FEISHU_VERIFICATION_TOKEN")
+            os.environ["FEISHU_VERIFICATION_TOKEN"] = "secret-token-value"
+            try:
+                store = ChannelConfigStore(Path(tmp) / ".hyperagent")
+                store.init_provider("feishu")
+                summary = store.env_configured_summary()["feishu"]
+
+                self.assertTrue(summary["FEISHU_VERIFICATION_TOKEN"])
+                self.assertFalse(summary["FEISHU_APP_ID"])
+                self.assertNotIn("secret-token-value", json.dumps(summary))
+            finally:
+                if old_token is None:
+                    os.environ.pop("FEISHU_VERIFICATION_TOKEN", None)
+                else:
+                    os.environ["FEISHU_VERIFICATION_TOKEN"] = old_token
 
     def test_channel_router_does_not_expose_local_tool_loops(self):
         root = Path(__file__).resolve().parents[1]

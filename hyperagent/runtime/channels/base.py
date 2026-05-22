@@ -76,6 +76,8 @@ def verify_token(
     candidates: Iterable[Optional[str]],
 ) -> Optional[str]:
     expected = env_value(config.verification_token_env)
+    if config.verification_token_env and not expected:
+        return f"verification token env is not configured: {config.verification_token_env}"
     if not expected:
         return None
     for candidate in candidates:

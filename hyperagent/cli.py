@@ -1067,6 +1067,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         configs = channel_store.ensure_defaults()
         registry = register_builtin_channel_platforms()
         env_summary = channel_store.env_summary()
+        env_configured = channel_store.env_configured_summary()
         payload = {
             "channels": [
                 {
@@ -1077,6 +1078,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "default_model": item.default_model,
                     "default_mode": item.default_mode,
                     "env_vars": env_summary.get(item.provider, []),
+                    "env_configured": env_configured.get(item.provider, {}),
                     "chat_query_only": True,
                 }
                 for item in configs
@@ -1092,6 +1094,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"llm={item['default_llm_provider']}\tmode={item['default_mode']}"
                 )
                 print(f"  env: {', '.join(item['env_vars'])}")
+                missing = [
+                    name for name, configured in item["env_configured"].items() if not configured
+                ]
+                if missing:
+                    print(f"  missing_env: {', '.join(missing)}")
             print("platforms:")
             for item in payload["platforms"]:
                 print(

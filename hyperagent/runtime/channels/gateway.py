@@ -31,6 +31,8 @@ def create_channel_app(router: ChannelRouter, config_store: ChannelConfigStore):
     @app.get("/channels")
     def channels() -> Dict[str, object]:
         configs = config_store.ensure_defaults()
+        env_summary = config_store.env_summary()
+        env_configured = config_store.env_configured_summary()
         return {
             "channels": [
                 {
@@ -40,7 +42,8 @@ def create_channel_app(router: ChannelRouter, config_store: ChannelConfigStore):
                     "default_llm_provider": item.default_llm_provider,
                     "default_model": item.default_model,
                     "default_mode": item.default_mode,
-                    "env_vars": config_store.env_summary().get(item.provider, []),
+                    "env_vars": env_summary.get(item.provider, []),
+                    "env_configured": env_configured.get(item.provider, {}),
                     "chat_query_only": True,
                 }
                 for item in configs

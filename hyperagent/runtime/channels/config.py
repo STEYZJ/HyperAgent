@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -121,3 +122,9 @@ class ChannelConfigStore:
             ]
             summary[config.provider] = sorted({name for name in names if name})
         return summary
+
+    def env_configured_summary(self) -> Dict[str, Dict[str, bool]]:
+        return {
+            provider: {name: bool(os.environ.get(name, "").strip()) for name in names}
+            for provider, names in self.env_summary().items()
+        }
