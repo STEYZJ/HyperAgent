@@ -108,6 +108,7 @@ BOOLEAN_FLAGS = {
     "--include-archived",
     "--hard",
     "--dry-run",
+    "--yes",
     "--list",
 }
 

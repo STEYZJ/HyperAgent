@@ -104,6 +104,13 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         parallel_safe=True,
         description="Run a SKILL.md skill inline or as a subagent.",
     ),
+    "install_skill": ToolMetadata(
+        name="install_skill",
+        risk_level="network/write",
+        mutating=True,
+        parallel_safe=False,
+        description="Preflight or install a third-party SKILL.md skill from a local path or GitHub source.",
+    ),
     "framework_command": ToolMetadata(
         name="framework_command",
         risk_level="read",
@@ -744,6 +751,92 @@ class SafeAgentToolExecutor:
                 warnings=["framework_command failed"],
             )
 
+    def install_skill(
+        self,
+        *,
+        path: str = "",
+        repo: str = "",
+        skill_path: str = "",
+        url: str = "",
+        ref: str = "main",
+        name: str = "",
+        force: bool = False,
+        dry_run: bool = True,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "install_skill",
+            {
+                "path": path,
+                "repo": repo,
+                "skill_path": skill_path,
+                "url": url,
+                "ref": ref,
+                "name": name,
+                "force": force,
+                "dry_run": dry_run,
+            },
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        source_count = sum(1 for value in (path, repo, url) if str(value or "").strip())
+        if source_count != 1:
+            return self._record(
+                call,
+                "error",
+                "provide exactly one skill source: path, repo, or url",
+                warnings=["invalid install_skill source"],
+            )
+        if repo and not skill_path:
+            return self._record(
+                call,
+                "error",
+                "repo installs require skill_path",
+                warnings=["install_skill repo source is incomplete"],
+            )
+        needs_network = bool(repo or url)
+        if needs_network or not dry_run:
+            permission = self._check_permission(
+                call,
+                risk_level="network/write" if needs_network else "write",
+                reason=(
+                    "download and install a third-party SKILL.md"
+                    if not dry_run
+                    else "download third-party SKILL.md metadata for preflight"
+                ),
+            )
+            if permission is not None:
+                return permission
+        try:
+            from hyperagent.runtime.skill_installer import SkillInstaller
+
+            result = SkillInstaller().install_from_request(
+                path=path,
+                repo=repo,
+                skill_path=skill_path,
+                url=url,
+                ref=ref,
+                name=name,
+                force=force,
+                dry_run=dry_run,
+            )
+            status = "ok" if result.status in {"planned", "installed"} else result.status
+            return self._record(
+                call,
+                status,
+                json.dumps(result.to_dict(), ensure_ascii=False, indent=2),
+                warnings=list(result.plan.warnings) + list(result.plan.blocked_reasons),
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["install_skill failed"],
+            )
+
     def web_search(
         self,
         query: str,
@@ -1188,10 +1281,8 @@ class SafeAgentToolExecutor:
     ) -> Optional[AgentToolResult]:
         if self.permission_policy == "auto" or risk_level == "read":
             return None
-        if self.permission_policy == "deny-write" and risk_level not in {
-            "write",
-            "training",
-        }:
+        write_like = any(marker in str(risk_level).split("/") for marker in {"write", "training"})
+        if self.permission_policy == "deny-write" and not write_like:
             return None
         request = ToolPermissionRequest(
             tool_name=call.tool_name,
@@ -1202,7 +1293,7 @@ class SafeAgentToolExecutor:
         )
         if self.permission_policy == "deny" or (
             self.permission_policy == "deny-write"
-            and risk_level in {"write", "training"}
+            and write_like
         ):
             return self._record(
                 call,

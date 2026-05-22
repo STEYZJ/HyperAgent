@@ -31,6 +31,11 @@ from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.skill_installer import (
+    SkillInstaller,
+    format_install_plan,
+    format_install_result,
+)
 from hyperagent.runtime.slash_registry import grouped_help
 from hyperagent.runtime.deepseek_reasonix import (
     get_reasonix_profile,
@@ -1315,6 +1320,9 @@ class HyperAgentRepl:
             if not self._run_skill_by_name(args[1], args[2:]):
                 self.output(self._t("cli.error.skill_not_found", "skill not found: {name}", name=args[1]))
             return
+        if args and args[0] == "install":
+            self._skill_install(args[1:])
+            return
         if args and args[0] not in {"list", "browse", "inspect", "install", "bundles"}:
             if self._run_skill_by_name(args[0], args[1:]):
                 return
@@ -1341,6 +1349,96 @@ class HyperAgentRepl:
             f"  {self._t('repl.skills.use', 'use')}: /skill {getattr(skill, 'name', '')} <instruction> "
             f"{self._t('repl.skills.or', 'or')} /{getattr(skill, 'name', '')} <instruction>"
         )
+
+    def _skill_install(self, args: List[str]) -> None:
+        try:
+            options = self._parse_skill_install_args(args)
+        except ValueError as exc:
+            self.output(str(exc))
+            self.output(
+                "usage: /skill install --path <local-skill> | "
+                "--repo owner/repo --skill-path skills/foo | "
+                "--url https://github.com/owner/repo/tree/main/skills/foo "
+                "[--name name] [--force] [--dry-run] [--yes]"
+            )
+            return
+        installer = SkillInstaller()
+        needs_network = bool(options["repo"] or options["url"])
+        if needs_network and not options["yes"]:
+            approved = self._confirm_permission(
+                ToolPermissionRequest(
+                    tool_name="install_skill",
+                    args={k: v for k, v in options.items() if k not in {"yes"}},
+                    risk_level="network/write",
+                    reason="download third-party skill metadata for preflight",
+                    run_id=None,
+                )
+            )
+            if not approved:
+                self._emit("tool", "status: blocked\nmessage: skill install preflight denied")
+                return
+        try:
+            preview = installer.install_from_request(**self._skill_install_request(options), dry_run=True)
+        except Exception as exc:
+            self._emit("error", f"skill install preflight failed: {type(exc).__name__}: {exc}")
+            return
+        self._emit("tool", format_install_plan(preview.plan))
+        if options["dry_run"]:
+            return
+        if preview.plan.blocked:
+            self._emit("tool", preview.message)
+            return
+        if not options["yes"]:
+            approved = self._confirm_permission(
+                ToolPermissionRequest(
+                    tool_name="install_skill",
+                    args={k: v for k, v in options.items() if k not in {"yes"}},
+                    risk_level="network/write" if needs_network else "write",
+                    reason="install third-party SKILL.md into the user skill directory",
+                    run_id=None,
+                )
+            )
+            if not approved:
+                self._emit("tool", "status: blocked\nmessage: skill installation denied")
+                return
+        result = installer.install_from_request(**self._skill_install_request(options), dry_run=False)
+        self._emit("tool", format_install_result(result))
+
+    def _parse_skill_install_args(self, args: List[str]) -> Dict[str, object]:
+        options: Dict[str, object] = {
+            "path": "",
+            "repo": "",
+            "skill_path": "",
+            "url": "",
+            "ref": "main",
+            "name": "",
+            "force": False,
+            "dry_run": False,
+            "yes": False,
+        }
+        index = 0
+        while index < len(args):
+            token = args[index]
+            if token in {"--force", "--dry-run", "--yes"}:
+                options[token[2:].replace("-", "_")] = True
+                index += 1
+                continue
+            if token in {"--path", "--repo", "--skill-path", "--url", "--ref", "--name"}:
+                if index + 1 >= len(args):
+                    raise ValueError(f"{token} requires a value")
+                options[token[2:].replace("-", "_")] = args[index + 1]
+                index += 2
+                continue
+            raise ValueError(f"unknown skill-install argument: {token}")
+        source_count = sum(1 for key in ("path", "repo", "url") if options[key])
+        if source_count != 1:
+            raise ValueError("provide exactly one skill source: --path, --repo, or --url")
+        if options["repo"] and not options["skill_path"]:
+            raise ValueError("--repo requires --skill-path")
+        return options
+
+    def _skill_install_request(self, options: Dict[str, object]) -> Dict[str, object]:
+        return {key: value for key, value in options.items() if key not in {"yes", "dry_run"}}
 
     def _truncate(self, text: str, limit: int) -> str:
         clean = " ".join(str(text or "").split())

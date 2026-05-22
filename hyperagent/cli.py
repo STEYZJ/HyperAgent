@@ -55,6 +55,11 @@ from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.skill_installer import (
+    SkillInstaller,
+    format_install_plan,
+    format_install_result,
+)
 from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.runtime.semantic_index import SemanticIndexStore
@@ -944,10 +949,17 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
     skill_install = subparsers.add_parser(
         "skill-install",
-        help="Install a local SKILL.md directory into this workspace",
+        help=_txt(translator, "cli.command.skill_install.help", "Install a third-party SKILL.md skill"),
     )
-    skill_install.add_argument("--path", required=True)
-    skill_install.add_argument("--name", default="")
+    skill_install.add_argument("--path", default="", help=_txt(translator, "cli.arg.skill_install.path", "Local skill directory or SKILL.md path"))
+    skill_install.add_argument("--repo", default="", help=_txt(translator, "cli.arg.skill_install.repo", "GitHub repo in owner/repo form"))
+    skill_install.add_argument("--skill-path", default="", help=_txt(translator, "cli.arg.skill_install.skill_path", "Path to the skill directory inside the GitHub repo"))
+    skill_install.add_argument("--url", default="", help=_txt(translator, "cli.arg.skill_install.url", "GitHub tree URL for a skill directory"))
+    skill_install.add_argument("--ref", default="main", help=_txt(translator, "cli.arg.skill_install.ref", "Git ref, branch, or tag"))
+    skill_install.add_argument("--name", default="", help=_txt(translator, "cli.arg.skill_install.name", "Override installed skill name"))
+    skill_install.add_argument("--force", action="store_true", help=_txt(translator, "cli.arg.skill_install.force", "Overwrite an existing installed skill"))
+    skill_install.add_argument("--dry-run", action="store_true", help=_txt(translator, "cli.arg.skill_install.dry_run", "Only run preflight checks; do not write files"))
+    skill_install.add_argument("--yes", action="store_true", help=_txt(translator, "cli.arg.skill_install.yes", "Confirm installation without an interactive prompt"))
     skill_install.add_argument("--json", action="store_true")
 
     skill_bundles = subparsers.add_parser("skill-bundles", help="List skill bundles")
@@ -2608,18 +2620,59 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "skill-install":
-        store = SkillStore([Path(args.path)])
-        skill = store.install(
-            Path(args.path),
-            workspace.workspace_dir / "skills",
+        sources = [bool(args.path), bool(args.repo), bool(args.url)]
+        if sum(1 for item in sources if item) != 1:
+            raise ValueError("provide exactly one skill source: --path, --repo, or --url")
+        if args.repo and not args.skill_path:
+            raise ValueError("--repo requires --skill-path")
+        installer = SkillInstaller()
+        preview = installer.install_from_request(
+            path=args.path,
+            repo=args.repo,
+            skill_path=args.skill_path,
+            url=args.url,
+            ref=args.ref,
             name=args.name,
+            force=args.force,
+            dry_run=True,
         )
         if args.json:
-            print_json(skill.to_dict())
+            if args.dry_run:
+                print_json(preview.to_dict())
+                return 0
         else:
-            print(_kv(translator, "installed", "installed", skill.name))
-            print(_kv(translator, "path", "path", skill.path))
-        return 0
+            print(format_install_plan(preview.plan))
+        if args.dry_run:
+            if args.json:
+                print_json(preview.to_dict())
+            return 0
+        if preview.plan.blocked:
+            if args.json:
+                print_json(preview.to_dict())
+            else:
+                print(preview.message)
+            return 2
+        if not args.yes:
+            if not sys.stdin.isatty():
+                raise PermissionError("skill-install requires --yes in non-interactive mode")
+            answer = input("Install this skill? [y/N] ").strip().lower()
+            if answer not in {"y", "yes"}:
+                raise PermissionError("skill installation cancelled")
+        result = installer.install_from_request(
+            path=args.path,
+            repo=args.repo,
+            skill_path=args.skill_path,
+            url=args.url,
+            ref=args.ref,
+            name=args.name,
+            force=args.force,
+            dry_run=False,
+        )
+        if args.json:
+            print_json(result.to_dict())
+        else:
+            print(format_install_result(result))
+        return 0 if result.installed else 2
 
     if args.command == "skill-bundles":
         roots = skill_roots(workspace)

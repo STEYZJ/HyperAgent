@@ -236,6 +236,63 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertIn("Hello HSI", run.steps[0].tool_result.content)
             self.assertIn("Skill directory:", run.steps[0].tool_result.content)
 
+    def test_action_loop_can_preflight_install_skill_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "third-party" / "academic-research-skill"
+            source.mkdir(parents=True)
+            (source / "SKILL.md").write_text(
+                "---\n"
+                "name: academic-research-skill\n"
+                "description: Academic research helper\n"
+                "runAs: inline\n"
+                "---\n"
+                "Study $ARGUMENTS\n",
+                encoding="utf-8",
+            )
+            codex_home = root / "codex-home"
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            session_store = ConversationStore(workspace.workspace_dir)
+            session = session_store.new("install-skill")
+            llm_store = LLMProviderStore(workspace.workspace_dir)
+            fake_client = FakeLLMClient(
+                [
+                    (
+                        '{"thought": "preflight skill install", "action": "tool", '
+                        '"tool_name": "install_skill", '
+                        '"args": {"path": "'
+                        + str(source)
+                        + '", "dry_run": true}}'
+                    )
+                ]
+            )
+
+            old_codex_home = os.environ.get("CODEX_HOME")
+            os.environ["CODEX_HOME"] = str(codex_home)
+            try:
+                run = AgentActionLoop(
+                    session_store,
+                    llm_store,
+                    workspace,
+                    llm_client=fake_client,
+                ).run(
+                    session.session_id,
+                    provider="deepseek",
+                    instruction="Install academic research skill.",
+                    max_steps=1,
+                )
+            finally:
+                if old_codex_home is None:
+                    os.environ.pop("CODEX_HOME", None)
+                else:
+                    os.environ["CODEX_HOME"] = old_codex_home
+
+            self.assertEqual(run.steps[0].tool_name, "install_skill")
+            self.assertEqual(run.steps[0].tool_result.status, "ok")
+            self.assertIn('"status": "planned"', run.steps[0].tool_result.content)
+            self.assertFalse((codex_home / "skills" / "academic-research-skill").exists())
+
     def test_action_loop_default_requires_permission_for_sensitive_tools(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

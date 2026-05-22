@@ -37,6 +37,7 @@ Allowed tools:
 - run_experiment: {"plan_path": "experiments/demo/experiment.yaml", "seeds": [42, 43], "output_dir": "experiments/demo_suite"}
 - task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2, "max_depth": 1, "max_concurrent": 3, "role": "leaf"}
 - run_skill: {"name": "review-experiment", "instruction": "review reports/result.json", "max_steps": 2}
+- install_skill: {"repo": "owner/repo", "skill_path": "skills/foo", "dry_run": true}
 - framework_command: {"command": "status|usage|web status|mcp status|skills list|worktree|todos|sessions|stats", "args": []}
 - todo_write: {"owner": "project", "items": [{"content": "inspect tests", "status": "in_progress", "priority": "high"}]}
 - check_patch: {"patch_text": "unified diff"}
@@ -62,7 +63,7 @@ or:
 
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
 Use framework_command before answering questions about HyperAgent status, usage/cost, configured providers, web availability, image availability, MCP, skills, commands, sessions, todos, plan mode, IDE context, worktree, hooks, agents, research strategy status, or available framework capabilities.
-When the user asks to list, inspect, install, or choose skills, call framework_command with "skills list" or "skills search". When the user asks to use a known skill, call run_skill with the skill name and the user's instruction instead of explaining the skill manually.
+When the user asks to list, inspect, or choose skills, call framework_command with "skills list" or "skills search". When the user asks to install a third-party skill from a local path, GitHub repo/path, or GitHub URL, call install_skill with dry_run=true first; only install with dry_run=false after human authorization. When the user asks to use a known skill, call run_skill with the skill name and the user's instruction instead of explaining the skill manually.
 When a SKILL.md mentions relative helper scripts such as scripts/list-skills.py, resolve them from the provided Skill directory and call run_command with cwd set to that Skill directory.
 Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
 Sensitive tools such as run_command, run_experiment, apply_patch, todo_write, web_search, web_fetch, web_extract, image_generate, and image_edit may require human authorization. If a tool is blocked for permission, report that approval is needed instead of pretending the capability is unavailable.
@@ -712,6 +713,19 @@ class AgentActionLoop:
                 created_at=utc_now(),
                 content=self._skill_runtime_context(skill, instruction),
                 artifact_path=skill.path,
+            )
+
+        if tool_name == "install_skill":
+            return self.tool_executor.install_skill(
+                path=str(args.get("path", "")),
+                repo=str(args.get("repo", "")),
+                skill_path=str(args.get("skill_path", args.get("skill-path", ""))),
+                url=str(args.get("url", "")),
+                ref=str(args.get("ref", "main")),
+                name=str(args.get("name", "")),
+                force=bool(args.get("force", False)),
+                dry_run=bool(args.get("dry_run", args.get("dry-run", True))),
+                run_id=run_id,
             )
 
         if tool_name in {"research_pattern_search", "experiment_strategy_search", "storytelling_search", "research_taste_search"}:
