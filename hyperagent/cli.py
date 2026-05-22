@@ -498,7 +498,7 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     headless_run.add_argument(
         "--permission",
         choices=["auto", "ask", "session-ask", "deny-write", "deny"],
-        default="auto",
+        default="session-ask",
     )
     add_llm_runtime_args(headless_run, translator)
 
@@ -683,7 +683,7 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     agent_act.add_argument(
         "--permission",
         choices=["auto", "ask", "session-ask", "deny-write", "deny"],
-        default="auto",
+        default="session-ask",
     )
 
     agent_run = subparsers.add_parser(

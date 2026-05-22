@@ -146,6 +146,42 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertIn('"initialized": true', run.steps[0].tool_result.content)
             self.assertEqual(run.final_response, "HyperAgent status was queried.")
 
+    def test_action_loop_default_requires_permission_for_sensitive_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            (root / "hyperagent").mkdir()
+            (root / "hyperagent" / "__init__.py").write_text("", encoding="utf-8")
+            session_store = ConversationStore(workspace.workspace_dir)
+            session = session_store.new("permission")
+            llm_store = LLMProviderStore(workspace.workspace_dir)
+            fake_client = FakeLLMClient(
+                [
+                    (
+                        '{"thought": "compile project", "action": "tool", '
+                        '"tool_name": "run_command", '
+                        '"args": {"argv": ["python", "-m", "compileall", "-q", "hyperagent"]}}'
+                    )
+                ]
+            )
+
+            run = AgentActionLoop(
+                session_store,
+                llm_store,
+                workspace,
+                llm_client=fake_client,
+            ).run(
+                session.session_id,
+                provider="deepseek",
+                instruction="Compile the project.",
+                max_steps=1,
+            )
+
+            self.assertEqual(run.steps[0].tool_name, "run_command")
+            self.assertEqual(run.steps[0].tool_result.status, "blocked")
+            self.assertIn("permission confirmation is required", run.steps[0].tool_result.warnings)
+
 
 if __name__ == "__main__":
     unittest.main()

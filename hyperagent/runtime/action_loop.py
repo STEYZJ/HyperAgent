@@ -53,6 +53,7 @@ or:
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
 Use framework_command before answering questions about HyperAgent status, usage/cost, configured providers, web availability, image availability, MCP, skills, commands, sessions, todos, plan mode, IDE context, worktree, hooks, agents, or available framework capabilities.
 Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
+Sensitive tools such as run_command, run_experiment, apply_patch, todo_write, web_search, web_fetch, web_extract, image_generate, and image_edit may require human authorization. If a tool is blocked for permission, report that approval is needed instead of pretending the capability is unavailable.
 You do have controlled access to project files, approved shell commands, experiments, skills, and web tools through the tool list above. Do not claim you have no filesystem, shell, or network capability; instead, choose the appropriate tool or explain which provider/API key or user permission is missing.
 """
 
@@ -68,7 +69,7 @@ class AgentActionLoop:
         *,
         llm_client: Optional[LLMClient] = None,
         tool_executor: Optional[SafeAgentToolExecutor] = None,
-        permission_policy: str = "auto",
+        permission_policy: str = "session-ask",
         permission_callback: Optional[Any] = None,
     ) -> None:
         self.session_store = session_store
