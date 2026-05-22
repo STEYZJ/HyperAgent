@@ -13,6 +13,15 @@ from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.extensions import RuntimeExtensionStore
+from hyperagent.runtime.feature_state import (
+    FeedbackStore,
+    IDEContextStore,
+    PersonalityStore,
+    PlanModeStore,
+    image_status,
+    web_status,
+    worktree_status,
+)
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.i18n import Translator
@@ -97,6 +106,10 @@ class HyperAgentRepl:
         self.todos = TodoStore(workspace.workspace_dir)
         self.subagents = SubagentRuntimeRegistry(workspace.workspace_dir)
         self.jobs = BackgroundJobStore(workspace.workspace_dir)
+        self.ide_context = IDEContextStore(workspace.workspace_dir)
+        self.plan_mode = PlanModeStore(workspace.workspace_dir)
+        self.personality = PersonalityStore(workspace.workspace_dir)
+        self.feedback = FeedbackStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
@@ -243,7 +256,21 @@ class HyperAgentRepl:
         elif command == "/model":
             self._models()
         elif command == "/mcp":
-            self._mcp()
+            self._mcp(args)
+        elif command == "/ide-context":
+            self._ide_context(args)
+        elif command == "/plan-mode":
+            self._plan_mode(args)
+        elif command == "/personality":
+            self._personality(args)
+        elif command == "/feedback":
+            self._feedback(args)
+        elif command == "/web":
+            self._web(args)
+        elif command == "/image":
+            self._image(args)
+        elif command == "/worktree":
+            self._worktree()
         elif command in {"/skills", "/skill"}:
             self._skills(args)
         elif command == "/checkpoint":
@@ -322,6 +349,9 @@ class HyperAgentRepl:
     def _act(self, instruction: str) -> None:
         if not instruction:
             self.output("usage: /act <instruction>")
+            return
+        if self.plan_mode.load().get("enabled"):
+            self.output("plan-mode is on; tool execution is paused. Use /plan or /plan-mode off.")
             return
         run = AgentActionLoop(
             self.conversations,
@@ -999,13 +1029,182 @@ class HyperAgentRepl:
                 f"{provider.api_key_env}"
             )
 
-    def _mcp(self) -> None:
+    def _mcp(self, args: Optional[List[str]] = None) -> None:
+        args = args or []
         servers = MCPServerStore(self.workspace.workspace_dir).list()
+        if args and args[0] in {"status", "health", "tools"}:
+            self.output(f"mcp servers: {len(servers)}")
+            for server in servers:
+                self.output(f"{server.name}\t{server.enabled}\tregistered\t{server.command}")
+            if not servers:
+                self.output("no MCP servers")
+            return
+        if args and args[0] == "inspect":
+            name = args[1] if len(args) > 1 else ""
+            for server in servers:
+                if server.name == name:
+                    self.output(
+                        f"name: {server.name}\n"
+                        f"enabled: {server.enabled}\n"
+                        f"command: {server.command} {' '.join(server.args)}\n"
+                        "runtime_client: not_connected"
+                    )
+                    return
+            self.output("MCP server not found")
+            return
         if not servers:
             self.output("no MCP servers")
             return
         for server in servers:
             self.output(f"{server.name}\t{server.command}\t{' '.join(server.args)}")
+
+    def _ide_context(self, args: List[str]) -> None:
+        action = args[0] if args else "status"
+        if action == "on":
+            payload = self.ide_context.set_enabled(True)
+        elif action == "off":
+            payload = self.ide_context.set_enabled(False)
+        elif action == "set-open-files":
+            payload = self.ide_context.set_open_files(args[1:])
+        elif action == "clear":
+            payload = self.ide_context.clear()
+        elif action == "status":
+            payload = self.ide_context.load()
+        else:
+            self.output("usage: /ide-context status|on|off|set-open-files|clear")
+            return
+        self.output(
+            f"ide_context: enabled={payload.get('enabled')} "
+            f"open_files={','.join(payload.get('open_files', [])) or 'none'}"
+        )
+
+    def _plan_mode(self, args: List[str]) -> None:
+        action = args[0] if args else "status"
+        if action == "on":
+            payload = self.plan_mode.set_enabled(True, " ".join(args[1:]))
+        elif action == "off":
+            payload = self.plan_mode.set_enabled(False, " ".join(args[1:]))
+        elif action == "status":
+            payload = self.plan_mode.load()
+        else:
+            self.output("usage: /plan-mode status|on|off")
+            return
+        self.output(f"plan_mode: enabled={payload.get('enabled')} reason={payload.get('reason', '')}")
+
+    def _personality(self, args: List[str]) -> None:
+        action = args[0] if args else "status"
+        if action == "set":
+            payload = self.personality.set(" ".join(args[1:]))
+        elif action == "clear":
+            payload = self.personality.clear()
+        elif action == "status":
+            payload = self.personality.load()
+        else:
+            self.output("usage: /personality status|set|clear")
+            return
+        self.output(payload.get("text") or "no personality note")
+
+    def _feedback(self, args: List[str]) -> None:
+        action = args[0] if args else "list"
+        if action == "add":
+            if len(args) < 2:
+                self.output("usage: /feedback add <text>")
+                return
+            self.feedback.add(" ".join(args[1:]), source="repl")
+            self.output("feedback recorded")
+            return
+        if action == "list":
+            items = self.feedback.list()
+            if not items:
+                self.output("no feedback")
+                return
+            for item in items:
+                self.output(f"{item.get('created_at', '')}\t{item.get('text', '')}")
+            return
+        self.output("usage: /feedback add|list")
+
+    def _web(self, args: List[str]) -> None:
+        action = args[0] if args else "status"
+        if action == "status":
+            payload = web_status()
+            self.output(
+                "web:\n"
+                f"- search_configured: {payload['search_configured']}\n"
+                f"- providers: {payload['providers']}\n"
+                "- fetch_available: true"
+            )
+            return
+        executor = SafeAgentToolExecutor(
+            self.workspace.project_root,
+            self.workspace.workspace_dir,
+            permission_policy=self.permission_policy,
+            permission_callback=self._confirm_permission,
+            session_permission_cache=self.permission_cache,
+            hook_engine=self.hooks,
+        )
+        if action == "search":
+            query = " ".join(args[1:]).strip()
+            if not query:
+                self.output("usage: /web search <query>")
+                return
+            result = executor.web_search(query)
+        elif action in {"fetch", "extract"}:
+            if len(args) < 2:
+                self.output(f"usage: /web {action} <url>")
+                return
+            result = (
+                executor.web_fetch(args[1])
+                if action == "fetch"
+                else executor.web_extract(args[1])
+            )
+        elif action == "cite":
+            result = executor.web_cite(args[1] if len(args) > 1 else "")
+        else:
+            self.output("usage: /web status|search <query>|fetch <url>|extract <url>|cite [id]")
+            return
+        self.output(render_tool_result(result))
+
+    def _image(self, args: List[str]) -> None:
+        action = args[0] if args else "status"
+        if action == "status":
+            payload = image_status()
+            self.output(
+                f"image: provider={payload['provider']} configured={payload['configured']} "
+                f"required_env={payload['required_env']}"
+            )
+            return
+        executor = SafeAgentToolExecutor(
+            self.workspace.project_root,
+            self.workspace.workspace_dir,
+            permission_policy=self.permission_policy,
+            permission_callback=self._confirm_permission,
+            session_permission_cache=self.permission_cache,
+            hook_engine=self.hooks,
+        )
+        if action == "generate":
+            prompt = " ".join(args[1:]).strip()
+            if not prompt:
+                self.output("usage: /image generate <prompt>")
+                return
+            result = executor.image_generate(prompt)
+        elif action == "edit":
+            if len(args) < 3:
+                self.output("usage: /image edit <path> <instruction>")
+                return
+            result = executor.image_edit(args[1], " ".join(args[2:]))
+        else:
+            self.output("usage: /image status|generate <prompt>|edit <path> <instruction>")
+            return
+        self.output(render_tool_result(result))
+
+    def _worktree(self) -> None:
+        payload = worktree_status(self.workspace.project_root)
+        self.output(
+            f"branch: {payload['branch']}\n"
+            f"head: {payload['head']}\n"
+            "dirty_files:\n"
+            + "\n".join(f"- {item}" for item in (payload["dirty_files"] or ["none"]))
+        )
 
     def _skills(self, args: Optional[List[str]] = None) -> None:
         args = args or []
@@ -1092,6 +1291,9 @@ class HyperAgentRepl:
         if not args:
             self.output(self._tool_usage())
             return
+        if self.plan_mode.load().get("enabled"):
+            self.output("plan-mode is on; manual tools are paused. Use /plan-mode off.")
+            return
         executor = SafeAgentToolExecutor(
             self.workspace.project_root,
             self.workspace.workspace_dir,
@@ -1129,6 +1331,14 @@ class HyperAgentRepl:
             content = " ".join(rest).strip()
             items = [{"content": content, "status": "pending"}] if content else []
             result = executor.todo_write(items, owner=self.session_id)
+        elif tool == "web-search":
+            result = executor.web_search(" ".join(rest))
+        elif tool == "web-fetch":
+            result = executor.web_fetch(rest[0] if rest else "")
+        elif tool == "web-cite":
+            result = executor.web_cite(rest[0] if rest else "")
+        elif tool == "image-generate":
+            result = executor.image_generate(" ".join(rest))
         else:
             self.output(f"unknown tool: {tool}")
             return
@@ -1166,6 +1376,10 @@ class HyperAgentRepl:
             "check-patch",
             "apply-patch",
             "todo-write",
+            "web-search",
+            "web-fetch",
+            "web-cite",
+            "image-generate",
         ]
 
     def _tool_usage(self) -> str:
@@ -1177,7 +1391,11 @@ class HyperAgentRepl:
             "  /tool run-experiment <experiment_yaml> [seed1,seed2]\n"
             "  /tool check-patch <patch_file_or_text>\n"
             "  /tool apply-patch <patch_file_or_text>\n"
-            "  /tool todo-write <todo content>"
+            "  /tool todo-write <todo content>\n"
+            "  /tool web-search <query>\n"
+            "  /tool web-fetch <url>\n"
+            "  /tool web-cite [citation_id]\n"
+            "  /tool image-generate <prompt>"
         )
 
     def _help(self) -> str:
@@ -1219,7 +1437,14 @@ class HyperAgentRepl:
             "/thinking ...         expand/collapse model reasoning_content display\n"
             "/simplify             show the three-agent simplification council\n"
             "/model                list LLM providers\n"
-            "/mcp                  list MCP servers\n"
+            "/ide-context ...      manage manually supplied IDE context\n"
+            "/mcp ...              list/check MCP servers\n"
+            "/personality ...      show/update local interaction personality note\n"
+            "/feedback ...         record/list local feedback notes\n"
+            "/plan-mode ...        toggle plan-only mode\n"
+            "/web ...              search/fetch public web through controlled tools\n"
+            "/image ...            create image request artifacts\n"
+            "/worktree             show git worktree status\n"
             "/skill ...            list/show/run skills\n"
             "/checkpoint ...       list or create file checkpoints\n"
             "/restore <id>         restore a checkpoint\n"

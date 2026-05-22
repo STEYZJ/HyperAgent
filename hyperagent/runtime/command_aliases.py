@@ -28,6 +28,13 @@ EXISTING_COMMANDS = {
     "llm-providers",
     "llm-profile",
     "llm-usage",
+    "web",
+    "image",
+    "ide-context",
+    "plan-mode",
+    "personality",
+    "feedback",
+    "worktree",
     "llm-dry-run",
     "llm-send",
     "agent-chat",
@@ -155,7 +162,7 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
     if alias == "compact":
         return global_options + _compact_command(rest)
     if alias == "mcp":
-        return global_options + ["mcp-list"] + rest
+        return global_options + _mcp_command(rest)
     if alias in {"skills", "skill"}:
         return global_options + _skills_command(rest)
     if alias in {"prompts", "prompt"}:
@@ -168,6 +175,8 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["llm-usage"] + rest
     if alias == "cost":
         return global_options + ["llm-usage"] + rest
+    if alias in {"web", "image", "ide-context", "plan-mode", "personality", "feedback", "worktree"}:
+        return global_options + [alias] + rest
     if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
         return global_options + [alias] + rest
     if alias in {"commands", "command"}:
@@ -210,6 +219,11 @@ Slash-style aliases:
   HyperAgent /commands
   HyperAgent /todos
   HyperAgent /doctor
+  HyperAgent /web
+  HyperAgent /image
+  HyperAgent /ide-context
+  HyperAgent /plan-mode
+  HyperAgent /worktree
   HyperAgent /mcp
   HyperAgent /skills
   HyperAgent /prompts
@@ -218,7 +232,7 @@ Slash-style aliases:
   HyperAgent /repl
 
 Inside REPL:
-  /context, /compact, /clear, /usage, /cost, /stats, /budget, /pro, /skill, /checkpoint, /restore, /logs, /init, /memory, /agents, /agents run, /hooks, /plugin, /rewind, /reasonix, /btw, /simplify
+  /context, /compact, /clear, /usage, /cost, /stats, /budget, /pro, /skill, /checkpoint, /restore, /logs, /init, /memory, /agents, /agents run, /commands, /todos, /hooks, /permissions, /export, /doctor, /plugin, /rewind, /reasonix, /btw, /simplify, /thinking, /web, /image, /ide-context, /plan-mode, /feedback, /worktree, /mcp status
 
 Provider options can be mixed into prompt commands:
   HyperAgent --model deepseek-v4-pro --thinking enabled --reasoning-effort max "design the next experiment"
@@ -270,6 +284,8 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return ["llm-usage"] + list(rest)
     if alias == "cost":
         return ["llm-usage"] + list(rest)
+    if alias in {"web", "image", "ide-context", "plan-mode", "personality", "feedback", "worktree"}:
+        return [alias] + list(rest)
     if alias in {"rollback", "snapshot"}:
         return ["checkpoint"] + list(rest)
     if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
@@ -281,7 +297,7 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias == "doctor":
         return ["doctor"] + list(rest)
     if alias == "mcp":
-        return ["mcp-list"] + list(rest)
+        return _mcp_command(rest)
     if alias in {"skills", "skill"}:
         return _skills_command(rest)
     if alias in {"prompts", "prompt"}:
@@ -339,6 +355,20 @@ def _skills_command(rest: Sequence[str]) -> List[str]:
     if action == "run":
         return ["skill-run"] + tail
     return ["skill-search"] + list(rest)
+
+
+def _mcp_command(rest: Sequence[str]) -> List[str]:
+    if not rest:
+        return ["mcp-list"]
+    action = rest[0].lower()
+    tail = list(rest[1:])
+    if action in {"status", "list", "tools"}:
+        return ["mcp-list"] + tail
+    if action in {"health"}:
+        return ["mcp-health"] + tail
+    if action in {"inspect", "browse"}:
+        return ["mcp-inspect"] + tail
+    return ["mcp-list"] + list(rest)
 
 
 def _hsi_command(rest: Sequence[str]) -> List[str]:

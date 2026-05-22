@@ -56,6 +56,39 @@ POST /webhooks/qq
 
 生成的 `.hyperagent/channels.yaml` 只保存环境变量名，不保存真实密钥。
 
+## 受控联网与功能面板
+
+HyperAgent 让模型通过本地受控工具联网，而不是依赖模型厂商不透明的原生浏览器。搜索需要在本地 `.env` 或环境变量中至少配置一个 provider：`BRAVE_SEARCH_API_KEY`、`TAVILY_API_KEY`、`SERPAPI_API_KEY` 或 `SEARXNG_BASE_URL`。用户明确给出公网 HTTP(S) URL 时，`web fetch` 不需要搜索 provider。
+
+```bash
+HyperAgent web status
+HyperAgent web search --query "latest hyperspectral image classification agent"
+HyperAgent web fetch --url https://example.org/paper
+HyperAgent /web
+```
+
+联网工具会拒绝 `file:`、`data:`、`javascript:`、localhost 和私网 IP。结果保存在 `.hyperagent/web_runs/`，会话中只注入摘要、来源 URL、抓取时间和 citation id。图片入口第一版会生成受权限控制的请求工件，保存在 `.hyperagent/image_runs/`：
+
+```bash
+HyperAgent image status
+HyperAgent image generate --prompt "高光谱实验工作流示意图"
+```
+
+截图中的 Codex/Claude Code 风格功能入口已经统一到 CLI、REPL、TUI 和斜杠命令：
+
+```bash
+HyperAgent ide-context status
+HyperAgent ide-context set-open-files hyperagent/cli.py hyperagent/runtime/repl.py
+HyperAgent plan-mode on "只做设计"
+HyperAgent plan-mode off
+HyperAgent personality status
+HyperAgent feedback add "TUI 面板需要突出联网状态"
+HyperAgent worktree
+HyperAgent /mcp status
+```
+
+计划模式会暂停 action-loop 类工具执行，包括 `run`、`agent-act`、`agent-run`、REPL `/act` 和手动 `/tool`，直到执行 `HyperAgent plan-mode off` 或 `/plan-mode off`。
+
 ## 常用命令
 
 ```bash
@@ -66,6 +99,14 @@ HyperAgent tui
 HyperAgent repl --permission ask
 HyperAgent agent-run --agent reviewer --instruction "检查最近一次实验报告"
 HyperAgent experiment-cycle --plan experiments/run/plan.yaml --result experiments/run/result.json --audit reports/audit.json
+HyperAgent web status
+HyperAgent web search --query "latest hyperspectral image classification agent"
+HyperAgent web fetch --url https://example.org
+HyperAgent image status
+HyperAgent ide-context status
+HyperAgent plan-mode status
+HyperAgent feedback list
+HyperAgent worktree
 HyperAgent channel-run --host 0.0.0.0 --port 8765
 ```
 
@@ -101,6 +142,7 @@ HyperAgent skill-run --name review-experiment --arguments "评审最新实验结
 - 鼠标点击输入区移动光标。
 - `←/→`、`Backspace`、`Delete` 编辑输入。
 - `/thinking on|off|toggle|status` 展开或折叠模型返回的思考内容。
+- `/web`、`/image`、`/ide-context`、`/plan-mode`、`/feedback`、`/worktree` 等功能入口。
 
 `HyperAgent repl` 复用同一套会话、工具权限和 Agent 逻辑，适合普通终端使用。
 

@@ -9,8 +9,15 @@ from typing import Dict, List, Optional, Tuple
 
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.background_jobs import BackgroundJobStore
+from hyperagent.runtime.feature_state import (
+    IDEContextStore,
+    PlanModeStore,
+    image_status,
+    web_status,
+)
 from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
+from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.runtime.slash_registry import command_names
@@ -431,6 +438,10 @@ class HyperAgentTui:
         if self.repl is not None:
             try:
                 usage = self.repl.usage.summarize()
+                ide = IDEContextStore(self.workspace.workspace_dir).load()
+                plan_mode = PlanModeStore(self.workspace.workspace_dir).load()
+                web = web_status()
+                image = image_status()
                 lines.extend(
                     [
                         self._panel_kv("llm_requests", "llm_requests", usage["request_count"]),
@@ -438,6 +449,11 @@ class HyperAgentTui:
                         self._panel_kv("cache_hit", "cache_hit", usage["cache_hit_ratio"]),
                         self._panel_kv("loop", "loop", self.repl.action_loop_mode),
                         self._panel_kv("budget", "budget", self.repl.action_token_budget),
+                        self._panel_kv("ide_context", "IDE context", self._on_off(ide.get("enabled"))),
+                        self._panel_kv("plan_mode", "plan mode", self._on_off(plan_mode.get("enabled"))),
+                        self._panel_kv("web", "web", self._t("tui.value.configured", "configured") if web["search_configured"] else self._t("tui.value.fetch_only", "fetch-only")),
+                        self._panel_kv("mcp", "MCP", len(MCPServerStore(self.workspace.workspace_dir).list())),
+                        self._panel_kv("image", "image", self._t("tui.value.configured", "configured") if image["configured"] else self._t("tui.value.missing_key", "missing key")),
                     ]
                 )
             except Exception:
@@ -477,6 +493,9 @@ class HyperAgentTui:
         if normalized == "selection":
             return self._t("tui.value.selection", "selection")
         return self._t("tui.value.interactive", "interactive")
+
+    def _on_off(self, value: object) -> str:
+        return self._t("tui.value.on", "on") if value else self._t("tui.value.off", "off")
 
     def _todo_panel_lines(self, owner: str) -> List[str]:
         if self.repl is None:

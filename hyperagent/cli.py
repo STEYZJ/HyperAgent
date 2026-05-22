@@ -25,6 +25,15 @@ from hyperagent.runtime.checkpoints import CheckpointStore
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.events import RuntimeEventLog
+from hyperagent.runtime.feature_state import (
+    FeedbackStore,
+    IDEContextStore,
+    PersonalityStore,
+    PlanModeStore,
+    image_status,
+    web_status,
+    worktree_status,
+)
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.extensions import RuntimeExtensionStore
@@ -306,6 +315,72 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     )
     llm_usage.add_argument("--limit", type=int, default=None)
     llm_usage.add_argument("--json", action="store_true")
+
+    web = subparsers.add_parser(
+        "web",
+        help=_txt(translator, "cli.command.web.help", "Use controlled web tools"),
+    )
+    web_sub = web.add_subparsers(dest="web_command", required=True)
+    web_status_cmd = web_sub.add_parser("status", help="Show controlled web status")
+    web_status_cmd.add_argument("--json", action="store_true")
+    web_search = web_sub.add_parser("search", help="Search the web through a configured provider")
+    web_search.add_argument("--query", required=True)
+    web_search.add_argument("--provider", default="auto")
+    web_search.add_argument("--max-results", type=int, default=5)
+    web_search.add_argument("--timeout-sec", type=int, default=20)
+    web_search.add_argument("--permission", choices=["auto", "ask", "session-ask", "deny"], default="session-ask")
+    web_search.add_argument("--json", action="store_true")
+    web_fetch = web_sub.add_parser("fetch", help="Fetch and extract a public HTTP(S) URL")
+    web_fetch.add_argument("--url", required=True)
+    web_fetch.add_argument("--max-chars", type=int, default=12000)
+    web_fetch.add_argument("--timeout-sec", type=int, default=20)
+    web_fetch.add_argument("--permission", choices=["auto", "ask", "session-ask", "deny"], default="session-ask")
+    web_fetch.add_argument("--json", action="store_true")
+    web_cite = web_sub.add_parser("cite", help="List recent web citations")
+    web_cite.add_argument("--citation-id", default="")
+    web_cite.add_argument("--limit", type=int, default=20)
+    web_cite.add_argument("--json", action="store_true")
+
+    image = subparsers.add_parser(
+        "image",
+        help=_txt(translator, "cli.command.image.help", "Use controlled image tools"),
+    )
+    image_sub = image.add_subparsers(dest="image_command", required=True)
+    image_status_cmd = image_sub.add_parser("status", help="Show image tool status")
+    image_status_cmd.add_argument("--json", action="store_true")
+    image_gen = image_sub.add_parser("generate", help="Create an image-generation request artifact")
+    image_gen.add_argument("--prompt", required=True)
+    image_gen.add_argument("--permission", choices=["auto", "ask", "session-ask", "deny"], default="session-ask")
+    image_gen.add_argument("--json", action="store_true")
+    image_edit = image_sub.add_parser("edit", help="Create an image-edit request artifact")
+    image_edit.add_argument("--image", required=True)
+    image_edit.add_argument("--instruction", required=True)
+    image_edit.add_argument("--permission", choices=["auto", "ask", "session-ask", "deny"], default="session-ask")
+    image_edit.add_argument("--json", action="store_true")
+
+    ide_context = subparsers.add_parser("ide-context", help="Manage manually supplied IDE context")
+    ide_context.add_argument("action", choices=["status", "on", "off", "set-open-files", "clear"])
+    ide_context.add_argument("paths", nargs="*")
+    ide_context.add_argument("--json", action="store_true")
+
+    plan_mode = subparsers.add_parser("plan-mode", help="Toggle plan-only mode")
+    plan_mode.add_argument("action", choices=["status", "on", "off"])
+    plan_mode.add_argument("reason", nargs="*")
+    plan_mode.add_argument("--json", action="store_true")
+
+    personality = subparsers.add_parser("personality", help="Manage local interaction personality note")
+    personality.add_argument("action", choices=["status", "set", "clear"])
+    personality.add_argument("text", nargs="*")
+    personality.add_argument("--json", action="store_true")
+
+    feedback = subparsers.add_parser("feedback", help="Record or list local feedback notes")
+    feedback.add_argument("action", choices=["add", "list"])
+    feedback.add_argument("text", nargs="*")
+    feedback.add_argument("--json", action="store_true")
+    feedback.add_argument("--limit", type=int, default=20)
+
+    worktree = subparsers.add_parser("worktree", help="Show git worktree status without modifying it")
+    worktree.add_argument("--json", action="store_true")
 
     llm_dry = subparsers.add_parser("llm-dry-run", help="Build a vendor request payload without sending it")
     llm_dry.add_argument("--provider", required=True)
@@ -1419,6 +1494,182 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"ledger: {summary['ledger_path']}")
         return 0
 
+    if args.command == "web":
+        if args.web_command == "status":
+            payload = web_status()
+            if args.json:
+                print_json(payload)
+            else:
+                print(f"search_configured: {payload['search_configured']}")
+                for name, configured in payload["providers"].items():
+                    print(f"{name}: {'configured' if configured else 'missing'}")
+                print("fetch_available: true")
+            return 0
+        executor = SafeAgentToolExecutor(
+            workspace.project_root,
+            workspace.workspace_dir,
+            permission_policy=getattr(args, "permission", "session-ask"),
+            permission_callback=(
+                confirm_tool_permission
+                if getattr(args, "permission", "") in {"ask", "session-ask"}
+                else None
+            ),
+            hook_engine=HookEngine(workspace.workspace_dir),
+        )
+        if args.web_command == "search":
+            result = executor.web_search(
+                args.query,
+                provider=args.provider,
+                max_results=args.max_results,
+                timeout_sec=args.timeout_sec,
+            )
+        elif args.web_command == "fetch":
+            result = executor.web_fetch(
+                args.url,
+                max_chars=args.max_chars,
+                timeout_sec=args.timeout_sec,
+            )
+        elif args.web_command == "cite":
+            result = executor.web_cite(args.citation_id, limit=args.limit)
+        else:
+            raise ValueError(f"Unsupported web command: {args.web_command}")
+        if args.json:
+            print_json(result.to_dict())
+        else:
+            print(f"tool: {result.tool_name}")
+            print(f"status: {result.status}")
+            print(f"artifact: {result.artifact_path}")
+            for warning in result.warnings:
+                print(f"warning: {warning}")
+            if result.content:
+                print(result.content)
+        return 0
+
+    if args.command == "image":
+        if args.image_command == "status":
+            payload = image_status()
+            if args.json:
+                print_json(payload)
+            else:
+                print(f"provider: {payload['provider']}")
+                print(f"required_env: {payload['required_env']}")
+                print(f"configured: {payload['configured']}")
+                print(f"output_root: {payload['output_root']}")
+            return 0
+        executor = SafeAgentToolExecutor(
+            workspace.project_root,
+            workspace.workspace_dir,
+            permission_policy=args.permission,
+            permission_callback=(
+                confirm_tool_permission
+                if args.permission in {"ask", "session-ask"}
+                else None
+            ),
+            hook_engine=HookEngine(workspace.workspace_dir),
+        )
+        if args.image_command == "generate":
+            result = executor.image_generate(args.prompt)
+        elif args.image_command == "edit":
+            result = executor.image_edit(args.image, args.instruction)
+        else:
+            raise ValueError(f"Unsupported image command: {args.image_command}")
+        if args.json:
+            print_json(result.to_dict())
+        else:
+            print(f"tool: {result.tool_name}")
+            print(f"status: {result.status}")
+            print(f"artifact: {result.artifact_path}")
+            for warning in result.warnings:
+                print(f"warning: {warning}")
+            if result.content:
+                print(result.content)
+        return 0
+
+    if args.command == "ide-context":
+        store = IDEContextStore(workspace.workspace_dir)
+        if args.action == "status":
+            payload = store.load()
+        elif args.action == "on":
+            payload = store.set_enabled(True)
+        elif args.action == "off":
+            payload = store.set_enabled(False)
+        elif args.action == "set-open-files":
+            payload = store.set_open_files(args.paths)
+        elif args.action == "clear":
+            payload = store.clear()
+        else:
+            raise ValueError(f"Unsupported ide-context action: {args.action}")
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"enabled: {payload.get('enabled')}")
+            print(f"open_files: {', '.join(payload.get('open_files', [])) or 'none'}")
+            print(f"updated_at: {payload.get('updated_at', '')}")
+        return 0
+
+    if args.command == "plan-mode":
+        store = PlanModeStore(workspace.workspace_dir)
+        if args.action == "status":
+            payload = store.load()
+        else:
+            payload = store.set_enabled(args.action == "on", " ".join(args.reason))
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"enabled: {payload.get('enabled')}")
+            if payload.get("reason"):
+                print(f"reason: {payload.get('reason')}")
+            print(f"updated_at: {payload.get('updated_at', '')}")
+        return 0
+
+    if args.command == "personality":
+        store = PersonalityStore(workspace.workspace_dir)
+        if args.action == "status":
+            payload = store.load()
+        elif args.action == "set":
+            payload = store.set(" ".join(args.text))
+        elif args.action == "clear":
+            payload = store.clear()
+        else:
+            raise ValueError(f"Unsupported personality action: {args.action}")
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload.get("text") or "no personality note")
+        return 0
+
+    if args.command == "feedback":
+        store = FeedbackStore(workspace.workspace_dir)
+        if args.action == "add":
+            payload = store.add(" ".join(args.text), source="cli")
+            if args.json:
+                print_json(payload)
+            else:
+                print("feedback recorded")
+            return 0
+        items = store.list(limit=args.limit)
+        if args.json:
+            print_json({"feedback": items})
+        else:
+            for item in items:
+                print(f"{item.get('created_at', '')}\t{item.get('text', '')}")
+        return 0
+
+    if args.command == "worktree":
+        payload = worktree_status(workspace.project_root)
+        if args.json:
+            print_json(payload)
+        else:
+            print(f"branch: {payload['branch']}")
+            print(f"head: {payload['head']}")
+            print("dirty_files:")
+            for item in payload["dirty_files"] or ["none"]:
+                print(f"  {item}")
+            print("recent_commits:")
+            for item in payload["recent_commits"]:
+                print(f"  {item}")
+        return 0
+
     if args.command == "llm-dry-run":
         llm_store.ensure_defaults()
         spec = llm_store.get(args.provider)
@@ -1518,6 +1769,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "run":
+        if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
+            print("plan-mode is enabled; headless action-loop tool execution is paused.")
+            print("Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning.")
+            return 0
         llm_store.ensure_defaults()
         instruction = " ".join(args.instruction).strip()
         if args.session_id:
@@ -1744,6 +1999,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "agent-run":
+        if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
+            print("plan-mode is enabled; agent-run tool execution is paused.")
+            print("Use `HyperAgent plan-mode off` to resume tool execution.")
+            return 0
         llm_store.ensure_defaults()
         session_id = args.session_id
         if not session_id and args.new_title:
@@ -1797,6 +2056,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "agent-act":
+        if PlanModeStore(workspace.workspace_dir).load().get("enabled"):
+            print("plan-mode is enabled; agent-act tool execution is paused.")
+            print("Use `HyperAgent plan-mode off` to resume tool execution, or use `HyperAgent plan ...` for planning.")
+            return 0
         llm_store.ensure_defaults()
         if args.session_id:
             session_id = args.session_id

@@ -1,6 +1,7 @@
 """Controlled local tools for Claude-Code-like agent workflows."""
 
 import json
+import os
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -11,6 +12,13 @@ from hyperagent.core.io import read_yaml, write_json
 from hyperagent.runtime.checkpoints import CheckpointStore, paths_from_unified_diff
 from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.repo_context import SKIP_DIRS, TEXT_SUFFIXES
+from hyperagent.runtime.web_tools import (
+    configured_search_provider,
+    recent_citations,
+    web_fetch as controlled_web_fetch,
+    web_search as controlled_web_search,
+    write_web_artifact,
+)
 from hyperagent.runtime.workspace import utc_now
 from hyperagent.schemas import AgentToolCall, AgentToolResult, ExperimentPlan
 
@@ -116,6 +124,48 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         mutating=True,
         parallel_safe=False,
         description="Apply a unified diff after permission and checkpoint.",
+    ),
+    "web_search": ToolMetadata(
+        name="web_search",
+        risk_level="network",
+        mutating=False,
+        parallel_safe=True,
+        description="Search the web through a configured provider and save citations.",
+    ),
+    "web_fetch": ToolMetadata(
+        name="web_fetch",
+        risk_level="network",
+        mutating=False,
+        parallel_safe=True,
+        description="Fetch a public HTTP(S) page, extract text, and save an artifact.",
+    ),
+    "web_extract": ToolMetadata(
+        name="web_extract",
+        risk_level="network",
+        mutating=False,
+        parallel_safe=True,
+        description="Fetch and extract readable text from a public HTTP(S) page.",
+    ),
+    "web_cite": ToolMetadata(
+        name="web_cite",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="List recent web citations saved by HyperAgent.",
+    ),
+    "image_generate": ToolMetadata(
+        name="image_generate",
+        risk_level="image",
+        mutating=True,
+        parallel_safe=False,
+        description="Create an image-generation request artifact.",
+    ),
+    "image_edit": ToolMetadata(
+        name="image_edit",
+        risk_level="image",
+        mutating=True,
+        parallel_safe=False,
+        description="Create an image-edit request artifact.",
     ),
 }
 
@@ -556,6 +606,241 @@ class SafeAgentToolExecutor:
                 warnings=["todo_write failed"],
             )
 
+    def web_search(
+        self,
+        query: str,
+        provider: str = "auto",
+        max_results: int = 5,
+        timeout_sec: int = 20,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "web_search",
+            {
+                "query": query,
+                "provider": provider,
+                "max_results": max_results,
+                "timeout_sec": timeout_sec,
+            },
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        if not str(query or "").strip():
+            return self._record(
+                call,
+                "error",
+                "query is required",
+                warnings=["web_search requires a non-empty query"],
+            )
+        if not configured_search_provider(provider):
+            return self._record(
+                call,
+                "error",
+                "No web search provider configured. Set BRAVE_SEARCH_API_KEY, TAVILY_API_KEY, SERPAPI_API_KEY, or SEARXNG_BASE_URL.",
+                warnings=["web search provider missing"],
+            )
+        permission = self._check_permission(
+            call,
+            risk_level="network",
+            reason="search the public web through a configured provider",
+        )
+        if permission is not None:
+            return permission
+        try:
+            payload = controlled_web_search(
+                query,
+                provider=provider,
+                max_results=max_results,
+                timeout_sec=timeout_sec,
+            )
+            artifact = write_web_artifact(self.workspace_dir, payload, run_id=run_id)
+            content = json.dumps(payload.to_dict(), ensure_ascii=False, indent=2)
+            return self._record(
+                call,
+                "ok",
+                content,
+                warnings=[f"artifact: {artifact}"],
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["web_search failed"],
+            )
+
+    def web_fetch(
+        self,
+        url: str,
+        max_chars: int = 12000,
+        timeout_sec: int = 20,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "web_fetch",
+            {"url": url, "max_chars": max_chars, "timeout_sec": timeout_sec},
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        permission = self._check_permission(
+            call,
+            risk_level="network",
+            reason="fetch a public HTTP(S) URL and save a cited artifact",
+        )
+        if permission is not None:
+            return permission
+        try:
+            payload = controlled_web_fetch(
+                url,
+                max_chars=max_chars,
+                timeout_sec=timeout_sec,
+            )
+            artifact = write_web_artifact(self.workspace_dir, payload, run_id=run_id)
+            content = json.dumps(payload.to_dict(), ensure_ascii=False, indent=2)
+            return self._record(
+                call,
+                "ok",
+                content,
+                warnings=[f"artifact: {artifact}", f"citation: {payload.citation_id}"],
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["web_fetch failed"],
+            )
+
+    def web_extract(
+        self,
+        url: str,
+        selector: str = "",
+        max_chars: int = 12000,
+        timeout_sec: int = 20,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "web_extract",
+            {
+                "url": url,
+                "selector": selector,
+                "max_chars": max_chars,
+                "timeout_sec": timeout_sec,
+            },
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        permission = self._check_permission(
+            call,
+            risk_level="network",
+            reason="extract readable text from a public HTTP(S) URL",
+        )
+        if permission is not None:
+            return permission
+        try:
+            payload = controlled_web_fetch(
+                url,
+                max_chars=max_chars,
+                timeout_sec=timeout_sec,
+            )
+            payload.kind = "web_extract"
+            if selector:
+                payload.metadata["selector"] = selector
+                payload.warnings.append(
+                    "selector is recorded but not applied in v1; full-page readable text was extracted"
+                )
+            artifact = write_web_artifact(self.workspace_dir, payload, run_id=run_id)
+            content = json.dumps(payload.to_dict(), ensure_ascii=False, indent=2)
+            return self._record(
+                call,
+                "ok",
+                content,
+                warnings=[f"artifact: {artifact}", f"citation: {payload.citation_id}"] + payload.warnings,
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["web_extract failed"],
+            )
+
+    def web_cite(
+        self,
+        citation_id: str = "",
+        limit: int = 20,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "web_cite",
+            {"citation_id": citation_id, "limit": limit},
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        citations = recent_citations(
+            self.workspace_dir,
+            citation_id_filter=citation_id,
+            limit=limit,
+        )
+        return self._record(
+            call,
+            "ok",
+            json.dumps({"citations": citations}, ensure_ascii=False, indent=2),
+        )
+
+    def image_generate(
+        self,
+        prompt: str,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call("image_generate", {"prompt": prompt}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        permission = self._check_permission(
+            call,
+            risk_level="image",
+            reason="create an image-generation request artifact",
+        )
+        if permission is not None:
+            return permission
+        return self._image_request_artifact(call, "generate", {"prompt": prompt})
+
+    def image_edit(
+        self,
+        image_path: str,
+        instruction: str,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call(
+            "image_edit",
+            {"image_path": image_path, "instruction": instruction},
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        permission = self._check_permission(
+            call,
+            risk_level="image",
+            reason="create an image-edit request artifact",
+        )
+        if permission is not None:
+            return permission
+        return self._image_request_artifact(
+            call,
+            "edit",
+            {"image_path": image_path, "instruction": instruction},
+        )
+
     def _call(
         self,
         tool_name: str,
@@ -630,6 +915,43 @@ class SafeAgentToolExecutor:
             "blocked",
             f"Unknown permission policy: {self.permission_policy}",
             warnings=["invalid permission policy"],
+        )
+
+    def _image_request_artifact(
+        self,
+        call: AgentToolCall,
+        action: str,
+        payload: Dict[str, object],
+    ) -> AgentToolResult:
+        root = self.workspace_dir / "image_runs" / (call.run_id or call.call_id)
+        root.mkdir(parents=True, exist_ok=True)
+        output = root / f"{action}.json"
+        configured = bool(os.environ.get("OPENAI_API_KEY"))
+        write_json(
+            output,
+            {
+                "action": action,
+                "created_at": utc_now(),
+                "provider": "openai",
+                "configured": configured,
+                "request": payload,
+                "note": (
+                    "Image provider execution is not enabled in this local v1. "
+                    "The request is saved for a user-approved image runtime."
+                ),
+            },
+        )
+        status = "ok" if configured else "blocked"
+        message = (
+            f"image request artifact: {output}"
+            if configured
+            else "OPENAI_API_KEY is not configured; image request was saved but not sent."
+        )
+        return self._record(
+            call,
+            status,
+            message,
+            warnings=[f"artifact: {output}", "image provider call not executed in v1"],
         )
 
     def _pre_tool_check(self, call: AgentToolCall) -> Optional[AgentToolResult]:

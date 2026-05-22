@@ -39,6 +39,10 @@ Allowed tools:
 - todo_write: {"owner": "project", "items": [{"content": "inspect tests", "status": "in_progress", "priority": "high"}]}
 - check_patch: {"patch_text": "unified diff"}
 - apply_patch: {"patch_text": "unified diff"}
+- web_search: {"query": "latest hyperspectral image classification mamba", "provider": "auto", "max_results": 5}
+- web_fetch: {"url": "https://example.org/paper", "max_chars": 12000}
+- web_extract: {"url": "https://example.org/paper", "max_chars": 12000}
+- web_cite: {"citation_id": "web:...", "limit": 10}
 
 Return exactly one JSON object and no prose:
 {"thought": "brief reason", "action": "tool", "tool_name": "search_code", "args": {"query": "ExperimentSuiteRunner"}}
@@ -46,6 +50,7 @@ or:
 {"thought": "brief reason", "action": "final", "final": "answer or next decision"}
 
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
+Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
 """
 
 
@@ -684,6 +689,46 @@ class AgentActionLoop:
         if tool_name == "apply_patch":
             return self.tool_executor.apply_patch(
                 str(args.get("patch_text", "")),
+                run_id=run_id,
+            )
+        if tool_name == "web_search":
+            return self.tool_executor.web_search(
+                str(args.get("query", "")),
+                provider=str(args.get("provider", "auto")),
+                max_results=int(args.get("max_results", 5)),
+                timeout_sec=int(args.get("timeout_sec", 20)),
+                run_id=run_id,
+            )
+        if tool_name == "web_fetch":
+            return self.tool_executor.web_fetch(
+                str(args.get("url", "")),
+                max_chars=int(args.get("max_chars", 12000)),
+                timeout_sec=int(args.get("timeout_sec", 20)),
+                run_id=run_id,
+            )
+        if tool_name == "web_extract":
+            return self.tool_executor.web_extract(
+                str(args.get("url", "")),
+                selector=str(args.get("selector", "")),
+                max_chars=int(args.get("max_chars", 12000)),
+                timeout_sec=int(args.get("timeout_sec", 20)),
+                run_id=run_id,
+            )
+        if tool_name == "web_cite":
+            return self.tool_executor.web_cite(
+                citation_id=str(args.get("citation_id", "")),
+                limit=int(args.get("limit", 20)),
+                run_id=run_id,
+            )
+        if tool_name == "image_generate":
+            return self.tool_executor.image_generate(
+                str(args.get("prompt", "")),
+                run_id=run_id,
+            )
+        if tool_name == "image_edit":
+            return self.tool_executor.image_edit(
+                str(args.get("image_path", "")),
+                str(args.get("instruction", "")),
                 run_id=run_id,
             )
         return AgentToolResult(

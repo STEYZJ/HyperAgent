@@ -55,6 +55,39 @@ POST /webhooks/qq
 
 The generated `.hyperagent/channels.yaml` stores only environment variable names, never secret values.
 
+## Controlled Web And Feature Panel
+
+HyperAgent gives the model web access through local audited tools, not through an opaque provider-side browser. Search requires at least one provider key in local `.env` or environment variables: `BRAVE_SEARCH_API_KEY`, `TAVILY_API_KEY`, `SERPAPI_API_KEY`, or `SEARXNG_BASE_URL`. Direct fetch works for user-provided public HTTP(S) URLs without a search provider.
+
+```bash
+HyperAgent web status
+HyperAgent web search --query "latest hyperspectral image classification agent"
+HyperAgent web fetch --url https://example.org/paper
+HyperAgent /web
+```
+
+The web tools reject `file:`, `data:`, `javascript:`, localhost, and private IP URLs. Results are saved under `.hyperagent/web_runs/`; conversations receive summaries, source URLs, fetch time, and citation ids. Image commands currently create permission-gated request artifacts under `.hyperagent/image_runs/`:
+
+```bash
+HyperAgent image status
+HyperAgent image generate --prompt "HSI experiment workflow diagram"
+```
+
+Claude/Codex-style feature entries are available through CLI, REPL, TUI, and slash commands:
+
+```bash
+HyperAgent ide-context status
+HyperAgent ide-context set-open-files hyperagent/cli.py hyperagent/runtime/repl.py
+HyperAgent plan-mode on "design only"
+HyperAgent plan-mode off
+HyperAgent personality status
+HyperAgent feedback add "TUI panel should emphasize web status"
+HyperAgent worktree
+HyperAgent /mcp status
+```
+
+Plan mode pauses action-loop tool execution (`run`, `agent-act`, `agent-run`, REPL `/act`, and manual `/tool`) until it is turned off.
+
 ## Third-Party Licenses
 
 Known open-source dependencies and reference projects are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Update that file before adding new runtime dependencies or copying any third-party source code.
@@ -97,6 +130,14 @@ HyperAgent propose-module --audit reports/audit.json --spectral reports/spectral
 HyperAgent llm-providers
 HyperAgent llm-profile
 HyperAgent llm-usage
+HyperAgent web status
+HyperAgent web search --query "latest hyperspectral image classification agent"
+HyperAgent web fetch --url https://example.org
+HyperAgent image status
+HyperAgent ide-context status
+HyperAgent plan-mode status
+HyperAgent feedback list
+HyperAgent worktree
 HyperAgent llm-dry-run --provider openai --user "Plan an HSI experiment"
 HyperAgent llm-send --provider deepseek --user "Plan a small HSI baseline experiment"
 HyperAgent llm-dry-run --provider deepseek --model deepseek-v4-pro --thinking enabled --reasoning-effort max --json-output --user "Return a JSON experiment plan"
@@ -195,7 +236,7 @@ HyperAgent /doctor
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/tools`, `/tool read hyperagent/cli.py`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/ide-context`, `/plan-mode`, `/web`, `/image`, `/feedback`, `/worktree`, `/mcp status`, `/tools`, `/tool read hyperagent/cli.py`, `/tool web-fetch https://example.org`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 
