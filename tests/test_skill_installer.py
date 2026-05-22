@@ -12,8 +12,15 @@ from hyperagent.runtime.skill_installer import (
     default_user_skill_root,
     parse_github_skill_url,
 )
+from hyperagent.runtime.conversations import ConversationStore
+from hyperagent.runtime.llm import LLMProviderStore
+from hyperagent.runtime.prompts import PromptLibrary
+from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.runtime.skills import SkillStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace
+
+
+PROMPT_ROOT = Path(__file__).resolve().parents[1] / "hyperagent" / "prompts"
 
 
 def _write_skill(root: Path, name: str = "academic-research-skill", body: str = "Use $ARGUMENTS.") -> Path:
@@ -109,6 +116,57 @@ class SkillInstallerTest(unittest.TestCase):
         self.assertEqual(parsed.ref, "main")
         self.assertEqual(parsed.skill_path, "skills/academic-research")
 
+    def test_github_repo_root_url_parser(self):
+        parsed = parse_github_skill_url("https://github.com/owner/repo")
+
+        self.assertEqual(parsed.owner, "owner")
+        self.assertEqual(parsed.repo, "repo")
+        self.assertEqual(parsed.ref, "main")
+        self.assertEqual(parsed.skill_path, "")
+
+    def test_github_repo_root_autodetects_single_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            skill = _write_skill(repo / "skills", name="nested-skill")
+
+            selected = SkillInstaller(install_root=root / "installed")._select_github_skill_source(
+                repo,
+                parse_github_skill_url("https://github.com/owner/repo"),
+            )
+
+            self.assertEqual(selected, skill)
+
+    def test_github_repo_root_reports_claude_plugin_without_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            (repo / ".claude-plugin").mkdir(parents=True)
+            (repo / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+
+            with self.assertRaises(FileNotFoundError) as ctx:
+                SkillInstaller(install_root=root / "installed")._select_github_skill_source(
+                    repo,
+                    parse_github_skill_url("https://github.com/owner/repo"),
+                )
+
+            self.assertIn("Claude plugin", str(ctx.exception))
+
+    def test_github_repo_root_requires_path_when_multiple_skills(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            _write_skill(repo / "skills", name="one")
+            _write_skill(repo / "more", name="two")
+
+            with self.assertRaises(ValueError) as ctx:
+                SkillInstaller(install_root=root / "installed")._select_github_skill_source(
+                    repo,
+                    parse_github_skill_url("https://github.com/owner/repo"),
+                )
+
+            self.assertIn("multiple SKILL.md", str(ctx.exception))
+
     def test_risk_warnings_and_secret_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -174,6 +232,31 @@ class SkillInstallerTest(unittest.TestCase):
             self.assertEqual(blocked.status, "blocked")
             self.assertEqual(allowed.status, "ok")
             self.assertTrue((codex_home / "skills" / "tool-skill" / "SKILL.md").exists())
+
+    def test_skill_installer_slash_alias_reports_existing_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            codex_home = root / "codex"
+            _write_skill(codex_home / "skills", name="nature-skill")
+            workspace = HyperAgentWorkspace(project)
+            workspace.init(project / "datasets")
+            outputs = []
+            with self._with_codex_home(codex_home):
+                repl = HyperAgentRepl(
+                    workspace=workspace,
+                    conversations=ConversationStore(workspace.workspace_dir),
+                    providers=LLMProviderStore(workspace.workspace_dir),
+                    prompt_library=PromptLibrary([PROMPT_ROOT]),
+                    output_func=outputs.append,
+                )
+                handled = repl._skill_slash_command("/skill-installer", ["安装", "Nature-skill"])
+
+            self.assertTrue(handled)
+            text = "\n".join(outputs)
+            self.assertIn("already_installed", text)
+            self.assertIn("nature-skill", text)
 
 
 if __name__ == "__main__":

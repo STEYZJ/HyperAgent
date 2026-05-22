@@ -155,7 +155,7 @@ class SkillInstaller:
             plan = self._build_plan(
                 local_source,
                 source_type="github",
-                source=f"{source.repo_slug}@{source.ref}:{source.skill_path}",
+                source=f"{source.repo_slug}@{source.ref}:{source.skill_path or '.'}",
                 name=name,
                 force=force,
             )
@@ -385,8 +385,7 @@ class SkillInstaller:
         roots = [item for item in extract_dir.iterdir() if item.is_dir()]
         if not roots:
             raise FileNotFoundError("GitHub archive did not contain a repository directory")
-        candidate = roots[0] / source.skill_path
-        return self._normalize_local_source(candidate)
+        return self._select_github_skill_source(roots[0], source)
 
     def _download_github_sparse_checkout(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
         repo_dir = tmp_root / "repo"
@@ -398,14 +397,15 @@ class SkillInstaller:
             text=True,
             timeout=120,
         )
-        subprocess.run(
-            ["git", "-C", str(repo_dir), "sparse-checkout", "set", source.skill_path],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=60,
-        )
+        if source.skill_path:
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "sparse-checkout", "set", source.skill_path],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=60,
+            )
         subprocess.run(
             ["git", "-C", str(repo_dir), "checkout", source.ref],
             check=True,
@@ -414,7 +414,35 @@ class SkillInstaller:
             text=True,
             timeout=120,
         )
-        return self._normalize_local_source(repo_dir / source.skill_path)
+        return self._select_github_skill_source(repo_dir, source)
+
+    def _select_github_skill_source(self, repo_root: Path, source: GitHubSkillSource) -> Path:
+        if source.skill_path:
+            return self._normalize_local_source(repo_root / source.skill_path)
+        matches = sorted(repo_root.rglob("SKILL.md"))
+        if len(matches) == 1:
+            return matches[0].parent
+        if len(matches) > 1:
+            examples = ", ".join(str(path.parent.relative_to(repo_root)) for path in matches[:8])
+            raise ValueError(
+                "GitHub repository contains multiple SKILL.md files; pass --skill-path. "
+                f"Candidates: {examples}"
+            )
+        claude_markers = [
+            repo_root / ".claude" / "CLAUDE.md",
+            repo_root / ".claude-plugin" / "plugin.json",
+            repo_root / "CLAUDE.md",
+        ]
+        if any(path.exists() for path in claude_markers):
+            raise FileNotFoundError(
+                "No SKILL.md found. This repository looks like a Claude plugin/project, "
+                "not a HyperAgent/Codex SKILL.md skill. Provide a directory containing SKILL.md "
+                "or convert the Claude instructions into a SKILL.md first."
+            )
+        raise FileNotFoundError(
+            "No SKILL.md found in GitHub repository. Pass --skill-path to a directory "
+            "that contains SKILL.md."
+        )
 
     def _github_headers(self) -> Dict[str, str]:
         headers = {
@@ -454,12 +482,15 @@ def parse_github_skill_url(url: str) -> GitHubSkillSource:
     }:
         raise ValueError("only github.com skill URLs are supported")
     parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) == 2:
+        return GitHubSkillSource(owner=parts[0], repo=parts[1], ref="main", skill_path="")
     if len(parts) < 5 or parts[2] not in {"tree", "blob"}:
-        raise ValueError("GitHub URL must look like https://github.com/owner/repo/tree/ref/path/to/skill")
+        raise ValueError(
+            "GitHub URL must look like https://github.com/owner/repo "
+            "or https://github.com/owner/repo/tree/ref/path/to/skill"
+        )
     owner, repo, _, ref = parts[:4]
     skill_path = "/".join(parts[4:])
-    if not skill_path:
-        raise ValueError("GitHub skill URL is missing a skill path")
     return GitHubSkillSource(owner=owner, repo=repo, ref=ref, skill_path=skill_path)
 
 

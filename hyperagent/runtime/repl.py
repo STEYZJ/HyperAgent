@@ -1,6 +1,7 @@
 """Interactive HyperAgent REPL."""
 
 import os
+import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -907,7 +908,57 @@ class HyperAgentRepl:
         name = command.lstrip("/")
         if not name:
             return False
+        if name in {"skill-installer", "skill-install"}:
+            return self._skill_installer_alias(args)
         return self._run_skill_by_name(name, args)
+
+    def _skill_installer_alias(self, args: List[str]) -> bool:
+        text = " ".join(args).strip()
+        if not text:
+            self.output(
+                "HyperAgent skill installer usage: "
+                "/skill install --path <local-skill> | "
+                "--repo owner/repo --skill-path skills/foo | "
+                "--url https://github.com/owner/repo/tree/main/skills/foo"
+            )
+            return True
+        github_url = re.search(r"https://github\.com/[^\s]+", text)
+        if github_url:
+            self._skill_install(["--url", github_url.group(0)])
+            return True
+        tokens = [token.strip("`'\"，,。:：") for token in text.split()]
+        for token in tokens:
+            path = Path(token).expanduser()
+            if path.exists() and (path.name == "SKILL.md" or (path / "SKILL.md").exists()):
+                self._skill_install(["--path", str(path)])
+                return True
+        requested = self._extract_requested_skill_name(text)
+        if requested:
+            skill = self._skill_store().get(requested)
+            if skill is not None:
+                self._emit(
+                    "tool",
+                    "status: already_installed\n"
+                    f"skill: {skill.name}\n"
+                    f"path: {skill.path}\n"
+                    "message: 该 skill 已经在当前 skill roots 中可用，不需要安装。",
+                )
+                return True
+        self.output(
+            "HyperAgent 的第三方 skill 安装器需要明确来源。请使用：\n"
+            "/skill install --path <local-skill>\n"
+            "/skill install --repo owner/repo --skill-path path/to/skill\n"
+            "/skill install --url https://github.com/owner/repo/tree/main/path/to/skill"
+        )
+        return True
+
+    def _extract_requested_skill_name(self, text: str) -> str:
+        clean = str(text or "").strip()
+        for word in ("安装", "install", "技能"):
+            clean = clean.replace(word, " ")
+        clean = " ".join(clean.split()).strip("`'\"，,。:：")
+        clean = re.sub(r"(?i)^skill\s+", "", clean).strip()
+        return clean
 
     def _todos(self, args: List[str]) -> None:
         owner = self.session_id
