@@ -3,6 +3,7 @@
 import json
 import locale
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 import unicodedata
@@ -275,11 +276,51 @@ class HyperAgentTui:
         self._append_output_event(kind, text)
 
     def _append_output_event(self, kind: str, text: str) -> None:
-        for index, line in enumerate(str(text).splitlines() or [""]):
-            self.lines.append(TuiLine(kind, line, show_label=index == 0))
+        event_lines = self._display_lines_for_event(kind, text)
+        if not event_lines:
+            return
+        show_first_label = self._should_show_role_label(kind)
+        for index, line in enumerate(event_lines):
+            self.lines.append(TuiLine(kind, line, show_label=show_first_label and index == 0))
         self.lines = self.lines[-1000:]
         if self.stdscr is not None:
             self._draw()
+
+    def _display_lines_for_event(self, kind: str, text: str) -> List[str]:
+        display_text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+        if kind in {"assistant", "reasoning"}:
+            display_text = self._strip_display_markdown(display_text)
+        lines = display_text.splitlines()
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        collapsed: List[str] = []
+        previous_blank = False
+        for line in lines:
+            is_blank = not line.strip()
+            if is_blank and previous_blank:
+                continue
+            collapsed.append(line)
+            previous_blank = is_blank
+        return collapsed or ([""] if kind in {"user", "command", "warning", "error"} else [])
+
+    def _should_show_role_label(self, kind: str) -> bool:
+        normalized = str(kind or "system").strip().lower()
+        if normalized in {"user", "command", "warning", "error"}:
+            return True
+        for line in reversed(self.lines):
+            if not line.text.strip():
+                continue
+            return line.kind != normalized
+        return True
+
+    def _strip_display_markdown(self, text: str) -> str:
+        # TUI is not a Markdown renderer. Strip common inline emphasis so narrow
+        # terminals do not break **skill** into unreadable star fragments.
+        cleaned = re.sub(r"(?<!\*)\*\*([^*\n]+?)\*\*(?!\*)", r"\1", str(text))
+        cleaned = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"\1", cleaned)
+        return cleaned
 
     def _prompt_dialog(self, prompt: str) -> str:
         self._append_output(prompt, kind="warning" if "?" in prompt else "system")

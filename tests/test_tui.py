@@ -81,6 +81,42 @@ class HyperAgentTuiTest(unittest.TestCase):
             )
             self.assertEqual(sum(1 for line in wrapped if line.text.startswith("工具 │ ")), 1)
 
+    def test_consecutive_assistant_events_share_one_role_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            translator = I18nStore(Path(tmp)).translator("zh-CN")
+            tui = HyperAgentTui(
+                workspace=None,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+                translator=translator,
+            )
+
+            tui._append_output_event("assistant", "\n\n根据技能清单：")
+            tui._append_output_event("assistant", "**open-design** - UI 原型设计")
+            wrapped = tui._wrap_lines(tui.lines, width=42, role_labels=True)
+
+            self.assertEqual(sum(1 for line in wrapped if line.text.startswith("助手 │ ")), 1)
+            self.assertIn("open-design - UI 原型设计", "\n".join(line.text for line in wrapped))
+            self.assertNotIn("**", "\n".join(line.text for line in wrapped))
+
+    def test_assistant_display_strips_leading_blank_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            translator = I18nStore(Path(tmp)).translator("zh-CN")
+            tui = HyperAgentTui(
+                workspace=None,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+                translator=translator,
+            )
+
+            tui._append_output_event("assistant", "\n\n你好")
+            wrapped = tui._wrap_lines(tui.lines, width=20, role_labels=True)
+
+            self.assertEqual(wrapped[0].text, "助手 │ 你好")
+            self.assertEqual(len(wrapped), 1)
+
     def test_role_labels_are_localized(self):
         with tempfile.TemporaryDirectory() as tmp:
             translator = I18nStore(Path(tmp)).translator("zh-CN")
