@@ -1324,8 +1324,29 @@ class HyperAgentRepl:
         if not skills:
             self.output(self._t("repl.no_skills", "no skills"))
             return
+        self.output(self._t("repl.skills.title", "Skills"))
         for skill in skills:
-            self.output(f"{skill.name}\t{skill.run_as}\t{skill.path}\t{skill.description}")
+            self.output(self._format_skill_item(skill))
+
+    def _format_skill_item(self, skill: object) -> str:
+        description = self._truncate(str(getattr(skill, "description", "") or ""), 160)
+        allowed_tools = getattr(skill, "allowed_tools", []) or []
+        tools = ", ".join(str(item) for item in allowed_tools) if allowed_tools else self._t("repl.none", "none")
+        return (
+            f"- {getattr(skill, 'name', '')}\n"
+            f"  {self._t('repl.skills.mode', 'mode')}: {getattr(skill, 'run_as', '')}\n"
+            f"  {self._t('repl.skills.tools', 'tools')}: {tools}\n"
+            f"  {self._t('repl.skills.path', 'path')}: {getattr(skill, 'path', '')}\n"
+            f"  {self._t('repl.skills.description', 'description')}: {description}\n"
+            f"  {self._t('repl.skills.use', 'use')}: /skill {getattr(skill, 'name', '')} <instruction> "
+            f"{self._t('repl.skills.or', 'or')} /{getattr(skill, 'name', '')} <instruction>"
+        )
+
+    def _truncate(self, text: str, limit: int) -> str:
+        clean = " ".join(str(text or "").split())
+        if len(clean) <= limit:
+            return clean
+        return clean[: max(limit - 3, 0)].rstrip() + "..."
 
     def _skill_roots(self) -> List[Path]:
         roots = [

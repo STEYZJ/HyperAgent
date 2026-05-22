@@ -174,6 +174,90 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         parallel_safe=False,
         description="Create an image-edit request artifact.",
     ),
+    "research_pattern_search": ToolMetadata(
+        name="research_pattern_search",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Search extracted novelty, gap, contribution, and reviewer-expectation research patterns.",
+    ),
+    "experiment_strategy_search": ToolMetadata(
+        name="experiment_strategy_search",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Search extracted baseline, ablation, control-variable, robustness, and visualization strategies.",
+    ),
+    "storytelling_search": ToolMetadata(
+        name="storytelling_search",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Search extracted scientific storytelling and reviewer-persuasion strategies.",
+    ),
+    "research_taste_search": ToolMetadata(
+        name="research_taste_search",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Search cross-paper research taste and field-timing lessons.",
+    ),
+    "extract_research_pattern": ToolMetadata(
+        name="extract_research_pattern",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Extract research-pattern lessons from one paper and write a HyperVault strategy card.",
+    ),
+    "extract_experiment_strategy": ToolMetadata(
+        name="extract_experiment_strategy",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Extract experiment-strategy lessons from one paper and write a HyperVault strategy card.",
+    ),
+    "extract_storytelling": ToolMetadata(
+        name="extract_storytelling",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Extract scientific-storytelling lessons from one paper and write a HyperVault strategy card.",
+    ),
+    "extract_research_taste": ToolMetadata(
+        name="extract_research_taste",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Extract or mark underdetermined research-taste lessons for one paper.",
+    ),
+    "paper_strategy_compare": ToolMetadata(
+        name="paper_strategy_compare",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Compare research strategies across papers without writing derived memory.",
+    ),
+    "compare_paper_strategies": ToolMetadata(
+        name="compare_paper_strategies",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Alias for paper_strategy_compare.",
+    ),
+    "research_experience_consolidate": ToolMetadata(
+        name="research_experience_consolidate",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Write long-term research-experience memory from paper strategy cards.",
+    ),
+    "consolidate_research_experience": ToolMetadata(
+        name="consolidate_research_experience",
+        risk_level="write",
+        mutating=True,
+        parallel_safe=False,
+        description="Alias for research_experience_consolidate.",
+    ),
 }
 
 
@@ -885,6 +969,193 @@ class SafeAgentToolExecutor:
             {"image_path": image_path, "instruction": instruction},
         )
 
+
+    def research_pattern_search(
+        self,
+        query: str,
+        field: str = "",
+        top_k: int = 8,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._research_strategy_search("research_pattern", "research_pattern_search", query, field, top_k, run_id)
+
+    def experiment_strategy_search(
+        self,
+        query: str,
+        field: str = "",
+        top_k: int = 8,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._research_strategy_search("experiment_strategy", "experiment_strategy_search", query, field, top_k, run_id)
+
+    def storytelling_search(
+        self,
+        query: str,
+        field: str = "",
+        top_k: int = 8,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._research_strategy_search("scientific_storytelling", "storytelling_search", query, field, top_k, run_id)
+
+    def research_taste_search(
+        self,
+        query: str,
+        field: str = "",
+        top_k: int = 8,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._research_strategy_search("research_taste", "research_taste_search", query, field, top_k, run_id)
+
+    def extract_research_pattern(
+        self,
+        paper: str,
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        write: bool = True,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._extract_research_section("research_pattern", "extract_research_pattern", paper, provider, model, field, write, run_id)
+
+    def extract_experiment_strategy(
+        self,
+        paper: str,
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        write: bool = True,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._extract_research_section("experiment_strategy", "extract_experiment_strategy", paper, provider, model, field, write, run_id)
+
+    def extract_storytelling(
+        self,
+        paper: str,
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        write: bool = True,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._extract_research_section("scientific_storytelling", "extract_storytelling", paper, provider, model, field, write, run_id)
+
+    def extract_research_taste(
+        self,
+        paper: str,
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        write: bool = True,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        return self._extract_research_section("research_taste", "extract_research_taste", paper, provider, model, field, write, run_id)
+
+    def paper_strategy_compare(
+        self,
+        papers: Sequence[str],
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call("paper_strategy_compare", {"papers": list(papers), "provider": provider, "model": model, "field": field}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        try:
+            payload = self._research_agent().compare_paper_strategies(papers, provider=provider, model=model, field=field)
+            return self._record(call, "ok", json.dumps(payload, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            return self._record(call, "error", f"{type(exc).__name__}: {exc}", warnings=["paper strategy comparison failed"])
+
+    def compare_paper_strategies(self, *args, **kwargs) -> AgentToolResult:
+        return self.paper_strategy_compare(*args, **kwargs)
+
+    def research_experience_consolidate(
+        self,
+        topic: str,
+        papers: Optional[Sequence[str]] = None,
+        provider: str = "",
+        model: Optional[str] = None,
+        field: str = "",
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        call = self._call("research_experience_consolidate", {"topic": topic, "papers": list(papers or []), "provider": provider, "model": model, "field": field}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        permission = self._check_permission(call, risk_level="write", reason="write consolidated research-experience memory into HyperVault")
+        if permission is not None:
+            return permission
+        try:
+            payload = self._research_agent().consolidate_research_experience(topic, papers=papers, provider=provider, model=model, field=field)
+            return self._record(call, "ok", json.dumps(payload, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            return self._record(call, "error", f"{type(exc).__name__}: {exc}", warnings=["research experience consolidation failed"])
+
+    def consolidate_research_experience(self, *args, **kwargs) -> AgentToolResult:
+        return self.research_experience_consolidate(*args, **kwargs)
+
+    def _research_strategy_search(
+        self,
+        family: str,
+        tool_name: str,
+        query: str,
+        field: str,
+        top_k: int,
+        run_id: Optional[str],
+    ) -> AgentToolResult:
+        call = self._call(tool_name, {"query": query, "field": field, "top_k": top_k}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        try:
+            payload = {
+                "family": family,
+                "results": [
+                    self._research_agent().search_dimension(dimension, query, top_k=top_k, field=field)
+                    for dimension in self._research_dimensions(family)
+                ],
+            }
+            return self._record(call, "ok", json.dumps(payload, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            return self._record(call, "error", f"{type(exc).__name__}: {exc}", warnings=["research strategy search failed"])
+
+    def _extract_research_section(
+        self,
+        section_type: str,
+        tool_name: str,
+        paper: str,
+        provider: str,
+        model: Optional[str],
+        field: str,
+        write: bool,
+        run_id: Optional[str],
+    ) -> AgentToolResult:
+        call = self._call(tool_name, {"paper": paper, "provider": provider, "model": model, "field": field, "write": write}, run_id=run_id)
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        if write:
+            permission = self._check_permission(call, risk_level="write", reason="write extracted paper strategy card into HyperVault")
+            if permission is not None:
+                return permission
+        try:
+            payload = self._research_agent().extract_section(section_type, paper, provider=provider, model=model, field=field, write=write)
+            return self._record(call, "ok", json.dumps(payload, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            return self._record(call, "error", f"{type(exc).__name__}: {exc}", warnings=["research strategy extraction failed"])
+
+    def _research_agent(self):
+        from hyperagent.agents.research_experience_agent import ResearchExperienceAgent
+
+        return ResearchExperienceAgent(self.project_root, self.workspace_dir)
+
+    def _research_dimensions(self, family: str) -> List[str]:
+        from hyperagent.schemas.research_experience import RESEARCH_EXPERIENCE_DIMENSIONS
+
+        return list(RESEARCH_EXPERIENCE_DIMENSIONS.get(family, []))
+
     def _call(
         self,
         tool_name: str,
@@ -1056,6 +1327,7 @@ class SafeAgentToolExecutor:
             "commands-list": ["commands", "list"],
             "agents-list": ["agents", "list"],
             "hooks-list": ["hooks", "list"],
+            "research-strategy-status": ["research", "strategy", "status"],
         }
         tokens = alias_tokens.get(normalized_text, normalized_text.split())
         if tokens and tokens[0] in alias_tokens:
@@ -1084,6 +1356,8 @@ class SafeAgentToolExecutor:
             "sessions",
             "agents list",
             "hooks list",
+            "research strategy status",
+            "research status",
         ]
 
         if key in {"help", "commands"} and (not tokens or tokens[0] == "help"):
@@ -1135,6 +1409,30 @@ class SafeAgentToolExecutor:
                     }
                 )
             return {"servers": servers}
+
+        if key in {"research strategy", "research status"} or tokens[:1] == ["research"]:
+            from hyperagent.runtime.hypervault import HyperVaultClient
+            from hyperagent.schemas.research_experience import RESEARCH_EXPERIENCE_DIMENSIONS
+
+            status = HyperVaultClient().status().to_dict()
+            return {
+                "hypervault": status,
+                "dimensions": RESEARCH_EXPERIENCE_DIMENSIONS,
+                "tools": [
+                    "research_pattern_search",
+                    "experiment_strategy_search",
+                    "storytelling_search",
+                    "research_taste_search",
+                    "extract_research_pattern",
+                    "extract_experiment_strategy",
+                    "extract_storytelling",
+                    "extract_research_taste",
+                    "paper_strategy_compare",
+                    "research_experience_consolidate",
+                ],
+                "note": "HyperAgent extracts research strategy; HyperVault stores papers, strategy cards, and long-term research memory.",
+            }
+
         if key in {"skills list", "skills search"} or tokens[:1] in (["skills"], ["skill"]):
             roots = [
                 Path(__file__).resolve().parents[1] / "skills",

@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from hyperagent.runtime.conversations import ConversationStore
@@ -17,6 +18,34 @@ PROMPT_ROOT = Path(__file__).resolve().parents[1] / "hyperagent" / "prompts"
 
 
 class HyperAgentReplTest(unittest.TestCase):
+    def test_repl_formats_skill_items_as_structured_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=ConversationStore(workspace.workspace_dir),
+                providers=LLMProviderStore(workspace.workspace_dir),
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+            )
+
+            text = repl._format_skill_item(
+                SimpleNamespace(
+                    name="open-design",
+                    run_as="inline",
+                    path="/tmp/open-design/SKILL.md",
+                    description="Create UI prototypes with local design workflows.",
+                    allowed_tools=["read_file"],
+                )
+            )
+
+            self.assertIn("- open-design", text)
+            self.assertIn("mode", text)
+            self.assertIn("tools", text)
+            self.assertIn("/skill open-design <instruction>", text)
+            self.assertIn("/open-design <instruction>", text)
+
     def test_repl_status_context_tools_and_exit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

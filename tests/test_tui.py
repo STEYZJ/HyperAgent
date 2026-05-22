@@ -536,7 +536,7 @@ class HyperAgentTuiTest(unittest.TestCase):
             skill_names=lambda: ["open-design", "spectral-critic"],
         )
 
-        self.assertIn("/open-design", tui._suggest_commands("/open"))
+        self.assertIn("/skill open-design", tui._suggest_commands("/open"))
         self.assertIn("/skills", tui._suggest_commands("/"))
 
 

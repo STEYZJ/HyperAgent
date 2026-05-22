@@ -69,6 +69,17 @@ from hyperagent.schemas.research import (
     ModuleProposal,
     ParameterProposal,
 )
+
+from hyperagent.schemas.research_experience import (
+    EvidenceSpan,
+    ExperimentStrategy,
+    PaperStrategyCard,
+    RESEARCH_EXPERIENCE_DIMENSIONS,
+    ResearchPattern,
+    ResearchTaste,
+    ScientificStorytelling,
+    StrategyLesson,
+)
 from hyperagent.schemas.runtime import ProjectConfig, ResearchTask, WorkspaceStatus
 from hyperagent.schemas.spectral import SpectralReport
 
@@ -123,6 +134,14 @@ __all__ = [
     "ParameterProposal",
     "PreprocessingConfig",
     "PromptTemplate",
+    "EvidenceSpan",
+    "ExperimentStrategy",
+    "PaperStrategyCard",
+    "RESEARCH_EXPERIENCE_DIMENSIONS",
+    "ResearchPattern",
+    "ResearchTaste",
+    "ScientificStorytelling",
+    "StrategyLesson",
     "ProjectConfig",
     "RepoFileContext",
     "RepoSnapshot",

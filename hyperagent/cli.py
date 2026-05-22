@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from hyperagent.agents import BenchmarkAgent, CoordinatorAgent, ExperimentAutopilotAgent
+from hyperagent.agents import BenchmarkAgent, CoordinatorAgent, ExperimentAutopilotAgent, ResearchExperienceAgent
 from hyperagent.core.io import read_json, read_yaml, write_json
 from hyperagent.core.worklog import append_worklog
 from hyperagent.data.synthetic import write_synthetic_mat
@@ -302,6 +302,61 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     literature.add_argument("--max-results", type=int, default=10)
     literature.add_argument("--year-from", type=int, default=None)
     literature.add_argument("--sort-by", default="latest")
+
+
+    research = subparsers.add_parser(
+        "research",
+        help="Extract and search transferable paper research experience",
+    )
+    research_sub = research.add_subparsers(dest="research_command", required=True)
+
+    research_extract = research_sub.add_parser("extract", help="Extract a full paper strategy card")
+    research_extract.add_argument("--paper", required=True)
+    research_extract.add_argument("--provider", default="")
+    research_extract.add_argument("--model", default=None)
+    research_extract.add_argument("--field", default="")
+    research_extract.add_argument("--title", default="")
+    research_extract.add_argument("--venue", default="")
+    research_extract.add_argument("--year", type=int, default=None)
+    research_extract.add_argument("--no-write", action="store_true")
+    research_extract.add_argument("--json", action="store_true")
+
+    for command_name, help_text in [
+        ("pattern", "Extract why-this-paper-can-publish research-pattern lessons"),
+        ("experiment", "Extract baseline, ablation, control-variable, robustness, and visualization strategy"),
+        ("storytelling", "Extract scientific storytelling and reviewer-persuasion strategy"),
+    ]:
+        parser_item = research_sub.add_parser(command_name, help=help_text)
+        parser_item.add_argument("--paper", required=True)
+        parser_item.add_argument("--provider", default="")
+        parser_item.add_argument("--model", default=None)
+        parser_item.add_argument("--field", default="")
+        parser_item.add_argument("--no-write", action="store_true")
+        parser_item.add_argument("--json", action="store_true")
+
+    research_taste = research_sub.add_parser("taste", help="Compare papers to extract research taste")
+    research_taste.add_argument("--field", required=True)
+    research_taste.add_argument("--papers", default="")
+    research_taste.add_argument("--provider", default="")
+    research_taste.add_argument("--model", default=None)
+    research_taste.add_argument("--json", action="store_true")
+
+    research_consolidate = research_sub.add_parser("consolidate", help="Consolidate research experience into long-term memory")
+    research_consolidate.add_argument("--topic", required=True)
+    research_consolidate.add_argument("--field", default="")
+    research_consolidate.add_argument("--papers", default="")
+    research_consolidate.add_argument("--provider", default="")
+    research_consolidate.add_argument("--model", default=None)
+    research_consolidate.add_argument("--json", action="store_true")
+
+    research_search = research_sub.add_parser("search", help="Search existing research-experience strategy cards")
+    research_search.add_argument("--query", required=True)
+    research_search.add_argument("--dimension", required=True)
+    research_search.add_argument("--field", default="")
+    research_search.add_argument("--top-k", type=int, default=8)
+    research_search.add_argument("--json", action="store_true")
+
+    subparsers.add_parser("research-mcp-serve", help="Serve research-experience tools over stdio MCP")
 
     auto = subparsers.add_parser(
         "auto-experiment",
@@ -2516,48 +2571,29 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "skill-list":
-        roots = [
-            PACKAGE_ROOT / "skills",
-            Path("skills"),
-            workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        if codex_home:
-            roots.append(Path(codex_home) / "skills")
+        roots = skill_roots(workspace)
         skills = SkillStore(roots).list()
         if args.json:
             print_json({"skills": [skill.to_dict() for skill in skills]})
         else:
+            print(_label(translator, "skills", "skills"))
             for skill in skills:
-                print(f"{skill.name}\t{skill.path}\t{skill.description}")
+                print(format_skill_block(translator, skill))
         return 0
 
     if args.command == "skill-search":
-        roots = [
-            PACKAGE_ROOT / "skills",
-            Path("skills"),
-            workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        if codex_home:
-            roots.append(Path(codex_home) / "skills")
+        roots = skill_roots(workspace)
         skills = SkillStore(roots).search(args.query)
         if args.json:
             print_json({"skills": [skill.to_dict() for skill in skills]})
         else:
+            print(_label(translator, "skills", "skills"))
             for skill in skills:
-                print(f"{skill.name}\t{skill.path}\t{skill.description}")
+                print(format_skill_block(translator, skill))
         return 0
 
     if args.command == "skill-inspect":
-        roots = [
-            PACKAGE_ROOT / "skills",
-            Path("skills"),
-            workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        if codex_home:
-            roots.append(Path(codex_home) / "skills")
+        roots = skill_roots(workspace)
         skill = SkillStore(roots).get(args.name)
         if skill is None:
             raise KeyError(_txt(translator, "cli.error.skill_not_found", "skill not found: {name}", name=args.name))
@@ -2586,14 +2622,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "skill-bundles":
-        roots = [
-            PACKAGE_ROOT / "skills",
-            Path("skills"),
-            workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        if codex_home:
-            roots.append(Path(codex_home) / "skills")
+        roots = skill_roots(workspace)
         bundles = SkillStore(roots).bundles()
         payload = {
             "bundles": {
@@ -2611,14 +2640,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.command == "skill-run":
-        roots = [
-            PACKAGE_ROOT / "skills",
-            Path("skills"),
-            workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        if codex_home:
-            roots.append(Path(codex_home) / "skills")
+        roots = skill_roots(workspace)
         skill = SkillStore(roots).render(args.name, args.arguments)
         if not args.run:
             payload = skill.to_dict()
@@ -2757,6 +2779,84 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(_kv(translator, "index", "index", store.path))
             print(_kv(translator, "documents", "documents", len(payload["documents"])))
             print(_kv(translator, "engine", "engine", payload["engine"]))
+        return 0
+
+
+    if args.command == "research-mcp-serve":
+        from hyperagent.runtime.research_mcp import run_research_mcp_server
+
+        return run_research_mcp_server(workspace.project_root)
+
+    if args.command == "research":
+        research_agent = ResearchExperienceAgent(
+            workspace.project_root,
+            workspace.workspace_dir,
+            llm_store=llm_store,
+        )
+        if args.research_command == "extract":
+            card = research_agent.extract(
+                args.paper,
+                provider=args.provider,
+                model=args.model,
+                field=args.field,
+                title=args.title,
+                venue=args.venue,
+                year=args.year,
+                write=not args.no_write,
+            )
+            payload = card.to_dict()
+        elif args.research_command in {"pattern", "experiment", "storytelling"}:
+            section_map = {
+                "pattern": "research_pattern",
+                "experiment": "experiment_strategy",
+                "storytelling": "scientific_storytelling",
+            }
+            payload = research_agent.extract_section(
+                section_map[args.research_command],
+                args.paper,
+                provider=args.provider,
+                model=args.model,
+                field=args.field,
+                write=not args.no_write,
+            )
+        elif args.research_command == "taste":
+            papers = parse_csv(args.papers)
+            payload = research_agent.compare_paper_strategies(
+                papers,
+                provider=args.provider,
+                model=args.model,
+                field=args.field,
+            )
+        elif args.research_command == "consolidate":
+            payload = research_agent.consolidate_research_experience(
+                args.topic,
+                papers=parse_csv(args.papers),
+                provider=args.provider,
+                model=args.model,
+                field=args.field,
+            )
+        elif args.research_command == "search":
+            payload = research_agent.search_dimension(
+                args.dimension,
+                args.query,
+                top_k=args.top_k,
+                field=args.field,
+            )
+        else:
+            raise ValueError(f"Unsupported research command: {args.research_command}")
+        append_worklog(
+            "运行科研经验提炼命令",
+            "HyperAgent 已具备基础科研实验与文献工具。",
+            f"执行 research {args.research_command}，面向 paper strategy 而非论文内容摘要。",
+            "科研经验需要进入可审计的 agent 工作流，方便后续 Codex、Claude Code 和 HyperVault 共享。",
+            f"命令输出包含 keys={sorted(payload.keys()) if isinstance(payload, dict) else type(payload).__name__}。",
+            "科研经验提炼结果已生成或检索完成。",
+            "下一步可人工确认 strategy card，再 consolidation 进入长期 memory。",
+        )
+        if getattr(args, "json", False):
+            print_json(payload)
+        else:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "obsidian-index":
@@ -3094,6 +3194,11 @@ def parse_env(values: List[str]) -> dict:
     return parsed
 
 
+
+def parse_csv(value: str) -> List[str]:
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
 def parse_vars(values: List[str]) -> dict:
     return parse_env(values)
 
@@ -3220,6 +3325,41 @@ def parse_json_object(value: Optional[str], flag_name: str) -> dict:
     if not isinstance(parsed, dict):
         raise ValueError(f"{flag_name} must be a JSON object")
     return parsed
+
+
+def skill_roots(workspace: HyperAgentWorkspace) -> List[Path]:
+    codex_home = os.environ.get("CODEX_HOME")
+    return [
+        PACKAGE_ROOT / "skills",
+        Path("skills"),
+        workspace.workspace_dir / "skills",
+        Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills",
+    ]
+
+
+def format_skill_block(translator: Optional[Translator], skill) -> str:
+    description = " ".join(str(skill.description or "").split())
+    if len(description) > 160:
+        description = description[:157].rstrip() + "..."
+    allowed_tools = ", ".join(str(item) for item in (skill.allowed_tools or []))
+    if not allowed_tools:
+        allowed_tools = _txt(translator, "cli.value.none", "none")
+    return "\n".join(
+        [
+            f"- {skill.name}",
+            f"  {_label(translator, 'run_as', 'run_as')}: {skill.run_as}",
+            f"  {_label(translator, 'allowed_tools', 'allowed_tools')}: {allowed_tools}",
+            f"  {_label(translator, 'path', 'path')}: {skill.path}",
+            f"  {_label(translator, 'description', 'description')}: {description}",
+            "  "
+            + _txt(
+                translator,
+                "cli.output.skill_invoke",
+                "invoke: /skill {name} <instruction> or /{name} <instruction>",
+                name=skill.name,
+            ),
+        ]
+    )
 
 
 def confirm_tool_permission(request) -> bool:

@@ -160,7 +160,44 @@ class ActionRepairPipeline:
         ]
         for pattern in marker_patterns:
             candidates.extend(match.group(1).strip() for match in pattern.finditer(text))
+        candidates.extend(self._balanced_json_candidates(text))
         candidates.extend(match.group(0).strip() for match in self.TOOL_JSON_RE.finditer(text))
+        deduped: List[str] = []
+        seen = set()
+        for candidate in candidates:
+            if candidate and candidate not in seen:
+                deduped.append(candidate)
+                seen.add(candidate)
+        return deduped
+
+    def _balanced_json_candidates(self, text: str) -> List[str]:
+        candidates: List[str] = []
+        for start, char in enumerate(text):
+            if char != "{":
+                continue
+            depth = 0
+            in_string = False
+            escaped = False
+            for index in range(start, len(text)):
+                current = text[index]
+                if escaped:
+                    escaped = False
+                    continue
+                if current == "\\":
+                    escaped = True
+                    continue
+                if current == '"':
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if current == "{":
+                    depth += 1
+                elif current == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidates.append(text[start : index + 1].strip())
+                        break
         return candidates
 
     def _repair_truncated_json(self, text: str) -> str:

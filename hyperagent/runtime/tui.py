@@ -722,11 +722,14 @@ class HyperAgentTui:
         body = text[1:].strip()
         if not body:
             common = ["help", "status", "agents", "commands", "skills", "todos", "doctor", "exit"]
-            available = set(builtins + custom + skills)
+            available = set(builtins + custom)
             return ["/" + name for name in common if name in available][:8]
         query = body.split()[0].lower()
-        matches = sorted({name for name in builtins + custom + skills if name.startswith(query)})
-        return ["/" + name for name in matches[:8]]
+        command_matches = sorted({name for name in builtins + custom if name.startswith(query)})
+        skill_matches = sorted({name for name in skills if name.startswith(query)})
+        suggestions = ["/" + name for name in command_matches]
+        suggestions.extend("/skill " + name for name in skill_matches)
+        return suggestions[:8]
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
         assert self.stdscr is not None

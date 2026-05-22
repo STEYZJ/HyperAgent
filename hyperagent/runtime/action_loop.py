@@ -45,6 +45,15 @@ Allowed tools:
 - web_fetch: {"url": "https://example.org/paper", "max_chars": 12000}
 - web_extract: {"url": "https://example.org/paper", "max_chars": 12000}
 - web_cite: {"citation_id": "web:...", "limit": 10}
+- research_pattern_search: {"query": "how authors frame the gap", "field": "", "top_k": 5}
+- experiment_strategy_search: {"query": "baseline selection logic", "field": "", "top_k": 5}
+- storytelling_search: {"query": "reviewer persuasion and claim scaffolding", "field": "", "top_k": 5}
+- research_taste_search: {"query": "what problems are worth doing", "field": "", "top_k": 5}
+- extract_research_pattern: {"paper": "paper_id_or_path", "provider": "deepseek", "write": true}
+- extract_experiment_strategy: {"paper": "paper_id_or_path", "provider": "deepseek", "write": true}
+- extract_storytelling: {"paper": "paper_id_or_path", "provider": "deepseek", "write": true}
+- paper_strategy_compare: {"papers": ["paper_a", "paper_b"], "field": ""}
+- research_experience_consolidate: {"topic": "baseline selection", "papers": ["paper_a", "paper_b"], "field": ""}
 
 Return exactly one JSON object and no prose:
 {"thought": "brief reason", "action": "tool", "tool_name": "search_code", "args": {"query": "ExperimentSuiteRunner"}}
@@ -52,7 +61,8 @@ or:
 {"thought": "brief reason", "action": "final", "final": "answer or next decision"}
 
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
-Use framework_command before answering questions about HyperAgent status, usage/cost, configured providers, web availability, image availability, MCP, skills, commands, sessions, todos, plan mode, IDE context, worktree, hooks, agents, or available framework capabilities.
+Use framework_command before answering questions about HyperAgent status, usage/cost, configured providers, web availability, image availability, MCP, skills, commands, sessions, todos, plan mode, IDE context, worktree, hooks, agents, research strategy status, or available framework capabilities.
+When the user asks to list, inspect, install, or choose skills, call framework_command with "skills list" or "skills search". When the user asks to use a known skill, call run_skill with the skill name and the user's instruction instead of explaining the skill manually.
 Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
 Sensitive tools such as run_command, run_experiment, apply_patch, todo_write, web_search, web_fetch, web_extract, image_generate, and image_edit may require human authorization. If a tool is blocked for permission, report that approval is needed instead of pretending the capability is unavailable.
 You do have controlled access to project files, approved shell commands, experiments, skills, and web tools through the tool list above. Do not claim you have no filesystem, shell, or network capability; instead, choose the appropriate tool or explain which provider/API key or user permission is missing.
@@ -700,6 +710,46 @@ class AgentActionLoop:
                 created_at=utc_now(),
                 content=skill.body,
                 artifact_path=skill.path,
+            )
+
+        if tool_name in {"research_pattern_search", "experiment_strategy_search", "storytelling_search", "research_taste_search"}:
+            method = getattr(self.tool_executor, tool_name)
+            return method(
+                str(args.get("query", "")),
+                field=str(args.get("field", "")),
+                top_k=int(args.get("top_k", 8)),
+                run_id=run_id,
+            )
+        if tool_name in {"extract_research_pattern", "extract_experiment_strategy", "extract_storytelling", "extract_research_taste"}:
+            method = getattr(self.tool_executor, tool_name)
+            return method(
+                str(args.get("paper", "")),
+                provider=str(args.get("provider", "")),
+                model=(None if args.get("model") in {None, ""} else str(args.get("model"))),
+                field=str(args.get("field", "")),
+                write=bool(args.get("write", True)),
+                run_id=run_id,
+            )
+        if tool_name in {"paper_strategy_compare", "compare_paper_strategies"}:
+            raw_papers = args.get("papers", [])
+            papers = [raw_papers] if isinstance(raw_papers, str) else raw_papers
+            return self.tool_executor.paper_strategy_compare(
+                [str(item) for item in papers] if isinstance(papers, list) else [],
+                provider=str(args.get("provider", "")),
+                model=(None if args.get("model") in {None, ""} else str(args.get("model"))),
+                field=str(args.get("field", "")),
+                run_id=run_id,
+            )
+        if tool_name in {"research_experience_consolidate", "consolidate_research_experience"}:
+            raw_papers = args.get("papers", [])
+            papers = [raw_papers] if isinstance(raw_papers, str) else raw_papers
+            return self.tool_executor.research_experience_consolidate(
+                str(args.get("topic", "")),
+                papers=[str(item) for item in papers] if isinstance(papers, list) else [],
+                provider=str(args.get("provider", "")),
+                model=(None if args.get("model") in {None, ""} else str(args.get("model"))),
+                field=str(args.get("field", "")),
+                run_id=run_id,
             )
         if tool_name == "framework_command":
             raw_args = args.get("args", [])
