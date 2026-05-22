@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -145,6 +146,94 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertEqual(run.steps[0].tool_result.status, "ok")
             self.assertIn('"initialized": true', run.steps[0].tool_result.content)
             self.assertEqual(run.final_response, "HyperAgent status was queried.")
+
+    def test_action_loop_normalizes_direct_tool_action_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            session_store = ConversationStore(workspace.workspace_dir)
+            session = session_store.new("direct-action")
+            llm_store = LLMProviderStore(workspace.workspace_dir)
+            fake_client = FakeLLMClient(
+                [
+                    (
+                        '{"thought": "inspect web", "action": "framework_command", '
+                        '"command": "web status"}'
+                    ),
+                    (
+                        '{"thought": "done", "action": "final", '
+                        '"final": "Web status was queried."}'
+                    ),
+                ]
+            )
+
+            run = AgentActionLoop(
+                session_store,
+                llm_store,
+                workspace,
+                llm_client=fake_client,
+            ).run(
+                session.session_id,
+                provider="deepseek",
+                instruction="你现在能联网了吗？",
+                max_steps=2,
+            )
+
+            self.assertEqual(run.status, "completed")
+            self.assertEqual(run.steps[0].tool_name, "framework_command")
+            self.assertEqual(run.steps[0].tool_result.status, "ok")
+            self.assertIn("Normalized direct tool action", run.steps[0].warnings[-1])
+            self.assertIn('"fetch_available": true', run.steps[0].tool_result.content)
+
+    def test_action_loop_run_skill_can_find_codex_home_skills(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            skill_dir = codex_home / "skills" / "demo"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: demo\ndescription: Demo\nrunAs: inline\n---\nHello $ARGUMENTS",
+                encoding="utf-8",
+            )
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            session_store = ConversationStore(workspace.workspace_dir)
+            session = session_store.new("codex-skill")
+            llm_store = LLMProviderStore(workspace.workspace_dir)
+            fake_client = FakeLLMClient(
+                [
+                    (
+                        '{"thought": "use skill", "action": "tool", '
+                        '"tool_name": "run_skill", '
+                        '"args": {"name": "demo", "instruction": "HSI"}}'
+                    )
+                ]
+            )
+
+            old_codex_home = os.environ.get("CODEX_HOME")
+            os.environ["CODEX_HOME"] = str(codex_home)
+            try:
+                run = AgentActionLoop(
+                    session_store,
+                    llm_store,
+                    workspace,
+                    llm_client=fake_client,
+                ).run(
+                    session.session_id,
+                    provider="deepseek",
+                    instruction="Run demo skill.",
+                    max_steps=1,
+                )
+            finally:
+                if old_codex_home is None:
+                    os.environ.pop("CODEX_HOME", None)
+                else:
+                    os.environ["CODEX_HOME"] = old_codex_home
+
+            self.assertEqual(run.steps[0].tool_name, "run_skill")
+            self.assertEqual(run.steps[0].tool_result.status, "ok")
+            self.assertIn("Hello HSI", run.steps[0].tool_result.content)
 
     def test_action_loop_default_requires_permission_for_sensitive_tools(self):
         with tempfile.TemporaryDirectory() as tmp:

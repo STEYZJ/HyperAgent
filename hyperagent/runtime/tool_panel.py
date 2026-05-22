@@ -1,5 +1,6 @@
 """Text panels for local tool calls and agent action runs."""
 
+import json
 from typing import Iterable, List, Optional
 
 from hyperagent.runtime.i18n import Translator
@@ -24,7 +25,7 @@ def render_tool_result(
         lines.extend(f"- {warning}" for warning in result.warnings)
     if result.content:
         lines.append(f"{_t(translator, 'tool_panel.output', 'output')}:")
-        lines.append(_preview(result.content, max_chars=max_chars))
+        lines.append(_preview_tool_content(result, max_chars=max_chars))
     return "\n".join(lines)
 
 
@@ -73,6 +74,75 @@ def _preview(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n...<truncated>"
+
+
+def _preview_tool_content(result: AgentToolResult, max_chars: int) -> str:
+    if result.tool_name != "framework_command":
+        return _preview(result.content, max_chars=max_chars)
+    try:
+        payload = json.loads(result.content)
+    except json.JSONDecodeError:
+        return _preview(result.content, max_chars=max_chars)
+    summary = _summarize_framework_payload(payload)
+    return _preview(summary or result.content, max_chars=max_chars)
+
+
+def _summarize_framework_payload(payload: object) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    if "providers" in payload:
+        providers = payload.get("providers", {})
+        if isinstance(providers, dict):
+            configured = [
+                name
+                for name, value in providers.items()
+                if bool(value)
+            ]
+            return "\n".join(
+                [
+                    f"search_configured: {bool(payload.get('search_configured'))}",
+                    "providers: " + (", ".join(configured) if configured else "none"),
+                    f"fetch_available: {bool(payload.get('fetch_available'))}",
+                ]
+            )
+    if "skills" in payload:
+        skills = payload.get("skills", [])
+        if isinstance(skills, list):
+            names = [
+                str(item.get("name", ""))
+                for item in skills
+                if isinstance(item, dict) and item.get("name")
+            ]
+            visible = names[:20]
+            suffix = f"\n... {len(names) - len(visible)} more" if len(names) > len(visible) else ""
+            return "skills:\n" + "\n".join(f"- {name}" for name in visible) + suffix
+    if "request_count" in payload:
+        return "\n".join(
+            [
+                f"request_count: {payload.get('request_count')}",
+                f"total_tokens: {payload.get('total_tokens')}",
+                f"cache_hit_ratio: {payload.get('cache_hit_ratio')}",
+                f"ledger_path: {payload.get('ledger_path')}",
+            ]
+        )
+    if "initialized" in payload:
+        return "\n".join(
+            [
+                f"initialized: {payload.get('initialized')}",
+                f"workspace: {payload.get('workspace')}",
+                f"dataset_root: {payload.get('dataset_root')}",
+                f"task_count: {payload.get('task_count')}",
+            ]
+        )
+    if "servers" in payload:
+        servers = payload.get("servers", [])
+        names = [
+            str(item.get("name", ""))
+            for item in servers
+            if isinstance(item, dict) and item.get("name")
+        ] if isinstance(servers, list) else []
+        return "mcp_servers: " + (", ".join(names) if names else "none")
+    return ""
 
 
 def _indent(text: str, prefix: str = "  ") -> str:

@@ -2,6 +2,7 @@
 
 import json
 import hashlib
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,7 +10,7 @@ from uuid import uuid4
 
 from hyperagent.core.io import write_json
 from hyperagent.runtime.action_repair import ActionRepairPipeline, ToolCallStormBreaker
-from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, tool_metadata
+from hyperagent.runtime.agent_tools import TOOL_METADATA, SafeAgentToolExecutor, tool_metadata
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.hooks import HookEngine
@@ -213,8 +214,10 @@ class AgentActionLoop:
 
             parsed_results = self.repair_pipeline.parse_many(response)
             parsed_result = parsed_results[0]
-            parsed = parsed_result.action
+            parsed, normalization_warning = self._normalize_action(parsed_result.action)
             warnings = list(parsed_result.warnings)
+            if normalization_warning:
+                warnings.append(normalization_warning)
             action = str(parsed.get("action", "final"))
             if action == "final":
                 final = str(parsed.get("final", response.content))
@@ -261,17 +264,20 @@ class AgentActionLoop:
 
             tool_actions = []
             for item in parsed_results:
-                parsed_action = item.action
+                parsed_action, normalization_warning = self._normalize_action(item.action)
                 item_action = str(parsed_action.get("action", "final"))
                 if item_action != "tool":
                     continue
                 item_args = dict(parsed_action.get("args", {}))
+                item_warnings = list(item.warnings)
+                if normalization_warning:
+                    item_warnings.append(normalization_warning)
                 tool_actions.append(
                     (
                         item,
                         str(parsed_action.get("tool_name", "")),
                         item_args,
-                        list(item.warnings),
+                        item_warnings,
                     )
                 )
             parallel = len(tool_actions) > 1 and all(
@@ -454,6 +460,23 @@ class AgentActionLoop:
             lines = lines[:-1]
         return "\n".join(lines).strip()
 
+    def _normalize_action(self, parsed: Dict[str, Any]) -> tuple:
+        normalized = dict(parsed or {})
+        action = str(normalized.get("action", "")).strip()
+        if action not in TOOL_METADATA:
+            return normalized, ""
+        args = normalized.get("args", {})
+        if not isinstance(args, dict):
+            args = {}
+        for key, value in normalized.items():
+            if key in {"action", "thought", "tool_name", "args"}:
+                continue
+            args.setdefault(key, value)
+        normalized["action"] = "tool"
+        normalized["tool_name"] = action
+        normalized["args"] = args
+        return normalized, f"Normalized direct tool action: {action}"
+
     def _execute_tool_actions(
         self,
         tool_actions: List[tuple],
@@ -618,6 +641,8 @@ class AgentActionLoop:
                 self.workspace.project_root / "skills",
                 self.workspace.workspace_dir / "skills",
             ]
+            codex_home = os.environ.get("CODEX_HOME")
+            roots.append(Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills")
             skill_name = str(args.get("name", args.get("skill", "")))
             instruction = str(args.get("instruction", args.get("arguments", "")))
             try:
