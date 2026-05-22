@@ -56,6 +56,31 @@ class HyperAgentTuiTest(unittest.TestCase):
             self.assertTrue(wrapped[1].text.startswith(" " * tui._display_width("助手 │ ")))
             self.assertTrue(all(tui._display_width(line.text) <= 18 for line in wrapped))
 
+    def test_multiline_output_event_labels_first_line_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            translator = I18nStore(Path(tmp)).translator("zh-CN")
+            tui = HyperAgentTui(
+                workspace=None,
+                conversations=None,
+                providers=None,
+                prompt_library=None,
+                translator=translator,
+            )
+
+            tui._append_output_event("tool", "步骤 1: action=tool\n工具：framework_command\n状态：ok")
+            wrapped = tui._wrap_lines(tui.lines, width=40, role_labels=True)
+
+            self.assertEqual(wrapped[0].text, "工具 │ 步骤 1: action=tool")
+            self.assertEqual(
+                wrapped[1].text,
+                " " * tui._display_width("工具 │ ") + "工具：framework_command",
+            )
+            self.assertEqual(
+                wrapped[2].text,
+                " " * tui._display_width("工具 │ ") + "状态：ok",
+            )
+            self.assertEqual(sum(1 for line in wrapped if line.text.startswith("工具 │ ")), 1)
+
     def test_role_labels_are_localized(self):
         with tempfile.TemporaryDirectory() as tmp:
             translator = I18nStore(Path(tmp)).translator("zh-CN")

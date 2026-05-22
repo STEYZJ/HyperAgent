@@ -36,6 +36,7 @@ except Exception:  # pragma: no cover
 class TuiLine:
     kind: str
     text: str
+    show_label: bool = True
 
     def __str__(self) -> str:
         return self.text
@@ -274,8 +275,8 @@ class HyperAgentTui:
         self._append_output_event(kind, text)
 
     def _append_output_event(self, kind: str, text: str) -> None:
-        for line in str(text).splitlines() or [""]:
-            self.lines.append(TuiLine(kind, line))
+        for index, line in enumerate(str(text).splitlines() or [""]):
+            self.lines.append(TuiLine(kind, line, show_label=index == 0))
         self.lines = self.lines[-1000:]
         if self.stdscr is not None:
             self._draw()
@@ -737,7 +738,9 @@ class HyperAgentTui:
     def _wrap_semantic_line(self, line: TuiLine, width: int) -> List[TuiLine]:
         width = max(int(width), 1)
         label = self._role_label(line.kind)
-        prefix = f"{label} │ " if label else ""
+        label_prefix = f"{label} │ " if label else ""
+        label_width = self._display_width(label_prefix)
+        prefix = label_prefix if line.show_label else " " * label_width
         prefix_width = self._display_width(prefix)
         if prefix_width >= width:
             prefix = self._clip_to_width(prefix, max(width - 1, 1))
@@ -747,8 +750,14 @@ class HyperAgentTui:
         continuation = " " * prefix_width
         wrapped: List[TuiLine] = []
         for index, part in enumerate(parts):
-            wrapped.append(TuiLine(line.kind, (prefix if index == 0 else continuation) + part))
-        return wrapped or [TuiLine(line.kind, prefix)]
+            wrapped.append(
+                TuiLine(
+                    line.kind,
+                    (prefix if index == 0 else continuation) + part,
+                    show_label=line.show_label and index == 0,
+                )
+            )
+        return wrapped or [TuiLine(line.kind, prefix, show_label=line.show_label)]
 
     def _wrap_line(self, line: str, width: int) -> List[str]:
         width = max(int(width), 1)
