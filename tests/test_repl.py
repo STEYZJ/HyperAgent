@@ -236,6 +236,66 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertIn("普通回答", "\n".join(outputs))
             self.assertNotIn("controlled action loop", "\n".join(outputs))
 
+    def test_skill_slash_invocation_runs_inline_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            skill_dir = workspace.workspace_dir / "skills" / "demo"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: demo\ndescription: Demo skill\nrunAs: inline\n---\nHello $ARGUMENTS",
+                encoding="utf-8",
+            )
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+            chat_calls = []
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                output_func=outputs.append,
+            )
+            repl._chat = lambda message: chat_calls.append(message)
+
+            self.assertTrue(repl.handle_line("/skill demo HSI"))
+            self.assertTrue(repl.handle_line("/demo module"))
+
+            self.assertEqual(chat_calls, ["Hello HSI", "Hello module"])
+
+    def test_skill_with_tools_enters_action_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            skill_dir = workspace.workspace_dir / "skills" / "reader"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                (
+                    "---\nname: reader\ndescription: Reader skill\nrunAs: inline\n"
+                    "allowed-tools: read_file\n---\nRead $ARGUMENTS"
+                ),
+                encoding="utf-8",
+            )
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            action_calls = []
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+            )
+            repl._act = lambda instruction: action_calls.append(instruction)
+
+            self.assertTrue(repl.handle_line("/reader notes.md"))
+
+            self.assertEqual(action_calls, ["Read notes.md"])
+
     def test_context_status_triggers_compression(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

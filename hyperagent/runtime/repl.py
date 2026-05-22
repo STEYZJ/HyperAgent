@@ -1,5 +1,6 @@
 """Interactive HyperAgent REPL."""
 
+import os
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -300,7 +301,7 @@ class HyperAgentRepl:
         elif command in {"/exit", "/quit"}:
             return False
         else:
-            if not self._custom_command(command, args):
+            if not self._custom_command(command, args) and not self._skill_slash_command(command, args):
                 self.output(
                     self._t(
                         "repl.unknown_command",
@@ -897,6 +898,12 @@ class HyperAgentRepl:
             self._chat(rendered.prompt)
         return True
 
+    def _skill_slash_command(self, command: str, args: List[str]) -> bool:
+        name = command.lstrip("/")
+        if not name:
+            return False
+        return self._run_skill_by_name(name, args)
+
     def _todos(self, args: List[str]) -> None:
         owner = self.session_id
         if args and args[0] == "clear":
@@ -1295,12 +1302,7 @@ class HyperAgentRepl:
 
     def _skills(self, args: Optional[List[str]] = None) -> None:
         args = args or []
-        roots = [
-            Path(__file__).resolve().parents[1] / "skills",
-            Path("skills"),
-            self.workspace.workspace_dir / "skills",
-        ]
-        store = SkillStore(roots)
+        store = self._skill_store()
         if args and args[0] in {"show", "render"} and len(args) >= 2:
             try:
                 skill = store.render(args[1], " ".join(args[2:]))
@@ -1309,13 +1311,14 @@ class HyperAgentRepl:
                 return
             self.output(skill.body)
             return
-        if args and args[0] == "run" and len(args) >= 2:
-            self._act(
-                "Run skill `{}` with arguments:\n{}".format(
-                    args[1],
-                    " ".join(args[2:]),
-                )
-            )
+        if args and args[0] in {"run", "use"} and len(args) >= 2:
+            if not self._run_skill_by_name(args[1], args[2:]):
+                self.output(self._t("cli.error.skill_not_found", "skill not found: {name}", name=args[1]))
+            return
+        if args and args[0] not in {"list", "browse", "inspect", "install", "bundles"}:
+            if self._run_skill_by_name(args[0], args[1:]):
+                return
+            self.output(self._t("cli.error.skill_not_found", "skill not found: {name}", name=args[0]))
             return
         skills = store.list()
         if not skills:
@@ -1323,6 +1326,37 @@ class HyperAgentRepl:
             return
         for skill in skills:
             self.output(f"{skill.name}\t{skill.run_as}\t{skill.path}\t{skill.description}")
+
+    def _skill_roots(self) -> List[Path]:
+        roots = [
+            Path(__file__).resolve().parents[1] / "skills",
+            self.workspace.project_root / "skills",
+            self.workspace.workspace_dir / "skills",
+        ]
+        codex_home = os.environ.get("CODEX_HOME")
+        roots.append(Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills")
+        return roots
+
+    def _skill_store(self) -> SkillStore:
+        return SkillStore(self._skill_roots())
+
+    def skill_names(self) -> List[str]:
+        return [skill.name for skill in self._skill_store().list()]
+
+    def _run_skill_by_name(self, name: str, args: List[str]) -> bool:
+        arguments = " ".join(args).strip()
+        try:
+            skill = self._skill_store().render(name, arguments)
+        except KeyError:
+            return False
+        if skill.run_as.lower() == "subagent":
+            self._act(f"Run skill `{skill.name}` with arguments:\n{arguments}")
+            return True
+        if skill.allowed_tools:
+            self._act(skill.body)
+            return True
+        self._chat(skill.body)
+        return True
 
     def _checkpoint(self, args: List[str]) -> None:
         store = CheckpointStore(self.workspace.project_root, self.workspace.workspace_dir)

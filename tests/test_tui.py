@@ -529,6 +529,16 @@ class HyperAgentTuiTest(unittest.TestCase):
             self.assertIn("/feature-dev", suggestions)
             self.assertIn("/background", tui._suggest_commands("/back"))
 
+    def test_tui_suggests_skill_slash_commands(self):
+        tui = self._tui()
+        tui.repl = SimpleNamespace(
+            command_store=SimpleNamespace(discover=lambda: []),
+            skill_names=lambda: ["open-design", "spectral-critic"],
+        )
+
+        self.assertIn("/open-design", tui._suggest_commands("/open"))
+        self.assertIn("/skills", tui._suggest_commands("/"))
+
 
 if __name__ == "__main__":
     unittest.main()

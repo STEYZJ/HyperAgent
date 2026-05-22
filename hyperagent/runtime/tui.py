@@ -718,13 +718,14 @@ class HyperAgentTui:
             return []
         builtins = command_names(include_aliases=True) + ["mouse", "act", "plan"]
         custom = [command.name for command in self.repl.command_store.discover()]
+        skills = self.repl.skill_names() if hasattr(self.repl, "skill_names") else []
         body = text[1:].strip()
         if not body:
-            common = ["help", "status", "agents", "commands", "todos", "doctor", "exit", "hsi"]
-            available = set(builtins + custom)
+            common = ["help", "status", "agents", "commands", "skills", "todos", "doctor", "exit"]
+            available = set(builtins + custom + skills)
             return ["/" + name for name in common if name in available][:8]
         query = body.split()[0].lower()
-        matches = sorted({name for name in builtins + custom if name.startswith(query)})
+        matches = sorted({name for name in builtins + custom + skills if name.startswith(query)})
         return ["/" + name for name in matches[:8]]
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
