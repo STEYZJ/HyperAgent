@@ -14,6 +14,7 @@ from hyperagent.runtime.i18n import I18nStore
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
+from hyperagent.runtime.slash_registry import public_commands
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 
 
@@ -154,6 +155,73 @@ class I18nTest(unittest.TestCase):
             self.assertIn("显示可用命令", repl_help)
             self.assertNotIn("Central command registry", repl_help)
             self.assertNotIn("Show available commands", repl_help)
+
+    def test_chinese_slash_args_hints_are_complete(self):
+        store = I18nStore(Path("."))
+        packs = {pack.locale: pack.translations for pack in store.list_packs()}
+        zh = packs["zh-CN"]
+
+        missing = []
+        untranslated = []
+        for command in public_commands():
+            if not command.args_hint:
+                continue
+            key = f"slash.command.{command.name}.args_hint"
+            if key not in zh:
+                missing.append(key)
+                continue
+            if zh[key] == command.args_hint:
+                untranslated.append(key)
+
+        self.assertEqual(missing, [])
+        self.assertEqual(untranslated, [])
+
+    def test_chinese_command_help_does_not_leak_common_english_help(self):
+        translator = I18nStore(Path(".")).translator("zh-CN")
+        help_text = command_help_text(translator)
+
+        forbidden = [
+            "Show available commands",
+            "Run a prompt",
+            "List saved",
+            "Generate or edit",
+            "[list|run|status|pause|resume|stop]",
+            "<session_id> [message]",
+        ]
+        for phrase in forbidden:
+            self.assertNotIn(phrase, help_text)
+
+        self.assertIn("/agents [list列表|run运行|status状态|pause暂停|resume恢复|stop停止]", help_text)
+        self.assertIn("/web <status状态|search搜索|fetch抓取|cite引用>", help_text)
+
+    def test_repl_help_uses_chinese_placeholders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            translator = I18nStore(root, workspace.workspace_dir).translator("zh-CN")
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=ConversationStore(workspace.workspace_dir),
+                providers=LLMProviderStore(workspace.workspace_dir),
+                prompt_library=PromptLibrary([]),
+                translator=translator,
+            )
+
+            repl_help = repl._help()
+            forbidden = [
+                "<question>",
+                "<instruction>",
+                "[title]",
+                "<path>",
+                "[limit]",
+                "<session_id>",
+            ]
+            for phrase in forbidden:
+                self.assertNotIn(phrase, repl_help)
+            self.assertIn("/btw <问题>", repl_help)
+            self.assertIn("/plan <任务说明>", repl_help)
+            self.assertIn("/restore <检查点ID>", repl_help)
 
 
 if __name__ == "__main__":

@@ -174,6 +174,27 @@
     "slash.command.hsi.description": "Run HSI-specific workflows",
     "slash.command.tui.description": "Start fullscreen TUI",
     "slash.command.repl.description": "Start interactive REPL",
-    "slash.command.exit.description": "Exit interactive mode"
+    "slash.command.exit.description": "Exit interactive mode",
+    "slash.command.resume.args_hint": "<session_id> [message]",
+    "slash.command.compact.args_hint": "<session_id>",
+    "slash.command.new.args_hint": "[title]",
+    "slash.command.branch.args_hint": "[title]",
+    "slash.command.queue.args_hint": "<prompt>",
+    "slash.command.steer.args_hint": "<prompt>",
+    "slash.command.goal.args_hint": "[text|pause|resume|clear|status]",
+    "slash.command.subgoal.args_hint": "[text|remove N|clear]",
+    "slash.command.background.args_hint": "<prompt>",
+    "slash.command.agents.args_hint": "[list|run|status|pause|resume|stop]",
+    "slash.command.tool.args_hint": "<name> <json>",
+    "slash.command.web.args_hint": "<status|search|fetch|cite>",
+    "slash.command.image.args_hint": "<status|generate|edit>",
+    "slash.command.ide-context.args_hint": "<status|on|off|set-open-files|clear>",
+    "slash.command.personality.args_hint": "<status|set|clear>",
+    "slash.command.feedback.args_hint": "<add|list>",
+    "slash.command.plan-mode.args_hint": "<status|on|off>",
+    "slash.command.preset.args_hint": "<flash|auto|pro|standard>",
+    "slash.command.budget.args_hint": "[tokens|clear]",
+    "slash.command.thinking.args_hint": "[on|off|toggle|status]",
+    "slash.command.hsi.args_hint": "<audit|experiment-cycle|review-experiment|literature|materialize-module>"
   }
 }
