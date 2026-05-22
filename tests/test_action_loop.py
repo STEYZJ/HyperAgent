@@ -106,6 +106,46 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertEqual(run.final_response, "plain final answer")
             self.assertIn("not valid JSON", run.steps[0].warnings[0])
 
+    def test_action_loop_executes_framework_command_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            session_store = ConversationStore(workspace.workspace_dir)
+            session = session_store.new("framework")
+            llm_store = LLMProviderStore(workspace.workspace_dir)
+            fake_client = FakeLLMClient(
+                [
+                    (
+                        '{"thought": "inspect HyperAgent status", "action": "tool", '
+                        '"tool_name": "framework_command", '
+                        '"args": {"command": "status"}}'
+                    ),
+                    (
+                        '{"thought": "status inspected", "action": "final", '
+                        '"final": "HyperAgent status was queried."}'
+                    ),
+                ]
+            )
+
+            run = AgentActionLoop(
+                session_store,
+                llm_store,
+                workspace,
+                llm_client=fake_client,
+            ).run(
+                session.session_id,
+                provider="deepseek",
+                instruction="Can you check the framework status?",
+                max_steps=2,
+            )
+
+            self.assertEqual(run.status, "completed")
+            self.assertEqual(run.steps[0].tool_name, "framework_command")
+            self.assertEqual(run.steps[0].tool_result.status, "ok")
+            self.assertIn('"initialized": true', run.steps[0].tool_result.content)
+            self.assertEqual(run.final_response, "HyperAgent status was queried.")
+
 
 if __name__ == "__main__":
     unittest.main()

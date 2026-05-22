@@ -104,6 +104,13 @@ TOOL_METADATA: Dict[str, ToolMetadata] = {
         parallel_safe=True,
         description="Run a SKILL.md skill inline or as a subagent.",
     ),
+    "framework_command": ToolMetadata(
+        name="framework_command",
+        risk_level="read",
+        mutating=False,
+        parallel_safe=True,
+        description="Query safe HyperAgent framework status and registry features.",
+    ),
     "todo_write": ToolMetadata(
         name="todo_write",
         risk_level="write",
@@ -606,6 +613,43 @@ class SafeAgentToolExecutor:
                 warnings=["todo_write failed"],
             )
 
+    def framework_command(
+        self,
+        command: str,
+        args: Optional[Sequence[str]] = None,
+        run_id: Optional[str] = None,
+    ) -> AgentToolResult:
+        normalized_args = [str(item) for item in (args or [])]
+        call = self._call(
+            "framework_command",
+            {"command": command, "args": normalized_args},
+            run_id=run_id,
+        )
+        pre_hook = self._pre_tool_check(call)
+        if pre_hook is not None:
+            return pre_hook
+        try:
+            payload = self._framework_command_payload(command, normalized_args)
+            return self._record(
+                call,
+                "ok",
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            )
+        except KeyError as exc:
+            return self._record(
+                call,
+                "blocked",
+                str(exc),
+                warnings=["unsupported framework command"],
+            )
+        except Exception as exc:
+            return self._record(
+                call,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+                warnings=["framework_command failed"],
+            )
+
     def web_search(
         self,
         query: str,
@@ -974,6 +1018,220 @@ class SafeAgentToolExecutor:
                 + [f"hook matched: {rule}" for rule in result.matched_rules],
             )
         return None
+
+    def _framework_command_payload(self, command: str, args: Sequence[str]) -> Dict[str, Any]:
+        from hyperagent.runtime.commands import SlashCommandStore
+        from hyperagent.runtime.conversations import ConversationStore
+        from hyperagent.runtime.events import RuntimeEventLog
+        from hyperagent.runtime.extensions import RuntimeExtensionStore
+        from hyperagent.runtime.feature_state import (
+            FeedbackStore,
+            IDEContextStore,
+            PersonalityStore,
+            PlanModeStore,
+            image_status,
+            web_status,
+            worktree_status,
+        )
+        from hyperagent.runtime.hooks import HookEngine
+        from hyperagent.runtime.llm_usage import LLMUsageLedger
+        from hyperagent.runtime.mcp import MCPServerStore
+        from hyperagent.runtime.skills import SkillStore
+        from hyperagent.runtime.todos import TodoStore
+        from hyperagent.runtime.workspace import HyperAgentWorkspace
+
+        command_text = " ".join([str(command or ""), *[str(arg) for arg in args]]).strip()
+        normalized_text = command_text.lower().replace("_", "-").strip()
+        alias_tokens = {
+            "commands-supported": ["help"],
+            "web-status": ["web", "status"],
+            "image-status": ["image", "status"],
+            "mcp-status": ["mcp", "status"],
+            "ide-context-status": ["ide-context", "status"],
+            "plan-mode-status": ["plan-mode", "status"],
+            "personality-status": ["personality", "status"],
+            "feedback-list": ["feedback", "list"],
+            "skills-list": ["skills", "list"],
+            "skills-search": ["skills", "search"],
+            "commands-list": ["commands", "list"],
+            "agents-list": ["agents", "list"],
+            "hooks-list": ["hooks", "list"],
+        }
+        tokens = alias_tokens.get(normalized_text, normalized_text.split())
+        if tokens and tokens[0] in alias_tokens:
+            tokens = alias_tokens[tokens[0]] + tokens[1:]
+        key = " ".join(tokens[:2]) if len(tokens) >= 2 else (tokens[0] if tokens else "help")
+        workspace = HyperAgentWorkspace(self.project_root)
+
+        supported = [
+            "help",
+            "status",
+            "usage",
+            "cost",
+            "stats",
+            "web status",
+            "image status",
+            "ide-context status",
+            "plan-mode status",
+            "personality status",
+            "feedback list",
+            "worktree",
+            "mcp status",
+            "skills list",
+            "skills search",
+            "commands list",
+            "todos",
+            "sessions",
+            "agents list",
+            "hooks list",
+        ]
+
+        if key in {"help", "commands"} and (not tokens or tokens[0] == "help"):
+            return {"supported_framework_commands": supported}
+        if key == "status":
+            status = workspace.status()
+            return {
+                "initialized": status.initialized,
+                "workspace": str(status.workspace_dir),
+                "dataset_root": str(status.dataset_root),
+                "task_count": status.task_count,
+                "tasks_by_status": status.tasks_by_status,
+            }
+        if key in {"usage", "cost"}:
+            return LLMUsageLedger(self.workspace_dir).summarize(limit=20)
+        if key == "stats":
+            return {
+                "events": RuntimeEventLog(self.workspace_dir).summarize(),
+                "llm_usage": LLMUsageLedger(self.workspace_dir).summarize(limit=20),
+                "tools": tool_catalog(),
+            }
+        if key == "web status" or tokens[:1] == ["web"]:
+            return web_status()
+        if key == "image status" or tokens[:1] == ["image"]:
+            return image_status()
+        if key == "ide-context status" or tokens[:1] == ["ide-context"]:
+            return IDEContextStore(self.workspace_dir).load()
+        if key == "plan-mode status" or tokens[:1] == ["plan-mode"]:
+            return PlanModeStore(self.workspace_dir).load()
+        if key == "personality status" or tokens[:1] == ["personality"]:
+            return PersonalityStore(self.workspace_dir).load()
+        if key == "feedback list" or tokens[:1] == ["feedback"]:
+            return {"feedback": FeedbackStore(self.workspace_dir).list(limit=20)}
+        if key == "worktree":
+            return worktree_status(self.project_root)
+        if key == "mcp status" or tokens[:1] == ["mcp"]:
+            servers = []
+            for server in MCPServerStore(self.workspace_dir).list():
+                servers.append(
+                    {
+                        "name": server.name,
+                        "enabled": server.enabled,
+                        "command": server.command,
+                        "args": server.args,
+                        "env_keys": sorted(server.env.keys()),
+                        "description": server.description,
+                        "runtime_client": "not_connected",
+                        "health": "registered",
+                    }
+                )
+            return {"servers": servers}
+        if key in {"skills list", "skills search"} or tokens[:1] in (["skills"], ["skill"]):
+            roots = [
+                Path(__file__).resolve().parents[1] / "skills",
+                self.project_root / "skills",
+                self.workspace_dir / "skills",
+            ]
+            codex_home = os.environ.get("CODEX_HOME")
+            if codex_home:
+                roots.append(Path(codex_home) / "skills")
+            else:
+                roots.append(Path.home() / ".codex" / "skills")
+            store = SkillStore(roots)
+            query = " ".join(tokens[2:]) if key == "skills search" else ""
+            skills = store.search(query) if query else store.list()
+            return {
+                "skills": [
+                    {
+                        "name": skill.name,
+                        "description": skill.description,
+                        "run_as": skill.run_as,
+                        "allowed_tools": skill.allowed_tools,
+                        "path": skill.path,
+                    }
+                    for skill in skills
+                ]
+            }
+        if key == "commands list" or tokens[:1] == ["commands"]:
+            commands = SlashCommandStore(self.project_root, self.workspace_dir).discover()
+            return {
+                "commands": [
+                    {
+                        "name": item.name,
+                        "description": item.description,
+                        "argument_hint": item.argument_hint,
+                        "allowed_tools": item.allowed_tools,
+                        "source": item.source,
+                    }
+                    for item in commands
+                ]
+            }
+        if key == "todos" or tokens[:1] == ["todos"]:
+            owner = tokens[1] if len(tokens) > 1 else "project"
+            return TodoStore(self.workspace_dir).load(owner).to_dict()
+        if key == "sessions":
+            sessions = ConversationStore(self.workspace_dir).list(include_archived=True)
+            return {
+                "sessions": [
+                    {
+                        "session_id": session.session_id,
+                        "title": session.title,
+                        "status": session.status,
+                        "messages": len(session.messages),
+                        "summaries": len(session.summaries),
+                        "updated_at": session.updated_at,
+                    }
+                    for session in sessions[-20:]
+                ]
+            }
+        if key == "agents list" or tokens[:1] == ["agents"]:
+            return {
+                "agents": [
+                    {
+                        "id": item.get("id", ""),
+                        "name": item.get("name", ""),
+                        "role": item.get("role", ""),
+                        "description": item.get("description", ""),
+                        "tools": item.get("tools", []),
+                        "model": item.get("model", ""),
+                        "profile": item.get("profile", ""),
+                        "color": item.get("color", ""),
+                        "source": item.get("source", ""),
+                        "created_at": item.get("created_at", ""),
+                    }
+                    for item in RuntimeExtensionStore(self.workspace_dir).list_subagents()
+                ]
+            }
+        if key == "hooks list" or tokens[:1] == ["hooks"]:
+            return {
+                "hooks": [
+                    {
+                        "id": rule.id,
+                        "name": rule.name,
+                        "event": rule.event,
+                        "action": rule.action,
+                        "message": rule.message,
+                        "pattern": rule.pattern,
+                        "tool_name": rule.tool_name,
+                        "command_configured": bool(rule.command),
+                        "enabled": rule.enabled,
+                        "source": rule.source,
+                    }
+                    for rule in HookEngine(self.workspace_dir).list_rules()
+                ]
+            }
+        raise KeyError(
+            "Unsupported framework command. Supported commands: " + ", ".join(supported)
+        )
 
     def _record(
         self,

@@ -8,10 +8,12 @@ from pathlib import Path
 
 from hyperagent.agents import CoordinatorAgent
 from hyperagent.cli import main
+from hyperagent.core.io import read_json
 from hyperagent.data.synthetic import write_synthetic_mat
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
+from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace
-from hyperagent.schemas import AgentToolResult
+from hyperagent.schemas import AgentToolResult, MCPServerSpec
 
 
 class AgentToolsTest(unittest.TestCase):
@@ -157,6 +159,73 @@ class AgentToolsTest(unittest.TestCase):
             self.assertEqual(result.status, "ok")
             self.assertIn("result_path", result.content)
             self.assertTrue((Path(plan.output_dir) / "result.json").exists())
+
+    def test_framework_command_status_and_unsupported_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            executor = SafeAgentToolExecutor(root, workspace.workspace_dir)
+
+            status = executor.framework_command("status")
+            self.assertEqual(status.status, "ok")
+            payload = read_json(Path(status.artifact_path))["result"]["content"]
+            self.assertIn('"initialized": true', payload)
+            self.assertIn('"task_count"', payload)
+
+            blocked = executor.framework_command("delete everything")
+            self.assertEqual(blocked.status, "blocked")
+            self.assertIn("unsupported framework command", blocked.warnings)
+
+    def test_framework_command_does_not_leak_search_provider_secret(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            secret = "SECRET_SHOULD_NOT_LEAK"
+            old_value = os.environ.get("BRAVE_SEARCH_API_KEY")
+            os.environ["BRAVE_SEARCH_API_KEY"] = secret
+            try:
+                result = SafeAgentToolExecutor(
+                    root,
+                    workspace.workspace_dir,
+                ).framework_command("web status")
+            finally:
+                if old_value is None:
+                    os.environ.pop("BRAVE_SEARCH_API_KEY", None)
+                else:
+                    os.environ["BRAVE_SEARCH_API_KEY"] = old_value
+
+            self.assertEqual(result.status, "ok")
+            self.assertIn('"brave": true', result.content)
+            self.assertNotIn(secret, result.content)
+
+    def test_framework_command_does_not_leak_mcp_env_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            secret = "SECRET_SHOULD_NOT_LEAK"
+            MCPServerStore(workspace.workspace_dir).upsert(
+                MCPServerSpec(
+                    name="demo",
+                    command="demo-mcp",
+                    args=["--safe"],
+                    env={"TOKEN": secret},
+                    enabled=True,
+                    description="demo server",
+                )
+            )
+
+            result = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+            ).framework_command("mcp status")
+
+            self.assertEqual(result.status, "ok")
+            self.assertIn('"env_keys"', result.content)
+            self.assertIn('"TOKEN"', result.content)
+            self.assertNotIn(secret, result.content)
 
     def test_deny_write_blocks_apply_patch(self):
         with tempfile.TemporaryDirectory() as tmp:
