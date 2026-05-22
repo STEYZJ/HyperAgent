@@ -33,7 +33,7 @@ You help with hyperspectral image classification research by selecting one safe 
 Allowed tools:
 - read_file: {"path": "relative/path", "start_line": 1, "max_lines": 120}
 - search_code: {"query": "text", "path": ".", "max_results": 30}
-- run_command: {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_sec": 60}
+- run_command: {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_sec": 60, "cwd": "."}
 - run_experiment: {"plan_path": "experiments/demo/experiment.yaml", "seeds": [42, 43], "output_dir": "experiments/demo_suite"}
 - task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2, "max_depth": 1, "max_concurrent": 3, "role": "leaf"}
 - run_skill: {"name": "review-experiment", "instruction": "review reports/result.json", "max_steps": 2}
@@ -63,6 +63,7 @@ or:
 Do not request unsafe shell commands. Ground experiment decisions in saved artifacts when they are available.
 Use framework_command before answering questions about HyperAgent status, usage/cost, configured providers, web availability, image availability, MCP, skills, commands, sessions, todos, plan mode, IDE context, worktree, hooks, agents, research strategy status, or available framework capabilities.
 When the user asks to list, inspect, install, or choose skills, call framework_command with "skills list" or "skills search". When the user asks to use a known skill, call run_skill with the skill name and the user's instruction instead of explaining the skill manually.
+When a SKILL.md mentions relative helper scripts such as scripts/list-skills.py, resolve them from the provided Skill directory and call run_command with cwd set to that Skill directory.
 Use web tools only when current external information is necessary. Cite source URLs/citation ids from web_search/web_fetch results. Never request non-http(s), localhost, private IP, file, data, or javascript URLs.
 Sensitive tools such as run_command, run_experiment, apply_patch, todo_write, web_search, web_fetch, web_extract, image_generate, and image_edit may require human authorization. If a tool is blocked for permission, report that approval is needed instead of pretending the capability is unavailable.
 You do have controlled access to project files, approved shell commands, experiments, skills, and web tools through the tool list above. Do not claim you have no filesystem, shell, or network capability; instead, choose the appropriate tool or explain which provider/API key or user permission is missing.
@@ -572,6 +573,7 @@ class AgentActionLoop:
             return self.tool_executor.run_command(
                 argv if isinstance(argv, list) else [],
                 timeout_sec=int(args.get("timeout_sec", 60)),
+                cwd=(None if args.get("cwd") in {None, ""} else str(args.get("cwd"))),
                 run_id=run_id,
             )
         if tool_name == "run_experiment":
@@ -686,7 +688,7 @@ class AgentActionLoop:
                 ).run(
                     session_id=self.session_store.new(f"skill:{skill.name}").session_id,
                     provider=str(args.get("provider", "")) or self._active_provider or "deepseek",
-                    instruction=skill.body,
+                    instruction=self._skill_runtime_context(skill, instruction),
                     agents=[agent_ref],
                     model=skill.model or self._active_model,
                     profile=skill.profile,
@@ -708,7 +710,7 @@ class AgentActionLoop:
                 tool_name=tool_name,
                 status="ok",
                 created_at=utc_now(),
-                content=skill.body,
+                content=self._skill_runtime_context(skill, instruction),
                 artifact_path=skill.path,
             )
 
@@ -829,6 +831,19 @@ class AgentActionLoop:
             created_at=utc_now(),
             content=f"Unsupported tool requested: {tool_name}",
             warnings=["Unsupported tool requested by LLM action loop"],
+        )
+
+    def _skill_runtime_context(self, skill: Any, instruction: str = "") -> str:
+        skill_path = Path(str(skill.path))
+        return (
+            f"Skill: {skill.name}\n"
+            f"Skill path: {skill.path}\n"
+            f"Skill directory: {skill_path.parent}\n"
+            f"User instruction: {instruction}\n\n"
+            "Execution note: resolve relative files mentioned by this SKILL.md "
+            "from Skill directory. For helper scripts, call run_command with "
+            "cwd set to Skill directory.\n\n"
+            f"{skill.body}"
         )
 
     def _persist(self, run: AgentActionRun) -> Path:

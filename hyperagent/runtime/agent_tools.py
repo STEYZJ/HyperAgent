@@ -417,11 +417,12 @@ class SafeAgentToolExecutor:
         self,
         argv: Sequence[str],
         timeout_sec: int = 60,
+        cwd: Optional[str] = None,
         run_id: Optional[str] = None,
     ) -> AgentToolResult:
         call = self._call(
             "run_command",
-            {"argv": list(argv), "timeout_sec": timeout_sec},
+            {"argv": list(argv), "timeout_sec": timeout_sec, "cwd": cwd or ""},
             run_id=run_id,
         )
         pre_hook = self._pre_tool_check(call)
@@ -448,9 +449,18 @@ class SafeAgentToolExecutor:
         if permission is not None:
             return permission
         try:
+            working_dir = self._resolve_command_cwd(cwd)
+        except ValueError as exc:
+            return self._record(
+                call,
+                "blocked",
+                str(exc),
+                warnings=["run_command cwd is outside allowed roots"],
+            )
+        try:
             completed = subprocess.run(
                 list(argv),
-                cwd=str(self.project_root),
+                cwd=str(working_dir),
                 check=False,
                 text=True,
                 stdout=subprocess.PIPE,
@@ -1612,6 +1622,33 @@ class SafeAgentToolExecutor:
                 return True, ""
             return False, "Python commands must use -m with an allowed module"
         return False, f"Command executable is not allowed: {argv[0]}"
+
+    def _resolve_command_cwd(self, cwd: Optional[str]) -> Path:
+        if not cwd:
+            return self.project_root
+        raw = Path(str(cwd)).expanduser()
+        target = raw if raw.is_absolute() else self.project_root / raw
+        target = target.resolve()
+        if not target.exists() or not target.is_dir():
+            raise ValueError(f"Command cwd does not exist or is not a directory: {cwd}")
+        for root in self._command_cwd_roots():
+            try:
+                resolved_root = root.resolve()
+            except OSError:
+                continue
+            if target == resolved_root or resolved_root in target.parents:
+                return target
+        raise ValueError(f"Command cwd is outside project and skill roots: {cwd}")
+
+    def _command_cwd_roots(self) -> List[Path]:
+        codex_home = os.environ.get("CODEX_HOME")
+        return [
+            self.project_root,
+            self.project_root / "skills",
+            self.workspace_dir / "skills",
+            Path(__file__).resolve().parents[1] / "skills",
+            Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills",
+        ]
 
     def _join_process_output(self, stdout: str, stderr: str) -> str:
         parts = []

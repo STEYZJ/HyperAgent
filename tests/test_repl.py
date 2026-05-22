@@ -323,7 +323,9 @@ class HyperAgentReplTest(unittest.TestCase):
 
             self.assertTrue(repl.handle_line("/reader notes.md"))
 
-            self.assertEqual(action_calls, ["Read notes.md"])
+            self.assertEqual(len(action_calls), 1)
+            self.assertIn("Read notes.md", action_calls[0])
+            self.assertIn("Skill directory:", action_calls[0])
 
     def test_context_status_triggers_compression(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -132,6 +132,46 @@ class AgentToolsTest(unittest.TestCase):
             self.assertEqual(allowed.status, "ok")
             self.assertIn("allowed", allowed.content)
 
+    def test_run_command_can_use_skill_directory_cwd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            codex_home = Path(tmp) / "codex-home"
+            skill_dir = codex_home / "skills" / "demo-skill"
+            scripts_dir = skill_dir / "scripts"
+            scripts_dir.mkdir(parents=True)
+            (scripts_dir / "show.py").write_text("print('skill cwd ok')\n", encoding="utf-8")
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            old_codex_home = os.environ.get("CODEX_HOME")
+            os.environ["CODEX_HOME"] = str(codex_home)
+            try:
+                executor = SafeAgentToolExecutor(
+                    root,
+                    workspace.workspace_dir,
+                    permission_policy="ask",
+                    permission_callback=lambda request: True,
+                    allow_arbitrary_commands=True,
+                )
+                result = executor.run_command(
+                    [sys.executable, "scripts/show.py"],
+                    cwd=str(skill_dir),
+                )
+                blocked = executor.run_command(
+                    [sys.executable, "-c", "print('bad cwd')"],
+                    cwd=str(Path(tmp)),
+                )
+            finally:
+                if old_codex_home is None:
+                    os.environ.pop("CODEX_HOME", None)
+                else:
+                    os.environ["CODEX_HOME"] = old_codex_home
+
+            self.assertEqual(result.status, "ok")
+            self.assertIn("skill cwd ok", result.content)
+            self.assertEqual(blocked.status, "blocked")
+            self.assertIn("cwd", blocked.warnings[0])
+
     def test_run_experiment_tool_runs_synthetic_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

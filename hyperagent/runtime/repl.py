@@ -1370,14 +1370,40 @@ class HyperAgentRepl:
             skill = self._skill_store().render(name, arguments)
         except KeyError:
             return False
-        if skill.run_as.lower() == "subagent":
-            self._act(f"Run skill `{skill.name}` with arguments:\n{arguments}")
-            return True
-        if skill.allowed_tools:
-            self._act(skill.body)
+        if skill.run_as.lower() == "subagent" or self._skill_requires_action_loop(skill):
+            self._act(self._skill_action_instruction(skill, arguments))
             return True
         self._chat(skill.body)
         return True
+
+    def _skill_requires_action_loop(self, skill: object) -> bool:
+        if getattr(skill, "allowed_tools", None):
+            return True
+        body = str(getattr(skill, "body", "") or "").lower()
+        return any(
+            marker in body
+            for marker in (
+                "scripts/",
+                "helper scripts",
+                "use network",
+                "github repo",
+                "install into",
+                "download",
+            )
+        )
+
+    def _skill_action_instruction(self, skill: object, arguments: str) -> str:
+        path = Path(str(getattr(skill, "path", "")))
+        return (
+            f"Run skill `{getattr(skill, 'name', '')}` with arguments:\n"
+            f"{arguments}\n\n"
+            f"Skill path: {path}\n"
+            f"Skill directory: {path.parent}\n\n"
+            "If the skill references relative helper scripts such as scripts/list-skills.py, "
+            "resolve them relative to Skill directory and call run_command with cwd set "
+            "to Skill directory.\n\n"
+            f"{getattr(skill, 'body', '')}"
+        )
 
     def _checkpoint(self, args: List[str]) -> None:
         store = CheckpointStore(self.workspace.project_root, self.workspace.workspace_dir)

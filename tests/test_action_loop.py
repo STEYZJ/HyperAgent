@@ -234,6 +234,7 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertEqual(run.steps[0].tool_name, "run_skill")
             self.assertEqual(run.steps[0].tool_result.status, "ok")
             self.assertIn("Hello HSI", run.steps[0].tool_result.content)
+            self.assertIn("Skill directory:", run.steps[0].tool_result.content)
 
     def test_action_loop_default_requires_permission_for_sensitive_tools(self):
         with tempfile.TemporaryDirectory() as tmp:
