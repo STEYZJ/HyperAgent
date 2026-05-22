@@ -55,6 +55,7 @@ from hyperagent.schemas import LLMMessage
 
 InputFunc = Callable[[str], str]
 OutputFunc = Callable[[str], None]
+OutputEventFunc = Callable[[str, str], None]
 WaitIndicatorFactory = Callable[[], WaitIndicator]
 
 
@@ -81,6 +82,7 @@ class HyperAgentRepl:
         translator: Optional[Translator] = None,
         input_func: InputFunc = input,
         output_func: OutputFunc = print,
+        output_event_func: Optional[OutputEventFunc] = None,
         wait_indicator_factory: Optional[WaitIndicatorFactory] = None,
     ) -> None:
         self.workspace = workspace
@@ -98,6 +100,7 @@ class HyperAgentRepl:
         self.translator = translator
         self.input = input_func
         self.output = output_func
+        self.output_event = output_event_func
         self.wait_indicator_factory = wait_indicator_factory
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
@@ -152,7 +155,7 @@ class HyperAgentRepl:
                 return self._handle_command(line)
             self._chat(line)
         except Exception as exc:
-            self.output(self._t("repl.error", "error: {error}", error=exc))
+            self._emit("error", self._t("repl.error", "error: {error}", error=exc))
         return True
 
     def _ensure_session(
@@ -336,15 +339,15 @@ class HyperAgentRepl:
         )
         result = run_with_wait_indicator(turn, indicator).value
         for warning in result.warnings:
-            self.output(self._warning(warning))
+            self._emit("warning", self._warning(warning))
         if result.response.reasoning_content:
             if self.expand_reasoning_content:
-                self.output("【模型思考内容】")
-                self.output(result.response.reasoning_content)
+                self._emit("reasoning", "【模型思考内容】")
+                self._emit("reasoning", result.response.reasoning_content)
             else:
-                self.output("【模型思考内容已折叠，可用 /thinking on 展开】")
+                self._emit("reasoning", "【模型思考内容已折叠，可用 /thinking on 展开】")
         if result.response.content:
-            self.output(result.response.content)
+            self._emit("assistant", result.response.content)
 
     def _act(self, instruction: str) -> None:
         if not instruction:
@@ -375,7 +378,7 @@ class HyperAgentRepl:
             token_budget=self.action_token_budget,
             **self.llm_kwargs,
         )
-        self.output(render_action_run(run, translator=self.translator))
+        self._emit("tool", render_action_run(run, translator=self.translator))
 
     def _plan(self, instruction: str) -> None:
         if not instruction:
@@ -1187,7 +1190,7 @@ class HyperAgentRepl:
         else:
             self.output(self._t("repl.usage.web", "usage: /web status|search <query>|fetch <url>|extract <url>|cite [id]"))
             return
-        self.output(render_tool_result(result, translator=self.translator))
+        self._emit("tool", render_tool_result(result, translator=self.translator))
 
     def _image(self, args: List[str]) -> None:
         action = args[0] if args else "status"
@@ -1222,7 +1225,7 @@ class HyperAgentRepl:
         else:
             self.output(self._t("repl.usage.image", "usage: /image status|generate <prompt>|edit <path> <instruction>"))
             return
-        self.output(render_tool_result(result, translator=self.translator))
+        self._emit("tool", render_tool_result(result, translator=self.translator))
 
     def _worktree(self) -> None:
         payload = worktree_status(self.workspace.project_root)
@@ -1376,7 +1379,7 @@ class HyperAgentRepl:
         else:
             self.output(self._t("repl.unknown_tool", "unknown tool: {tool}", tool=tool))
             return
-        self.output(render_tool_result(result, translator=self.translator))
+        self._emit("tool", render_tool_result(result, translator=self.translator))
 
     def _read_text_arg(self, args: List[str]) -> str:
         if not args:
@@ -1389,7 +1392,8 @@ class HyperAgentRepl:
     def _confirm_permission(self, request: ToolPermissionRequest) -> bool:
         if self.permission_policy not in {"ask", "session-ask"}:
             return True
-        self.output(
+        self._emit(
+            "warning",
             self._t(
                 "repl.permission_requested",
                 "permission requested: {tool_name} risk={risk_level} reason={reason}",
@@ -1521,6 +1525,12 @@ class HyperAgentRepl:
 
     def _warning(self, warning: str) -> str:
         return f"{self._label('warning', 'warning')}: {warning}"
+
+    def _emit(self, kind: str, text: str) -> None:
+        if self.output_event is not None:
+            self.output_event(kind, text)
+            return
+        self.output(text)
 
     def _emit_hook_messages(self, event: str, payload: Dict[str, object]) -> None:
         result = self.hooks.run(event, payload)

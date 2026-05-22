@@ -3,6 +3,7 @@
 import json
 import locale
 import os
+from dataclasses import dataclass
 from pathlib import Path
 import unicodedata
 from typing import Dict, List, Optional, Tuple
@@ -29,6 +30,22 @@ try:  # pragma: no cover - import availability depends on platform.
     import curses
 except Exception:  # pragma: no cover
     curses = None
+
+
+@dataclass
+class TuiLine:
+    kind: str
+    text: str
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return self.text == other
+        if isinstance(other, TuiLine):
+            return self.kind == other.kind and self.text == other.text
+        return False
 
 
 class TuiWaitIndicator(WaitIndicator):
@@ -85,7 +102,7 @@ class HyperAgentTui:
         self.keep_last = keep_last
         self.llm_kwargs = dict(llm_kwargs or {})
         self.translator = translator
-        self.lines: List[str] = []
+        self.lines: List[TuiLine] = []
         self.stdscr = None
         self.repl: Optional[HyperAgentRepl] = None
         self.main_scroll_offset = 0
@@ -100,6 +117,8 @@ class HyperAgentTui:
         self._main_prompt_suffix = "HyperAgent > "
         self.command_suggestions: List[str] = []
         self.locale_warning = ""
+        self.color_enabled = False
+        self.styles: Dict[str, int] = {}
 
     def run(self) -> int:
         if curses is None:
@@ -131,10 +150,90 @@ class HyperAgentTui:
             )
         return ""
 
+    def _init_colors(self) -> None:
+        self.color_enabled = False
+        self.styles = {}
+        if curses is None:
+            return
+        try:
+            if not curses.has_colors():
+                self.styles = self._fallback_styles()
+                return
+            curses.start_color()
+            try:
+                curses.use_default_colors()
+                background = -1
+            except curses.error:
+                background = curses.COLOR_BLACK
+            pairs = {
+                "user": (1, curses.COLOR_CYAN, background),
+                "command": (2, curses.COLOR_BLUE, background),
+                "assistant": (3, curses.COLOR_GREEN, background),
+                "reasoning": (4, curses.COLOR_YELLOW, background),
+                "tool": (5, curses.COLOR_MAGENTA, background),
+                "system": (6, curses.COLOR_WHITE, background),
+                "warning": (7, curses.COLOR_YELLOW, background),
+                "error": (8, curses.COLOR_RED, background),
+                "panel": (9, curses.COLOR_WHITE, background),
+            }
+            for _, (pair_id, fg, bg) in pairs.items():
+                curses.init_pair(pair_id, fg, bg)
+            self.styles = {
+                "user": curses.color_pair(1) | curses.A_BOLD,
+                "command": curses.color_pair(2) | curses.A_BOLD,
+                "assistant": curses.color_pair(3),
+                "reasoning": curses.color_pair(4),
+                "tool": curses.color_pair(5) | curses.A_BOLD,
+                "system": curses.color_pair(6),
+                "warning": curses.color_pair(7) | curses.A_BOLD,
+                "error": curses.color_pair(8) | curses.A_BOLD,
+                "panel": curses.color_pair(9),
+            }
+            self.color_enabled = True
+        except curses.error:
+            self.styles = self._fallback_styles()
+
+    def _fallback_styles(self) -> Dict[str, int]:
+        if curses is None:
+            return {}
+        return {
+            "user": curses.A_BOLD,
+            "command": curses.A_BOLD,
+            "assistant": 0,
+            "reasoning": curses.A_BOLD,
+            "tool": curses.A_BOLD,
+            "system": 0,
+            "warning": curses.A_BOLD,
+            "error": curses.A_REVERSE | curses.A_BOLD,
+            "panel": 0,
+        }
+
+    def _style_for_kind(self, kind: str) -> int:
+        if not self.styles:
+            self.styles = self._fallback_styles()
+        return self.styles.get(str(kind), self.styles.get("system", 0))
+
+    def _role_label(self, kind: str) -> str:
+        normalized = str(kind or "system").strip().lower()
+        defaults = {
+            "user": "You",
+            "command": "Command",
+            "assistant": "Assistant",
+            "reasoning": "Reasoning",
+            "tool": "Tool",
+            "system": "System",
+            "warning": "Warning",
+            "error": "Error",
+        }
+        if normalized == "panel":
+            return ""
+        return self._t(f"tui.role.{normalized}", defaults.get(normalized, "System"))
+
     def _run(self, stdscr) -> int:
         self.stdscr = stdscr
         curses.curs_set(1)
         stdscr.keypad(True)
+        self._init_colors()
         self._set_mouse_mode("interactive")
         self.repl = HyperAgentRepl(
             workspace=self.workspace,
@@ -154,9 +253,10 @@ class HyperAgentTui:
             translator=self.translator,
             input_func=self._prompt_dialog,
             output_func=self._append_output,
+            output_event_func=self._append_output_event,
             wait_indicator_factory=lambda: TuiWaitIndicator(self),
         )
-        self._append_output(self.repl._banner())
+        self._append_output(self.repl._banner(), kind="system")
         while True:
             self._draw()
             line = self._read_line(self._main_prompt())
@@ -170,15 +270,18 @@ class HyperAgentTui:
                 self._draw()
                 return 0
 
-    def _append_output(self, text: str) -> None:
+    def _append_output(self, text: str, kind: str = "system") -> None:
+        self._append_output_event(kind, text)
+
+    def _append_output_event(self, kind: str, text: str) -> None:
         for line in str(text).splitlines() or [""]:
-            self.lines.append(line)
+            self.lines.append(TuiLine(kind, line))
         self.lines = self.lines[-1000:]
         if self.stdscr is not None:
             self._draw()
 
     def _prompt_dialog(self, prompt: str) -> str:
-        self._append_output(prompt)
+        self._append_output(prompt, kind="warning" if "?" in prompt else "system")
         return self._read_line(prompt)
 
     def _read_line(self, prompt: str) -> str:
@@ -200,7 +303,8 @@ class HyperAgentTui:
             self._draw(prompt_line, cursor_x=cursor_x)
             key = self.stdscr.get_wch()
             if key in ("\n", "\r"):
-                self._append_output(prompt + buffer)
+                kind = "command" if buffer.strip().startswith("/") else "user"
+                self._append_output(buffer, kind=kind)
                 self._record_history(prompt, buffer)
                 return buffer
             if key in ("\x1b",):
@@ -367,7 +471,12 @@ class HyperAgentTui:
         )
         log_height = max(1, height - 3)
         main_content_width = max(main_width - 1, 1)
-        wrapped_main = self._wrap_lines(self.lines, main_content_width)
+        wrapped_main = self._wrap_lines(
+            self.lines,
+            main_content_width,
+            role_labels=True,
+            default_kind="system",
+        )
         self.main_scroll_offset = self._clamp_scroll_offset(
             self.main_scroll_offset,
             len(wrapped_main),
@@ -379,7 +488,12 @@ class HyperAgentTui:
             self.main_scroll_offset,
         )
         for index, line in enumerate(visible, start=1):
-            self._addstr(index, 0, self._clip_to_width(line, main_content_width))
+            self._addstr(
+                index,
+                0,
+                self._clip_to_width(line.text, main_content_width),
+                self._style_for_kind(line.kind),
+            )
         if side_width:
             separator_x = main_width
             for row in range(1, height - 1):
@@ -395,7 +509,12 @@ class HyperAgentTui:
                 ),
                 curses.A_BOLD,
             )
-            panel_lines = self._wrap_lines(self._panel_lines(), panel_width)
+            panel_lines = self._wrap_lines(
+                self._panel_lines(),
+                panel_width,
+                role_labels=False,
+                default_kind="panel",
+            )
             panel_height = max(height - 4, 0)
             self.panel_scroll_offset = self._clamp_scroll_offset(
                 self.panel_scroll_offset,
@@ -408,7 +527,12 @@ class HyperAgentTui:
                 self.panel_scroll_offset,
             )
             for offset, line in enumerate(visible_panel, start=3):
-                self._addstr(offset, panel_x, self._clip_to_width(line, panel_width))
+                self._addstr(
+                    offset,
+                    panel_x,
+                    self._clip_to_width(line.text, panel_width),
+                    self._style_for_kind(line.kind),
+                )
         self._addstr(height - 2, 0, "-" * max(width - 1, 0))
         self._addstr(height - 1, 0, self._clip_to_width(prompt_line, max(width - 1, 1)))
         if cursor_x is not None:
@@ -471,12 +595,20 @@ class HyperAgentTui:
             "",
             self._t("tui.panel.recent_artifacts", "recent artifacts:"),
         ])
+        artifact_markers = (
+            "artifact:",
+            "agent_run:",
+            "action_run:",
+            "工件:",
+            "智能体运行:",
+            "动作运行:",
+        )
         artifact_lines = [
             line
             for line in self.lines[-80:]
-            if "artifact:" in line or "agent_run:" in line or "action_run:" in line
+            if line.kind == "tool" or any(marker in line.text for marker in artifact_markers)
         ]
-        lines.extend(artifact_lines[-10:] or [self._t("tui.panel.none", "none")])
+        lines.extend([line.text for line in artifact_lines[-10:]] or [self._t("tui.panel.none", "none")])
         return lines
 
     def _panel_kv(self, key: str, default: str, value: object) -> str:
@@ -585,11 +717,38 @@ class HyperAgentTui:
             except curses.error:
                 continue
 
-    def _wrap_lines(self, lines: List[str], width: int) -> List[str]:
-        wrapped: List[str] = []
+    def _wrap_lines(
+        self,
+        lines: List[object],
+        width: int,
+        *,
+        role_labels: bool = False,
+        default_kind: str = "system",
+    ) -> List[TuiLine]:
+        wrapped: List[TuiLine] = []
         for line in lines:
-            wrapped.extend(self._wrap_line(line, width))
+            item = line if isinstance(line, TuiLine) else TuiLine(default_kind, str(line))
+            if role_labels:
+                wrapped.extend(self._wrap_semantic_line(item, width))
+            else:
+                wrapped.extend(TuiLine(item.kind, part) for part in self._wrap_line(item.text, width))
         return wrapped
+
+    def _wrap_semantic_line(self, line: TuiLine, width: int) -> List[TuiLine]:
+        width = max(int(width), 1)
+        label = self._role_label(line.kind)
+        prefix = f"{label} │ " if label else ""
+        prefix_width = self._display_width(prefix)
+        if prefix_width >= width:
+            prefix = self._clip_to_width(prefix, max(width - 1, 1))
+            prefix_width = self._display_width(prefix)
+        content_width = max(width - prefix_width, 1)
+        parts = self._wrap_line(line.text, content_width)
+        continuation = " " * prefix_width
+        wrapped: List[TuiLine] = []
+        for index, part in enumerate(parts):
+            wrapped.append(TuiLine(line.kind, (prefix if index == 0 else continuation) + part))
+        return wrapped or [TuiLine(line.kind, prefix)]
 
     def _wrap_line(self, line: str, width: int) -> List[str]:
         width = max(int(width), 1)
