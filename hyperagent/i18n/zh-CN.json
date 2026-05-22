@@ -50,6 +50,7 @@
     "cli.arg.skill_install.name": "覆盖安装后的技能名称。",
     "cli.arg.skill_install.force": "覆盖已安装的同名技能。",
     "cli.arg.skill_install.dry_run": "只执行预检，不写入文件。",
+    "cli.arg.skill_install.all": "安装来源下找到的全部 SKILL.md 技能。",
     "cli.arg.skill_install.yes": "无需交互提示，直接确认安装。",
     "cli.output.initialized": "已初始化",
     "cli.output.workspace": "工作区",

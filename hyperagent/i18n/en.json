@@ -50,6 +50,7 @@
     "cli.arg.skill_install.name": "Override installed skill name.",
     "cli.arg.skill_install.force": "Overwrite an existing installed skill.",
     "cli.arg.skill_install.dry_run": "Only run preflight checks; do not write files.",
+    "cli.arg.skill_install.all": "Install every SKILL.md skill found under the source.",
     "cli.arg.skill_install.yes": "Confirm installation without an interactive prompt.",
     "cli.output.initialized": "initialized",
     "cli.output.workspace": "workspace",

@@ -101,6 +101,26 @@ class SkillInstallResult:
         }
 
 
+@dataclass
+class SkillInstallBatchResult:
+    status: str
+    installed: bool
+    source: str
+    candidates: List[str] = field(default_factory=list)
+    results: List[SkillInstallResult] = field(default_factory=list)
+    message: str = ""
+
+    def to_dict(self) -> Dict[str, object]:
+        return {
+            "status": self.status,
+            "installed": self.installed,
+            "source": self.source,
+            "candidates": list(self.candidates),
+            "message": self.message,
+            "results": [result.to_dict() for result in self.results],
+        }
+
+
 class SkillInstaller:
     """Install local or GitHub-hosted SKILL.md directories without executing them."""
 
@@ -133,6 +153,32 @@ class SkillInstaller:
         )
         return self._install_from_plan(plan, dry_run=dry_run)
 
+    def install_all_from_path(
+        self,
+        path: Path,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> SkillInstallBatchResult:
+        root = Path(path).expanduser().resolve()
+        candidates = self._find_skill_dirs(root)
+        if not candidates:
+            raise FileNotFoundError(f"No SKILL.md files found under: {root}")
+        results = [
+            self._install_from_plan(
+                self._build_plan(
+                    candidate,
+                    source_type="local",
+                    source=str(root),
+                    name="",
+                    force=force,
+                ),
+                dry_run=dry_run,
+            )
+            for candidate in candidates
+        ]
+        return self._batch_result(str(root), root, candidates, results, dry_run=dry_run)
+
     def install_from_repo(
         self,
         repo: str,
@@ -161,6 +207,49 @@ class SkillInstaller:
             )
             return self._install_from_plan(plan, dry_run=dry_run)
 
+    def install_all_from_repo(
+        self,
+        repo: str,
+        skill_path: str = "",
+        *,
+        ref: str = "main",
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> SkillInstallBatchResult:
+        owner, repo_name = parse_repo_slug(repo)
+        source = GitHubSkillSource(
+            owner=owner,
+            repo=repo_name,
+            ref=ref or "main",
+            skill_path=skill_path.strip("/"),
+        )
+        with tempfile.TemporaryDirectory(prefix="hyperagent-skill-") as tmp:
+            repo_root = self._download_github_repository(source, Path(tmp))
+            base = repo_root / source.skill_path if source.skill_path else repo_root
+            candidates = self._find_skill_dirs(base)
+            if not candidates:
+                raise FileNotFoundError(f"No SKILL.md files found under GitHub path: {source.skill_path or '.'}")
+            results = [
+                self._install_from_plan(
+                    self._build_plan(
+                        candidate,
+                        source_type="github",
+                        source=f"{source.repo_slug}@{source.ref}:{candidate.relative_to(repo_root)}",
+                        name="",
+                        force=force,
+                    ),
+                    dry_run=dry_run,
+                )
+                for candidate in candidates
+            ]
+            return self._batch_result(
+                f"{source.repo_slug}@{source.ref}:{source.skill_path or '.'}",
+                repo_root,
+                candidates,
+                results,
+                dry_run=dry_run,
+            )
+
     def install_from_url(
         self,
         url: str,
@@ -179,6 +268,22 @@ class SkillInstaller:
             dry_run=dry_run,
         )
 
+    def install_all_from_url(
+        self,
+        url: str,
+        *,
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> SkillInstallBatchResult:
+        source = parse_github_skill_url(url)
+        return self.install_all_from_repo(
+            source.repo_slug,
+            source.skill_path,
+            ref=source.ref,
+            force=force,
+            dry_run=dry_run,
+        )
+
     def plan_from_request(
         self,
         *,
@@ -189,7 +294,18 @@ class SkillInstaller:
         ref: str = "main",
         name: str = "",
         force: bool = False,
+        all_skills: bool = False,
     ) -> SkillInstallResult:
+        if all_skills:
+            return self.install_all_from_request(
+                path=path,
+                repo=repo,
+                skill_path=skill_path,
+                url=url,
+                ref=ref,
+                force=force,
+                dry_run=True,
+            )
         if path:
             return self.install_from_path(Path(path), name=name, force=force, dry_run=True)
         if url:
@@ -216,7 +332,18 @@ class SkillInstaller:
         name: str = "",
         force: bool = False,
         dry_run: bool = False,
+        all_skills: bool = False,
     ) -> SkillInstallResult:
+        if all_skills:
+            return self.install_all_from_request(
+                path=path,
+                repo=repo,
+                skill_path=skill_path,
+                url=url,
+                ref=ref,
+                force=force,
+                dry_run=dry_run,
+            )
         if path:
             return self.install_from_path(Path(path), name=name, force=force, dry_run=dry_run)
         if url:
@@ -227,6 +354,31 @@ class SkillInstaller:
                 skill_path,
                 ref=ref,
                 name=name,
+                force=force,
+                dry_run=dry_run,
+            )
+        raise ValueError("skill source is required: provide --path, --repo/--skill-path, or --url")
+
+    def install_all_from_request(
+        self,
+        *,
+        path: str = "",
+        repo: str = "",
+        skill_path: str = "",
+        url: str = "",
+        ref: str = "main",
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> SkillInstallBatchResult:
+        if path:
+            return self.install_all_from_path(Path(path), force=force, dry_run=dry_run)
+        if url:
+            return self.install_all_from_url(url, force=force, dry_run=dry_run)
+        if repo:
+            return self.install_all_from_repo(
+                repo,
+                skill_path,
+                ref=ref,
                 force=force,
                 dry_run=dry_run,
             )
@@ -330,6 +482,35 @@ class SkillInstaller:
             message=f"installed skill: {plan.skill_name}",
         )
 
+    def _batch_result(
+        self,
+        source: str,
+        root: Path,
+        candidates: List[Path],
+        results: List[SkillInstallResult],
+        *,
+        dry_run: bool,
+    ) -> SkillInstallBatchResult:
+        relative_candidates = [
+            str(candidate.relative_to(root)) if _is_relative_to(candidate, root) else str(candidate)
+            for candidate in candidates
+        ]
+        installed = bool(results) and all(result.installed for result in results)
+        blocked = any(result.status == "blocked" or result.plan.blocked for result in results)
+        status = "blocked" if blocked else ("planned" if dry_run else "installed")
+        return SkillInstallBatchResult(
+            status=status,
+            installed=installed,
+            source=source,
+            candidates=relative_candidates,
+            results=results,
+            message=(
+                f"{'planned' if dry_run else 'installed'} {len(results)} skill(s)"
+                if not blocked
+                else "one or more skill installs were blocked"
+            ),
+        )
+
     def _scan_source(self, source: Path, skill: SkillSpec) -> Tuple[List[str], List[str]]:
         warnings: List[str] = []
         blocked: List[str] = []
@@ -372,7 +553,17 @@ class SkillInstaller:
         except Exception:
             return self._download_github_sparse_checkout(source, tmp_root)
 
+    def _download_github_repository(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
+        try:
+            return self._download_github_archive_root(source, tmp_root)
+        except Exception:
+            return self._download_github_sparse_root(source, tmp_root)
+
     def _download_github_archive(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
+        repo_root = self._download_github_archive_root(source, tmp_root)
+        return self._select_github_skill_source(repo_root, source)
+
+    def _download_github_archive_root(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
         archive = tmp_root / "repo.zip"
         url = f"https://github.com/{source.repo_slug}/archive/{urllib.parse.quote(source.ref, safe='')}.zip"
         request = urllib.request.Request(url, headers=self._github_headers())
@@ -385,9 +576,13 @@ class SkillInstaller:
         roots = [item for item in extract_dir.iterdir() if item.is_dir()]
         if not roots:
             raise FileNotFoundError("GitHub archive did not contain a repository directory")
-        return self._select_github_skill_source(roots[0], source)
+        return roots[0]
 
     def _download_github_sparse_checkout(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
+        repo_dir = self._download_github_sparse_root(source, tmp_root)
+        return self._select_github_skill_source(repo_dir, source)
+
+    def _download_github_sparse_root(self, source: GitHubSkillSource, tmp_root: Path) -> Path:
         repo_dir = tmp_root / "repo"
         subprocess.run(
             ["git", "clone", "--filter=blob:none", "--no-checkout", f"https://github.com/{source.repo_slug}.git", str(repo_dir)],
@@ -414,19 +609,19 @@ class SkillInstaller:
             text=True,
             timeout=120,
         )
-        return self._select_github_skill_source(repo_dir, source)
+        return repo_dir
 
     def _select_github_skill_source(self, repo_root: Path, source: GitHubSkillSource) -> Path:
         if source.skill_path:
             return self._normalize_local_source(repo_root / source.skill_path)
-        matches = sorted(repo_root.rglob("SKILL.md"))
-        if len(matches) == 1:
-            return matches[0].parent
-        if len(matches) > 1:
-            examples = ", ".join(str(path.parent.relative_to(repo_root)) for path in matches[:8])
+        candidates = self._find_skill_dirs(repo_root)
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            examples = ", ".join(str(path.relative_to(repo_root)) for path in candidates[:8])
             raise ValueError(
                 "GitHub repository contains multiple SKILL.md files; pass --skill-path. "
-                f"Candidates: {examples}"
+                f"Candidates: {examples}. Or pass --all to install every candidate."
             )
         claude_markers = [
             repo_root / ".claude" / "CLAUDE.md",
@@ -443,6 +638,14 @@ class SkillInstaller:
             "No SKILL.md found in GitHub repository. Pass --skill-path to a directory "
             "that contains SKILL.md."
         )
+
+    def _find_skill_dirs(self, root: Path) -> List[Path]:
+        root = Path(root)
+        if root.name == "SKILL.md" and root.is_file():
+            return [root.parent]
+        if (root / "SKILL.md").is_file():
+            return [root]
+        return sorted(path.parent for path in root.rglob("SKILL.md"))
 
     def _github_headers(self) -> Dict[str, str]:
         headers = {
@@ -494,6 +697,14 @@ def parse_github_skill_url(url: str) -> GitHubSkillSource:
     return GitHubSkillSource(owner=owner, repo=repo, ref=ref, skill_path=skill_path)
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def format_install_plan(plan: SkillInstallPlan) -> str:
     lines = [
         f"skill: {plan.skill_name}",
@@ -510,6 +721,22 @@ def format_install_plan(plan: SkillInstallPlan) -> str:
     if plan.blocked_reasons:
         lines.append("blocked:")
         lines.extend(f"- {reason}" for reason in plan.blocked_reasons)
+    return "\n".join(lines)
+
+
+def format_install_batch_result(result: SkillInstallBatchResult) -> str:
+    lines = [
+        f"status: {result.status}",
+        f"installed: {result.installed}",
+        f"source: {result.source}",
+        f"candidates: {len(result.candidates)}",
+    ]
+    for candidate in result.candidates:
+        lines.append(f"- {candidate}")
+    lines.append(f"message: {result.message}")
+    for item in result.results:
+        lines.append("")
+        lines.append(format_install_result(item))
     return "\n".join(lines)
 
 

@@ -762,6 +762,7 @@ class SafeAgentToolExecutor:
         name: str = "",
         force: bool = False,
         dry_run: bool = True,
+        all_skills: bool = False,
         run_id: Optional[str] = None,
     ) -> AgentToolResult:
         call = self._call(
@@ -775,6 +776,7 @@ class SafeAgentToolExecutor:
                 "name": name,
                 "force": force,
                 "dry_run": dry_run,
+                "all_skills": all_skills,
             },
             run_id=run_id,
         )
@@ -820,6 +822,7 @@ class SafeAgentToolExecutor:
                 ref=ref,
                 name=name,
                 force=force,
+                all_skills=all_skills,
                 dry_run=dry_run,
             )
             status = "ok" if result.status in {"planned", "installed"} else result.status

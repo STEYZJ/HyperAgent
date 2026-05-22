@@ -110,6 +110,7 @@ BOOLEAN_FLAGS = {
     "--dry-run",
     "--yes",
     "--list",
+    "--all",
 }
 
 

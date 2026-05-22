@@ -166,6 +166,38 @@ class SkillInstallerTest(unittest.TestCase):
                 )
 
             self.assertIn("multiple SKILL.md", str(ctx.exception))
+            self.assertIn("--all", str(ctx.exception))
+
+    def test_install_all_from_path_dry_run_lists_every_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            _write_skill(repo / "skills", name="one")
+            _write_skill(repo / "more", name="two")
+
+            result = SkillInstaller(install_root=root / "installed").install_all_from_path(
+                repo,
+                dry_run=True,
+            )
+
+            self.assertEqual(result.status, "planned")
+            self.assertEqual(len(result.results), 2)
+            self.assertEqual(sorted(item.plan.skill_name for item in result.results), ["one", "two"])
+            self.assertFalse((root / "installed" / "one").exists())
+
+    def test_install_all_from_path_installs_every_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            _write_skill(repo / "skills", name="one")
+            _write_skill(repo / "more", name="two")
+
+            result = SkillInstaller(install_root=root / "installed").install_all_from_path(repo)
+
+            self.assertEqual(result.status, "installed")
+            self.assertTrue(result.installed)
+            self.assertTrue((root / "installed" / "one" / "SKILL.md").exists())
+            self.assertTrue((root / "installed" / "two" / "SKILL.md").exists())
 
     def test_risk_warnings_and_secret_block(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -232,6 +264,26 @@ class SkillInstallerTest(unittest.TestCase):
             self.assertEqual(blocked.status, "blocked")
             self.assertEqual(allowed.status, "ok")
             self.assertTrue((codex_home / "skills" / "tool-skill" / "SKILL.md").exists())
+
+    def test_cli_skill_install_all_path_dry_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            project.mkdir()
+            repo = root / "repo"
+            _write_skill(repo / "skills", name="one")
+            _write_skill(repo / "more", name="two")
+            old_cwd = Path.cwd()
+            try:
+                os.chdir(project)
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    code = main(["skill-install", "--path", str(repo), "--all", "--dry-run"])
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(code, 0)
+            self.assertIn("candidates: 2", stdout.getvalue())
 
     def test_skill_installer_slash_alias_reports_existing_skill(self):
         with tempfile.TemporaryDirectory() as tmp:

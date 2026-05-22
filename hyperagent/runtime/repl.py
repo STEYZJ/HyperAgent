@@ -34,6 +34,8 @@ from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
     SkillInstaller,
+    SkillInstallBatchResult,
+    format_install_batch_result,
     format_install_plan,
     format_install_result,
 )
@@ -1410,7 +1412,7 @@ class HyperAgentRepl:
                 "usage: /skill install --path <local-skill> | "
                 "--repo owner/repo --skill-path skills/foo | "
                 "--url https://github.com/owner/repo/tree/main/skills/foo "
-                "[--name name] [--force] [--dry-run] [--yes]"
+                "[--name name] [--force] [--all] [--dry-run] [--yes]"
             )
             return
         installer = SkillInstaller()
@@ -1433,10 +1435,20 @@ class HyperAgentRepl:
         except Exception as exc:
             self._emit("error", f"skill install preflight failed: {type(exc).__name__}: {exc}")
             return
-        self._emit("tool", format_install_plan(preview.plan))
+        self._emit(
+            "tool",
+            format_install_batch_result(preview)
+            if isinstance(preview, SkillInstallBatchResult)
+            else format_install_plan(preview.plan),
+        )
         if options["dry_run"]:
             return
-        if preview.plan.blocked:
+        preview_blocked = (
+            any(item.plan.blocked for item in preview.results)
+            if isinstance(preview, SkillInstallBatchResult)
+            else preview.plan.blocked
+        )
+        if preview_blocked:
             self._emit("tool", preview.message)
             return
         if not options["yes"]:
@@ -1453,7 +1465,12 @@ class HyperAgentRepl:
                 self._emit("tool", "status: blocked\nmessage: skill installation denied")
                 return
         result = installer.install_from_request(**self._skill_install_request(options), dry_run=False)
-        self._emit("tool", format_install_result(result))
+        self._emit(
+            "tool",
+            format_install_batch_result(result)
+            if isinstance(result, SkillInstallBatchResult)
+            else format_install_result(result),
+        )
 
     def _parse_skill_install_args(self, args: List[str]) -> Dict[str, object]:
         options: Dict[str, object] = {
@@ -1465,6 +1482,7 @@ class HyperAgentRepl:
             "name": "",
             "force": False,
             "dry_run": False,
+            "all_skills": False,
             "yes": False,
         }
         index = 0
@@ -1472,6 +1490,10 @@ class HyperAgentRepl:
             token = args[index]
             if token in {"--force", "--dry-run", "--yes"}:
                 options[token[2:].replace("-", "_")] = True
+                index += 1
+                continue
+            if token == "--all":
+                options["all_skills"] = True
                 index += 1
                 continue
             if token in {"--path", "--repo", "--skill-path", "--url", "--ref", "--name"}:
@@ -1484,8 +1506,10 @@ class HyperAgentRepl:
         source_count = sum(1 for key in ("path", "repo", "url") if options[key])
         if source_count != 1:
             raise ValueError("provide exactly one skill source: --path, --repo, or --url")
-        if options["repo"] and not options["skill_path"]:
-            raise ValueError("--repo requires --skill-path")
+        if options["repo"] and not options["skill_path"] and not options.get("all_skills"):
+            raise ValueError("--repo requires --skill-path unless --all is set")
+        if options.get("all_skills") and options.get("name"):
+            raise ValueError("--name cannot be used with --all")
         return options
 
     def _skill_install_request(self, options: Dict[str, object]) -> Dict[str, object]:

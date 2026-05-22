@@ -57,6 +57,8 @@ from hyperagent.runtime.obsidian import ObsidianVaultIndex
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
     SkillInstaller,
+    SkillInstallBatchResult,
+    format_install_batch_result,
     format_install_plan,
     format_install_result,
 )
@@ -959,6 +961,7 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     skill_install.add_argument("--name", default="", help=_txt(translator, "cli.arg.skill_install.name", "Override installed skill name"))
     skill_install.add_argument("--force", action="store_true", help=_txt(translator, "cli.arg.skill_install.force", "Overwrite an existing installed skill"))
     skill_install.add_argument("--dry-run", action="store_true", help=_txt(translator, "cli.arg.skill_install.dry_run", "Only run preflight checks; do not write files"))
+    skill_install.add_argument("--all", action="store_true", help=_txt(translator, "cli.arg.skill_install.all", "Install every SKILL.md found under the source"))
     skill_install.add_argument("--yes", action="store_true", help=_txt(translator, "cli.arg.skill_install.yes", "Confirm installation without an interactive prompt"))
     skill_install.add_argument("--json", action="store_true")
 
@@ -2624,7 +2627,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if sum(1 for item in sources if item) != 1:
             raise ValueError("provide exactly one skill source: --path, --repo, or --url")
         if args.repo and not args.skill_path:
-            raise ValueError("--repo requires --skill-path")
+            if not args.all:
+                raise ValueError("--repo requires --skill-path unless --all is set")
+        if args.all and args.name:
+            raise ValueError("--name cannot be used with --all")
         installer = SkillInstaller()
         preview = installer.install_from_request(
             path=args.path,
@@ -2634,6 +2640,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             ref=args.ref,
             name=args.name,
             force=args.force,
+            all_skills=args.all,
             dry_run=True,
         )
         if args.json:
@@ -2641,12 +2648,21 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print_json(preview.to_dict())
                 return 0
         else:
-            print(format_install_plan(preview.plan))
+            print(
+                format_install_batch_result(preview)
+                if isinstance(preview, SkillInstallBatchResult)
+                else format_install_plan(preview.plan)
+            )
         if args.dry_run:
             if args.json:
                 print_json(preview.to_dict())
             return 0
-        if preview.plan.blocked:
+        preview_blocked = (
+            any(item.plan.blocked for item in preview.results)
+            if isinstance(preview, SkillInstallBatchResult)
+            else preview.plan.blocked
+        )
+        if preview_blocked:
             if args.json:
                 print_json(preview.to_dict())
             else:
@@ -2666,12 +2682,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             ref=args.ref,
             name=args.name,
             force=args.force,
+            all_skills=args.all,
             dry_run=False,
         )
         if args.json:
             print_json(result.to_dict())
         else:
-            print(format_install_result(result))
+            print(
+                format_install_batch_result(result)
+                if isinstance(result, SkillInstallBatchResult)
+                else format_install_result(result)
+            )
         return 0 if result.installed else 2
 
     if args.command == "skill-bundles":

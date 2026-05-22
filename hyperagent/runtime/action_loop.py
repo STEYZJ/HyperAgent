@@ -38,6 +38,7 @@ Allowed tools:
 - task: {"agents": ["reviewer", "experiment-analyst"], "instruction": "review this result", "mode": "parallel", "max_steps": 2, "max_depth": 1, "max_concurrent": 3, "role": "leaf"}
 - run_skill: {"name": "review-experiment", "instruction": "review reports/result.json", "max_steps": 2}
 - install_skill: {"repo": "owner/repo", "skill_path": "skills/foo", "dry_run": true}
+- install_skill: {"url": "https://github.com/owner/repo", "all_skills": true, "dry_run": true}
 - framework_command: {"command": "status|usage|web status|mcp status|skills list|worktree|todos|sessions|stats", "args": []}
 - todo_write: {"owner": "project", "items": [{"content": "inspect tests", "status": "in_progress", "priority": "high"}]}
 - check_patch: {"patch_text": "unified diff"}
@@ -727,6 +728,7 @@ class AgentActionLoop:
                 name=str(args.get("name", "")),
                 force=bool(args.get("force", False)),
                 dry_run=bool(args.get("dry_run", args.get("dry-run", True))),
+                all_skills=bool(args.get("all_skills", args.get("all", False))),
                 run_id=run_id,
             )
 
