@@ -54,11 +54,28 @@ HyperAgent channel-run --host 0.0.0.0 --port 8765
 Configure platform credentials through local environment variables or `.env`, then point the official platform callback URL at:
 
 ```text
+GET /status
 POST /webhooks/feishu
 POST /webhooks/qq
 ```
 
 The generated `.hyperagent/channels.yaml` stores only environment variable names, never secret values.
+
+## Hermes-Style Platform Runtime
+
+HyperAgent now exposes a local platform view inspired by Hermes Agent while keeping external channels chat/query only. `HyperAgent platform-status` aggregates provider config health, channel env health, session counts, skill/bundle counts, runtime event summaries, and skill usage totals without making live provider calls or storing secret values. The channel gateway serves the same read-only payload at `GET /status`.
+
+```bash
+HyperAgent platform-status
+HyperAgent platform-status --json
+HyperAgent session-search --query "spectral result" --limit 5
+HyperAgent skill-usage --json
+HyperAgent /platforms
+HyperAgent /sessions search "spectral result"
+HyperAgent /skills usage
+```
+
+Session search writes a lightweight local index to `.hyperagent/sessions/session_index.json` and returns only short snippets, not full conversation contents. Skill usage telemetry is append-only under `.hyperagent/skills/usage.jsonl`; the curator summary highlights unused skills, high-frequency skills, and skills missing bundle metadata without rewriting skill files.
 
 ## Controlled Web And Feature Panel
 
@@ -157,18 +174,21 @@ HyperAgent act --provider deepseek --new-title "Action loop" --max-steps 3 "Insp
 HyperAgent events --limit 20
 HyperAgent replay --run-id <run_id>
 HyperAgent stats
+HyperAgent platform-status
 HyperAgent diff --left reports/a.json --right reports/b.json
 HyperAgent checkpoint --path hyperagent/runtime/action_loop.py --reason "before repair change"
 HyperAgent restore --checkpoint-id <checkpoint_id>
 HyperAgent index --root hyperagent --root tests
 HyperAgent index --query "spectral experiment council"
 HyperAgent skill-list
+HyperAgent skill-usage
 HyperAgent skill-run --name review-experiment --arguments "review the latest result"
 HyperAgent agent-tool read-file --path hyperagent/cli.py --max-lines 80
 HyperAgent agent-tool search-code --query "AgentLoop" --path hyperagent
 HyperAgent agent-tool run-command -- python -m unittest discover -s tests
 HyperAgent session-new --title "Indian Pines research"
 HyperAgent session-add --session-id <session_id> --role user --content "Next experiment?"
+HyperAgent session-search --query "Indian Pines"
 HyperAgent /compact <session_id> --keep-last 4
 HyperAgent session-archive --session-id <session_id>
 HyperAgent session-delete --session-id <session_id>
@@ -232,6 +252,8 @@ HyperAgent repl --permission ask
 HyperAgent /resume <session_id> "continue from the last result"
 HyperAgent /status
 HyperAgent /sessions
+HyperAgent /platforms
+HyperAgent /session-search "spectral result"
 HyperAgent /model
 HyperAgent /reasonix
 HyperAgent /usage
@@ -241,7 +263,7 @@ HyperAgent /doctor
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/ide-context`, `/plan-mode`, `/web`, `/image`, `/feedback`, `/worktree`, `/mcp status`, `/tools`, `/tool read hyperagent/cli.py`, `/tool web-fetch https://example.org`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; answer `a` at the prompt to remember the exact tool/risk/args approval under `.hyperagent/permissions/remembered.json`, inspect it with `/permissions`, and remove it with `/permissions forget <id|key>` or `/permissions clear`. Write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/platforms`, `/sessions search ...`, `/skills usage`, `/ide-context`, `/plan-mode`, `/web`, `/image`, `/feedback`, `/worktree`, `/mcp status`, `/tools`, `/tool read hyperagent/cli.py`, `/tool web-fetch https://example.org`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; answer `a` at the prompt to remember the exact tool/risk/args approval under `.hyperagent/permissions/remembered.json`, inspect it with `/permissions`, and remove it with `/permissions forget <id|key>` or `/permissions clear`. Write operations can be blocked with `--permission deny-write`.
 
 The fullscreen TUI shares the same REPL runtime and now exposes a Claude-style status line with provider/model, short session id, permission mode, context meter, token usage, cache-hit ratio, and wait status. Its side panel also shows context summaries plus session and remembered permission counts. Action-loop terminal states emit a lightweight `TaskComplete` hook, so local hook rules can react to completed, paused, or failed agent tasks without expanding commit/test automation.
 

@@ -91,7 +91,7 @@ HyperAgent 和 Hermes Agent、Claude Code、DeepSeek Reasonix 的核心差异不
 2. **Claude 方向**：声明式 commands/agents/hooks/skills、统一 slash registry、TUI palette 和权限面板。
 3. **Hermes 方向**：多端 gateway、subagent tree、skill hub、memory/search 和平台化部署。
 
-当前实施进展：Reasonix 方向已进入第一轮工程落地，重点补强了 action-loop 累计 token budget、usage event 追踪、cache hit/miss 元数据、repair 事件、cache-first 稳定前缀 hash，以及 `replay/stats` 的可观测性输出。Claude 方向也完成第一轮体验补强：本地 remembered permissions、`/permissions list|forget|clear`、TUI status/context/cache/permission 面板，以及 action-loop `TaskComplete` hook 已落地；下一步可继续做 command palette、权限详情面板和更完整的插件 bundle。
+当前实施进展：Reasonix 方向已进入第一轮工程落地，重点补强了 action-loop 累计 token budget、usage event 追踪、cache hit/miss 元数据、repair 事件、cache-first 稳定前缀 hash，以及 `replay/stats` 的可观测性输出。Claude 方向也完成第一轮体验补强：本地 remembered permissions、`/permissions list|forget|clear`、TUI status/context/cache/permission 面板，以及 action-loop `TaskComplete` hook 已落地。Hermes 方向完成第一轮平台化：`platform-status` 与 gateway `GET /status` 汇总 provider/channel/session/skill/runtime 状态，`session-search` 提供本地会话索引和短 snippet，`skill-usage` 记录 CLI/REPL/action-loop/framework/install 路径的 skill telemetry 并输出 curator summary。下一步可继续做 command palette、权限详情面板、更完整的插件 bundle、平台消息重试和 live provider health。
 
 ## 对比图文件
 

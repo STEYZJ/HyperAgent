@@ -54,6 +54,12 @@ from hyperagent.runtime.llm import LLMClient, LLMProviderStore, LLMRequestBuilde
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.obsidian import ObsidianVaultIndex
+from hyperagent.runtime.platform_runtime import (
+    PlatformStatusReporter,
+    SessionSearchIndex,
+    SkillTelemetryStore,
+    skill_bundle_name,
+)
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
     SkillInstaller,
@@ -896,6 +902,9 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     stats = subparsers.add_parser("stats", help="Summarize runtime events and LLM usage")
     stats.add_argument("--json", action="store_true")
 
+    platform_status = subparsers.add_parser("platform-status", help="Summarize Hermes-style platform health")
+    platform_status.add_argument("--json", action="store_true")
+
     prune_sessions = subparsers.add_parser("prune-sessions", help="List or prune archived sessions")
     prune_sessions.add_argument("--dry-run", action="store_true")
     prune_sessions.add_argument("--json", action="store_true")
@@ -921,6 +930,12 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     session_list = subparsers.add_parser("session-list", help="List conversation sessions")
     session_list.add_argument("--include-archived", action="store_true")
     session_list.add_argument("--json", action="store_true")
+
+    session_search = subparsers.add_parser("session-search", help="Search indexed conversation sessions")
+    session_search.add_argument("--query", required=True)
+    session_search.add_argument("--limit", type=int, default=10)
+    session_search.add_argument("--include-archived", action="store_true")
+    session_search.add_argument("--json", action="store_true")
 
     session_show = subparsers.add_parser("session-show", help="Show a conversation session")
     session_show.add_argument("--session-id", required=True)
@@ -967,6 +982,9 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
     skill_bundles = subparsers.add_parser("skill-bundles", help="List skill bundles")
     skill_bundles.add_argument("--json", action="store_true")
+
+    skill_usage = subparsers.add_parser("skill-usage", help="Summarize skill usage telemetry")
+    skill_usage.add_argument("--json", action="store_true")
 
     skill_run = subparsers.add_parser("skill-run", help="Render or run a SKILL.md skill")
     skill_run.add_argument("--name", required=True)
@@ -1307,6 +1325,45 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"  {item['provider']}\tchat_query_only={item['chat_query_only']}\t"
                     f"webhook={item['supports_webhook']}"
                 )
+        return 0
+
+    if args.command == "platform-status":
+        payload = PlatformStatusReporter(
+            workspace,
+            session_store,
+            llm_store,
+            channel_store=channel_store,
+            skill_roots=skill_roots(workspace),
+        ).report()
+        if args.json:
+            print_json(payload)
+        else:
+            print(_kv(translator, "status", "status", payload["status"]))
+            print(f"{_label(translator, 'providers', 'providers')}:")
+            for provider in payload["providers"]:
+                print(
+                    f"  {provider['name']}\t{provider['health']}\t"
+                    f"{provider['api_key_env']}={_value(translator, provider['api_key_configured'])}"
+                )
+            print(f"{_label(translator, 'channels', 'channels')}:")
+            for channel in payload["channels"]:
+                print(
+                    f"  {channel['provider']}\t{channel['health']}\t"
+                    f"enabled={_value(translator, channel['enabled'])}"
+                )
+            print(
+                f"{_label(translator, 'sessions', 'sessions')}: "
+                f"{payload['sessions']['total']} "
+                f"{payload['sessions']['by_status']}"
+            )
+            print(
+                f"{_label(translator, 'skills', 'skills')}: "
+                f"{payload['skills']['total']} bundles={payload['skills']['bundles']}"
+            )
+            if payload["warnings"]:
+                print(f"{_label(translator, 'warnings', 'warnings')}:")
+                for warning in payload["warnings"]:
+                    print(f"  {warning}")
         return 0
 
     if args.command == "channel-run":
@@ -2557,6 +2614,29 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"{session.session_id}\t{session.status}\t{len(session.messages)}\t{session.title}")
         return 0
 
+    if args.command == "session-search":
+        index = SessionSearchIndex(workspace.workspace_dir)
+        results = index.search(
+            session_store,
+            args.query,
+            limit=args.limit,
+            include_archived=args.include_archived,
+        )
+        payload = {
+            "query": args.query,
+            "index_path": str(index.path),
+            "results": [result.to_dict() for result in results],
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            for result in payload["results"]:
+                print(
+                    f"{result['session_id']}\t{result['score']}\t"
+                    f"{result['status']}\t{result['title']}\t{result['snippet']}"
+                )
+        return 0
+
     if args.command == "session-show":
         session = session_store.load(args.session_id)
         if args.json:
@@ -2595,6 +2675,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "skill-list":
         roots = skill_roots(workspace)
         skills = SkillStore(roots).list()
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "list",
+            source="cli",
+            metadata={"count": len(skills)},
+        )
         if args.json:
             print_json({"skills": [skill.to_dict() for skill in skills]})
         else:
@@ -2606,6 +2691,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "skill-search":
         roots = skill_roots(workspace)
         skills = SkillStore(roots).search(args.query)
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "search",
+            source="cli",
+            metadata={"query": args.query, "count": len(skills)},
+        )
         if args.json:
             print_json({"skills": [skill.to_dict() for skill in skills]})
         else:
@@ -2619,6 +2709,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         skill = SkillStore(roots).get(args.name)
         if skill is None:
             raise KeyError(_txt(translator, "cli.error.skill_not_found", "skill not found: {name}", name=args.name))
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "inspect",
+            skill=skill.name,
+            bundle=skill_bundle_name(skill),
+            source="cli",
+        )
         if args.json:
             print_json(skill.to_dict())
         else:
@@ -2649,6 +2745,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             force=args.force,
             all_skills=args.all,
             dry_run=True,
+        )
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "install_preview",
+            skill=args.name or args.skill_path or args.path or args.repo or args.url,
+            source="cli",
+            metadata={"dry_run": True, "all_skills": args.all},
         )
         if args.json:
             if args.dry_run:
@@ -2692,6 +2794,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             all_skills=args.all,
             dry_run=False,
         )
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "install",
+            skill=args.name or args.skill_path or args.path or args.repo or args.url,
+            source="cli",
+            metadata={"installed": getattr(result, "installed", False), "all_skills": args.all},
+        )
         if args.json:
             print_json(result.to_dict())
         else:
@@ -2705,6 +2813,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "skill-bundles":
         roots = skill_roots(workspace)
         bundles = SkillStore(roots).bundles()
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "bundles",
+            source="cli",
+            metadata={"bundle_count": len(bundles)},
+        )
         payload = {
             "bundles": {
                 name: [skill.to_dict() for skill in skills]
@@ -2720,11 +2833,34 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(f"  {skill.name}\t{skill.description}")
         return 0
 
+    if args.command == "skill-usage":
+        roots = skill_roots(workspace)
+        store = SkillStore(roots)
+        telemetry = SkillTelemetryStore(workspace.workspace_dir)
+        summary = telemetry.summarize()
+        payload = {**summary, "curator": telemetry.curate(store.list())}
+        if args.json:
+            print_json(payload)
+        else:
+            print(_kv(translator, "total_events", "total_events", payload["total_events"]))
+            print(_kv(translator, "by_action", "by_action", payload["by_action"]))
+            print(_kv(translator, "by_skill", "by_skill", payload["by_skill"]))
+            curator = payload["curator"]
+            print(_kv(translator, "unused_skills", "unused_skills", curator["unused_skills"]))
+            print(_kv(translator, "missing_bundle_metadata", "missing_bundle_metadata", curator["missing_bundle_metadata"]))
+        return 0
+
     if args.command == "skill-run":
         roots = skill_roots(workspace)
         skill = SkillStore(roots).render(args.name, args.arguments)
         if not args.run:
             payload = skill.to_dict()
+            SkillTelemetryStore(workspace.workspace_dir).record(
+                "render",
+                skill=skill.name,
+                bundle=skill_bundle_name(skill),
+                source="cli",
+            )
             if args.json:
                 print_json(payload)
             else:
@@ -2757,6 +2893,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             "final_response": run.final_response,
             "warnings": run.warnings,
         }
+        SkillTelemetryStore(workspace.workspace_dir).record(
+            "run",
+            skill=skill.name,
+            bundle=skill_bundle_name(skill),
+            source="cli",
+            metadata={"run_id": run.run_id, "status": run.status},
+        )
         if args.json:
             print_json(payload)
         else:

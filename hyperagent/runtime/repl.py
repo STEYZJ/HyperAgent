@@ -1,6 +1,5 @@
 """Interactive HyperAgent REPL."""
 
-import os
 import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -32,6 +31,11 @@ from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.permissions import RememberedPermissionStore
+from hyperagent.runtime.platform_runtime import (
+    SkillTelemetryStore,
+    default_skill_roots,
+    skill_bundle_name,
+)
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
     SkillInstaller,
@@ -125,6 +129,7 @@ class HyperAgentRepl:
         self.feedback = FeedbackStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
         self.remembered_permissions = RememberedPermissionStore(workspace.workspace_dir)
+        self.skill_telemetry = SkillTelemetryStore(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
         self.expand_reasoning_content = self._default_expand_reasoning_content()
@@ -1409,6 +1414,13 @@ class HyperAgentRepl:
             except KeyError as exc:
                 self.output(str(exc))
                 return
+            self.skill_telemetry.record(
+                "render",
+                skill=skill.name,
+                bundle=skill_bundle_name(skill),
+                source="repl",
+                metadata={"arguments": " ".join(args[2:])},
+            )
             self.output(skill.body)
             return
         if args and args[0] in {"run", "use"} and len(args) >= 2:
@@ -1418,12 +1430,39 @@ class HyperAgentRepl:
         if args and args[0] == "install":
             self._skill_install(args[1:])
             return
+        if args and args[0] == "usage":
+            summary = self.skill_telemetry.summarize()
+            curator = self.skill_telemetry.curate(store.list())
+            self.output(f"total_events: {summary['total_events']}")
+            self.output(f"by_action: {summary['by_action']}")
+            self.output(f"by_skill: {summary['by_skill']}")
+            self.output(f"unused_skills: {curator['unused_skills']}")
+            self.output(f"missing_bundle_metadata: {curator['missing_bundle_metadata']}")
+            return
+        if args and args[0] == "bundles":
+            bundles = store.bundles()
+            self.skill_telemetry.record(
+                "bundles",
+                source="repl",
+                metadata={"bundle_count": len(bundles)},
+            )
+            if not bundles:
+                self.output(self._t("repl.no_skills", "no skills"))
+                return
+            for name, skills in sorted(bundles.items()):
+                self.output(f"{name}\t{len(skills)}")
+            return
         if args and args[0] not in {"list", "browse", "inspect", "install", "bundles"}:
             if self._run_skill_by_name(args[0], args[1:]):
                 return
             self.output(self._t("cli.error.skill_not_found", "skill not found: {name}", name=args[0]))
             return
         skills = store.list()
+        self.skill_telemetry.record(
+            "list",
+            source="repl",
+            metadata={"count": len(skills)},
+        )
         if not skills:
             self.output(self._t("repl.no_skills", "no skills"))
             return
@@ -1477,6 +1516,7 @@ class HyperAgentRepl:
         except Exception as exc:
             self._emit("error", f"skill install preflight failed: {type(exc).__name__}: {exc}")
             return
+        self._record_skill_install_telemetry(preview, dry_run=True)
         self._emit(
             "tool",
             format_install_batch_result(preview)
@@ -1507,6 +1547,7 @@ class HyperAgentRepl:
                 self._emit("tool", "status: blocked\nmessage: skill installation denied")
                 return
         result = installer.install_from_request(**self._skill_install_request(options), dry_run=False)
+        self._record_skill_install_telemetry(result, dry_run=False)
         self._emit(
             "tool",
             format_install_batch_result(result)
@@ -1564,14 +1605,7 @@ class HyperAgentRepl:
         return clean[: max(limit - 3, 0)].rstrip() + "..."
 
     def _skill_roots(self) -> List[Path]:
-        roots = [
-            Path(__file__).resolve().parents[1] / "skills",
-            self.workspace.project_root / "skills",
-            self.workspace.workspace_dir / "skills",
-        ]
-        codex_home = os.environ.get("CODEX_HOME")
-        roots.append(Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills")
-        return roots
+        return default_skill_roots(self.workspace.project_root, self.workspace.workspace_dir)
 
     def _skill_store(self) -> SkillStore:
         return SkillStore(self._skill_roots())
@@ -1585,11 +1619,63 @@ class HyperAgentRepl:
             skill = self._skill_store().render(name, arguments)
         except KeyError:
             return False
+        self.skill_telemetry.record(
+            "run",
+            skill=skill.name,
+            bundle=skill_bundle_name(skill),
+            source="repl",
+            metadata={
+                "arguments": arguments,
+                "mode": "action_loop" if (
+                    skill.run_as.lower() == "subagent" or self._skill_requires_action_loop(skill)
+                ) else "inline_chat",
+            },
+        )
         if skill.run_as.lower() == "subagent" or self._skill_requires_action_loop(skill):
             self._act(self._skill_action_instruction(skill, arguments))
             return True
         self._chat(skill.body)
         return True
+
+    def _record_skill_install_telemetry(self, result: object, *, dry_run: bool) -> None:
+        action = "install_preview" if dry_run else "install"
+        if hasattr(result, "results"):
+            for item in getattr(result, "results", []) or []:
+                plan = getattr(item, "plan", None)
+                skill = getattr(item, "skill", None)
+                skill_name = (
+                    getattr(skill, "name", "")
+                    or getattr(plan, "skill_name", "")
+                    or getattr(plan, "source", "")
+                )
+                self.skill_telemetry.record(
+                    action,
+                    skill=str(skill_name or ""),
+                    bundle=skill_bundle_name(skill) if skill is not None else "",
+                    source="repl",
+                    metadata={
+                        "status": getattr(item, "status", ""),
+                        "installed": getattr(item, "installed", False),
+                    },
+                )
+            return
+        plan = getattr(result, "plan", None)
+        skill = getattr(result, "skill", None)
+        skill_name = (
+            getattr(skill, "name", "")
+            or getattr(plan, "skill_name", "")
+            or getattr(plan, "source", "")
+        )
+        self.skill_telemetry.record(
+            action,
+            skill=str(skill_name or ""),
+            bundle=skill_bundle_name(skill) if skill is not None else "",
+            source="repl",
+            metadata={
+                "status": getattr(result, "status", ""),
+                "installed": getattr(result, "installed", False),
+            },
+        )
 
     def _skill_requires_action_loop(self, skill: object) -> bool:
         if getattr(skill, "allowed_tools", None):

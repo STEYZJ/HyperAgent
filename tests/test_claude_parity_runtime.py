@@ -42,12 +42,18 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
     def test_central_slash_registry_drives_help_and_gateway_allowlist(self):
         self.assertIn("agents", command_names())
         self.assertIn("background", command_names())
+        self.assertIn("session-search", command_names())
+        self.assertIn("skill-usage", command_names())
         self.assertEqual(resolve_command("channels").cli_command, "channel-list")
+        self.assertEqual(resolve_command("platforms").cli_command, "platform-status")
         self.assertIn("forget", resolve_command("permissions").args_hint)
         self.assertIn("status", gateway_command_names())
+        self.assertIn("platforms", gateway_command_names())
         help_text = grouped_help()
         self.assertIn("/hsi", help_text)
         self.assertIn("/permissions [list|forget", help_text)
+        self.assertIn("/session-search", help_text)
+        self.assertIn("/skill-usage", help_text)
         self.assertIn("/snapshot", help_text)
         self.assertEqual(
             normalize_hyperagent_args(["/agents", "pause", "maintenance"]),
@@ -56,6 +62,14 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
         self.assertEqual(
             normalize_hyperagent_args(["/skills", "bundles"]),
             ["skill-bundles"],
+        )
+        self.assertEqual(
+            normalize_hyperagent_args(["/skills", "usage"]),
+            ["skill-usage"],
+        )
+        self.assertEqual(
+            normalize_hyperagent_args(["/sessions", "search", "spectral", "result"]),
+            ["session-search", "--query", "spectral result"],
         )
 
     def test_slash_command_discovery_and_argument_rendering(self):

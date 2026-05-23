@@ -51,10 +51,19 @@ Already partially present:
 
 Still worth implementing:
 
-- centralized slash-command registry shared by CLI and REPL
 - broader subagent execution budgets outside experiment council
-- searchable session index
-- skill usage telemetry and curator
+- richer live provider checks and channel retry/fallback policies
+
+Implemented in Hermes first round:
+
+- centralized slash-command registry entries for platform/session/skill usage
+- `PlatformStatusReporter.report()` for providers, channels, sessions, skills,
+  runtime events, and skill usage
+- `HyperAgent platform-status --json` and gateway `GET /status`
+- `SessionSearchIndex` with `HyperAgent session-search`
+- `SkillTelemetryStore` with `HyperAgent skill-usage` and curator summary
+- skill usage events from CLI, REPL, framework commands, action-loop
+  `run_skill`, and `install_skill`
 
 ## OpenClaw
 
@@ -70,6 +79,6 @@ Useful ideas for HyperAgent:
 Still worth implementing:
 
 - gateway process for IDE/terminal/web UI clients
-- provider health checks and route fallback
+- live provider health checks and route fallback
 - config migration utilities
 - safer command allowlists with persistent approvals

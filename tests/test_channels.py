@@ -294,6 +294,7 @@ class ChannelGatewayTest(unittest.TestCase):
             app = create_channel_app(router, store)
             paths = {route.path for route in app.routes}
             self.assertIn("/health", paths)
+            self.assertIn("/status", paths)
             self.assertIn("/channels", paths)
             self.assertIn("/webhooks/feishu", paths)
             self.assertIn("/webhooks/qq", paths)
@@ -312,6 +313,7 @@ class ChannelGatewayTest(unittest.TestCase):
             client = TestClient(create_channel_app(router, store))
 
             self.assertEqual(client.get("/health").json()["status"], "ok")
+            self.assertIn("providers", client.get("/status").json())
             self.assertEqual(client.get("/channels").status_code, 200)
             response = client.post("/webhooks/feishu", json=_feishu_event("hello"))
             self.assertEqual(response.status_code, 200)

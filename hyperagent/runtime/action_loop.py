@@ -2,7 +2,6 @@
 
 import json
 import hashlib
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,6 +15,11 @@ from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.llm import LLMClient, LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
+from hyperagent.runtime.platform_runtime import (
+    SkillTelemetryStore,
+    default_skill_roots,
+    skill_bundle_name,
+)
 from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.deepseek_reasonix import reasonix_cache_guidance
 from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
@@ -825,13 +829,7 @@ class AgentActionLoop:
             from hyperagent.runtime.multi_agent import MultiAgentTaskRunner
             from hyperagent.runtime.skills import SkillStore
 
-            roots = [
-                Path(__file__).resolve().parents[1] / "skills",
-                self.workspace.project_root / "skills",
-                self.workspace.workspace_dir / "skills",
-            ]
-            codex_home = os.environ.get("CODEX_HOME")
-            roots.append(Path(codex_home) / "skills" if codex_home else Path.home() / ".codex" / "skills")
+            roots = default_skill_roots(self.workspace.project_root, self.workspace.workspace_dir)
             skill_name = str(args.get("name", args.get("skill", "")))
             instruction = str(args.get("instruction", args.get("arguments", "")))
             try:
@@ -873,6 +871,17 @@ class AgentActionLoop:
                     max_steps=int(args.get("max_steps", 2)),
                     llm_kwargs={},
                 )
+                SkillTelemetryStore(self.workspace.workspace_dir).record(
+                    "run",
+                    skill=skill.name,
+                    bundle=skill_bundle_name(skill),
+                    source="action_loop",
+                    metadata={
+                        "status": task_run.status,
+                        "run_id": task_run.run_id,
+                        "agent": agent_ref,
+                    },
+                )
                 return AgentToolResult(
                     call_id=f"{utc_now().replace(':', '').replace('-', '')}-{uuid4().hex[:6]}",
                     tool_name=tool_name,
@@ -882,6 +891,13 @@ class AgentActionLoop:
                     artifact_path=str(Path(task_run.run_dir) / "multi_agent_run.json"),
                     warnings=task_run.warnings,
                 )
+            SkillTelemetryStore(self.workspace.workspace_dir).record(
+                "run",
+                skill=skill.name,
+                bundle=skill_bundle_name(skill),
+                source="action_loop",
+                metadata={"status": "rendered_inline"},
+            )
             return AgentToolResult(
                 call_id=f"{utc_now().replace(':', '').replace('-', '')}-{uuid4().hex[:6]}",
                 tool_name=tool_name,

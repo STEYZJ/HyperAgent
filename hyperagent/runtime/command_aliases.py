@@ -57,6 +57,7 @@ EXISTING_COMMANDS = {
     "replay",
     "diff",
     "stats",
+    "platform-status",
     "prune-sessions",
     "checkpoint",
     "restore",
@@ -64,6 +65,7 @@ EXISTING_COMMANDS = {
     "session-new",
     "session-add",
     "session-list",
+    "session-search",
     "session-show",
     "session-archive",
     "session-delete",
@@ -73,6 +75,7 @@ EXISTING_COMMANDS = {
     "skill-inspect",
     "skill-install",
     "skill-bundles",
+    "skill-usage",
     "skill-run",
     "mcp-add",
     "mcp-list",
@@ -158,7 +161,7 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
             defaults=_default_provider(rest),
         )
     if alias == "sessions":
-        return global_options + ["session-list"] + rest
+        return global_options + _sessions_command(rest)
     if alias == "resume":
         return global_options + _resume_command(rest)
     if alias == "compact":
@@ -191,6 +194,8 @@ def normalize_hyperagent_args(argv: Sequence[str]) -> List[str]:
         return global_options + ["language-list"] + rest
     if alias in {"channels", "channel"}:
         return global_options + ["channel-list"] + rest
+    if alias == "platforms":
+        return global_options + ["platform-status"] + rest
     if alias == "agents":
         return global_options + _agents_command(rest)
 
@@ -273,7 +278,7 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias == "status":
         return ["status"] + list(rest)
     if alias == "sessions":
-        return ["session-list"] + list(rest)
+        return _sessions_command(rest)
     if alias == "resume":
         return _resume_command(rest)
     if alias in {"compact", "compress"}:
@@ -290,7 +295,20 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
         return [alias] + list(rest)
     if alias in {"rollback", "snapshot"}:
         return ["checkpoint"] + list(rest)
-    if alias in {"events", "replay", "diff", "stats", "checkpoint", "restore", "index"}:
+    if alias == "session-search":
+        query = " ".join(rest).strip()
+        return ["session-search", "--query", query] if query else ["session-search"]
+    if alias in {
+        "events",
+        "replay",
+        "diff",
+        "stats",
+        "platform-status",
+        "skill-usage",
+        "checkpoint",
+        "restore",
+        "index",
+    }:
         return [alias] + list(rest)
     if alias in {"commands", "command"}:
         return ["command-list"] + list(rest)
@@ -309,7 +327,7 @@ def _normalize_slash_command(command: str, rest: Sequence[str]) -> List[str]:
     if alias in {"channels", "channel"}:
         return ["channel-list"] + list(rest)
     if alias == "platforms":
-        return ["channel-list"] + list(rest)
+        return ["platform-status"] + list(rest)
     if alias == "agents":
         return _agents_command(rest)
     if alias == "hsi":
@@ -339,6 +357,17 @@ def _agents_command(rest: Sequence[str]) -> List[str]:
     return ["agent-status"] + list(rest)
 
 
+def _sessions_command(rest: Sequence[str]) -> List[str]:
+    if not rest:
+        return ["session-list"]
+    action = rest[0].lower()
+    tail = list(rest[1:])
+    if action == "search":
+        query = " ".join(tail).strip()
+        return ["session-search", "--query", query] if query else ["session-search"]
+    return ["session-list"] + list(rest)
+
+
 def _skills_command(rest: Sequence[str]) -> List[str]:
     if not rest:
         return ["skill-list"]
@@ -354,6 +383,8 @@ def _skills_command(rest: Sequence[str]) -> List[str]:
         return ["skill-install"] + tail
     if action == "bundles":
         return ["skill-bundles"] + tail
+    if action in {"usage", "telemetry"}:
+        return ["skill-usage"] + tail
     if action == "run":
         return ["skill-run"] + tail
     return ["skill-search"] + list(rest)

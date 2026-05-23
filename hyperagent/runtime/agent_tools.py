@@ -12,6 +12,11 @@ from hyperagent.core.io import read_yaml, write_json
 from hyperagent.runtime.checkpoints import CheckpointStore, paths_from_unified_diff
 from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.permissions import RememberedPermissionStore
+from hyperagent.runtime.platform_runtime import (
+    SkillTelemetryStore,
+    default_skill_roots,
+    skill_bundle_name,
+)
 from hyperagent.runtime.repo_context import SKIP_DIRS, TEXT_SUFFIXES
 from hyperagent.runtime.web_tools import (
     configured_search_provider,
@@ -832,6 +837,7 @@ class SafeAgentToolExecutor:
                 all_skills=all_skills,
                 dry_run=dry_run,
             )
+            self._record_skill_install_usage(result, dry_run=dry_run)
             status = "ok" if result.status in {"planned", "installed"} else result.status
             return self._record(
                 call,
@@ -1443,6 +1449,8 @@ class SafeAgentToolExecutor:
             "feedback-list": ["feedback", "list"],
             "skills-list": ["skills", "list"],
             "skills-search": ["skills", "search"],
+            "skills-bundles": ["skills", "bundles"],
+            "skills-usage": ["skills", "usage"],
             "commands-list": ["commands", "list"],
             "agents-list": ["agents", "list"],
             "hooks-list": ["hooks", "list"],
@@ -1470,6 +1478,8 @@ class SafeAgentToolExecutor:
             "mcp status",
             "skills list",
             "skills search",
+            "skills bundles",
+            "skills usage",
             "commands list",
             "todos",
             "sessions",
@@ -1552,20 +1562,44 @@ class SafeAgentToolExecutor:
                 "note": "HyperAgent extracts research strategy; HyperVault stores papers, strategy cards, and long-term research memory.",
             }
 
-        if key in {"skills list", "skills search"} or tokens[:1] in (["skills"], ["skill"]):
-            roots = [
-                Path(__file__).resolve().parents[1] / "skills",
-                self.project_root / "skills",
-                self.workspace_dir / "skills",
-            ]
-            codex_home = os.environ.get("CODEX_HOME")
-            if codex_home:
-                roots.append(Path(codex_home) / "skills")
-            else:
-                roots.append(Path.home() / ".codex" / "skills")
+        if key in {"skills list", "skills search", "skills bundles", "skills usage"} or tokens[:1] in (["skills"], ["skill"]):
+            roots = default_skill_roots(self.project_root, self.workspace_dir)
             store = SkillStore(roots)
+            if key == "skills usage":
+                telemetry = SkillTelemetryStore(self.workspace_dir)
+                return {
+                    **telemetry.summarize(),
+                    "curator": telemetry.curate(store.list()),
+                }
+            if key == "skills bundles":
+                bundles = store.bundles()
+                SkillTelemetryStore(self.workspace_dir).record(
+                    "bundles",
+                    source="framework_command",
+                    metadata={"bundle_count": len(bundles)},
+                )
+                return {
+                    "bundles": {
+                        name: [
+                            {
+                                "name": skill.name,
+                                "description": skill.description,
+                                "run_as": skill.run_as,
+                                "allowed_tools": skill.allowed_tools,
+                                "path": skill.path,
+                            }
+                            for skill in skills
+                        ]
+                        for name, skills in bundles.items()
+                    }
+                }
             query = " ".join(tokens[2:]) if key == "skills search" else ""
             skills = store.search(query) if query else store.list()
+            SkillTelemetryStore(self.workspace_dir).record(
+                "search" if query else "list",
+                source="framework_command",
+                metadata={"query": query, "count": len(skills)},
+            )
             return {
                 "skills": [
                     {
@@ -1648,6 +1682,47 @@ class SafeAgentToolExecutor:
             }
         raise KeyError(
             "Unsupported framework command. Supported commands: " + ", ".join(supported)
+        )
+
+    def _record_skill_install_usage(self, result: object, *, dry_run: bool) -> None:
+        action = "install_preview" if dry_run else "install"
+        telemetry = SkillTelemetryStore(self.workspace_dir)
+        if hasattr(result, "results"):
+            for item in getattr(result, "results", []) or []:
+                plan = getattr(item, "plan", None)
+                skill = getattr(item, "skill", None)
+                skill_name = (
+                    getattr(skill, "name", "")
+                    or getattr(plan, "skill_name", "")
+                    or getattr(plan, "source", "")
+                )
+                telemetry.record(
+                    action,
+                    skill=str(skill_name or ""),
+                    bundle=skill_bundle_name(skill) if skill is not None else "",
+                    source="agent_tool",
+                    metadata={
+                        "status": getattr(item, "status", ""),
+                        "installed": getattr(item, "installed", False),
+                    },
+                )
+            return
+        plan = getattr(result, "plan", None)
+        skill = getattr(result, "skill", None)
+        skill_name = (
+            getattr(skill, "name", "")
+            or getattr(plan, "skill_name", "")
+            or getattr(plan, "source", "")
+        )
+        telemetry.record(
+            action,
+            skill=str(skill_name or ""),
+            bundle=skill_bundle_name(skill) if skill is not None else "",
+            source="agent_tool",
+            metadata={
+                "status": getattr(result, "status", ""),
+                "installed": getattr(result, "installed", False),
+            },
         )
 
     def _record(

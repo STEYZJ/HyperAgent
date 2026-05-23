@@ -74,6 +74,17 @@ class HyperAgentLauncherTest(unittest.TestCase):
         self.assertEqual(normalize_hyperagent_args(["/language"]), ["language-list"])
         self.assertEqual(normalize_hyperagent_args(["/repl"]), ["repl"])
         self.assertEqual(normalize_hyperagent_args(["/tui"]), ["tui"])
+        self.assertEqual(normalize_hyperagent_args(["/platforms"]), ["platform-status"])
+        self.assertEqual(normalize_hyperagent_args(["/skill-usage"]), ["skill-usage"])
+        self.assertEqual(
+            normalize_hyperagent_args(["/sessions", "search", "spectral", "result"]),
+            ["session-search", "--query", "spectral result"],
+        )
+        self.assertEqual(
+            normalize_hyperagent_args(["/session-search", "spectral", "result"]),
+            ["session-search", "--query", "spectral result"],
+        )
+        self.assertEqual(normalize_hyperagent_args(["/skills", "usage"]), ["skill-usage"])
         self.assertEqual(
             normalize_hyperagent_args(["/resume", "sid-1", "continue", "work"]),
             ["agent-chat", "--session-id", "sid-1", "--message", "continue work"],

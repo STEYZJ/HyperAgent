@@ -5,6 +5,7 @@ from typing import Dict
 
 from hyperagent.runtime.channels.config import ChannelConfigStore
 from hyperagent.runtime.channels.router import ChannelRouter
+from hyperagent.runtime.platform_runtime import PlatformStatusReporter
 
 
 def create_channel_app(router: ChannelRouter, config_store: ChannelConfigStore):
@@ -49,6 +50,15 @@ def create_channel_app(router: ChannelRouter, config_store: ChannelConfigStore):
                 for item in configs
             ]
         }
+
+    @app.get("/status")
+    def status() -> Dict[str, object]:
+        return PlatformStatusReporter(
+            router.workspace,
+            router.conversations,
+            router.providers,
+            channel_store=config_store,
+        ).report()
 
     @app.post("/webhooks/feishu")
     async def feishu(request: Request):
