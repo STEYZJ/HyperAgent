@@ -9,6 +9,9 @@ HyperAgent 是一个面向高光谱图像分类研究的解耦式 Agent 框架�
 架构图和横向对比图保存在 `描述文件/设计结构/`。其中 `描述文件/设计结构/对比/`
 按结构拓扑、业务流程、用例覆盖和模块通信四类图，对比 HyperAgent、Hermes
 Agent、Claude Code 参考和 DeepSeek Reasonix。
+`docs/reasonix_cache_hit_study.md` 记录了本轮 Reasonix 命中率研究，说明
+DeepSeek prefix cache、append-only log、tool-call repair 和 telemetry 是如何共同
+支撑高命中率的，以及哪些策略可迁移到 HyperAgent。
 
 ## 快速开始
 
@@ -18,6 +21,9 @@ Agent、Claude Code 参考和 DeepSeek Reasonix。
 conda activate HyperAgent
 HyperAgent demo --synthetic
 ```
+
+环境维护见 `docs/environment_maintenance.md`：`environment.yml` 用于兼容安装，
+`environment.txt` 记录当前验证环境的精确包快照。
 
 如果出现 `HyperAgent: command not found`，说明命令还没有安装到当前 shell。可以先使用仓库内启动器：
 

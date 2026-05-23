@@ -1,6 +1,18 @@
 remote:
   name: origin
   url: git@github.com:STEYZJ/HyperAgent.git
+about:
+  description: "Research workflow orchestration framework for auditable hyperspectral image classification agents."
+  homepage: ""
+  topics:
+    - agent-framework
+    - hyperspectral-imaging
+    - research-workflow
+    - reproducible-experiments
+    - llm-agents
+    - deepseek
+    - prompt-caching
+    - scientific-computing
 default_branch: main
 branch_policy:
   protected_branch: main

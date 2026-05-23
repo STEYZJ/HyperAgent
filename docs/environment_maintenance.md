@@ -5,6 +5,19 @@ HyperAgent keeps two environment files:
 - `environment.yml`: human-readable dependency intent for creating a compatible environment.
 - `environment.txt`: exact conda package snapshot for the current verified environment.
 
+The verified project environment is:
+
+```text
+HyperAgent -> /home/lzj/miniconda3/envs/HyperAgent
+```
+
+Create a compatible environment from intent:
+
+```bash
+conda env create -f environment.yml
+conda activate HyperAgent
+```
+
 Update `environment.txt` after dependency changes and before stage commits:
 
 ```bash

@@ -23,6 +23,10 @@ Generated architecture and comparison diagrams are kept under `描述文件/设�
 The comparison set in `描述文件/设计结构/对比/` contrasts HyperAgent with
 Hermes Agent, Claude Code references, and DeepSeek Reasonix across topology,
 workflow, use-case coverage, and module communication.
+The Reasonix cache-hit study in `docs/reasonix_cache_hit_study.md` explains how
+DeepSeek prefix-cache stability, append-only logs, repair, and telemetry produce
+the reported high cache-hit ratios and which pieces are transferable to
+HyperAgent.
 
 ## Quick Start
 
@@ -32,6 +36,10 @@ Use the project Python environment:
 conda activate HyperAgent
 HyperAgent demo --synthetic
 ```
+
+Environment maintenance is documented in `docs/environment_maintenance.md`.
+Use `environment.yml` for a compatible setup and `environment.txt` for the exact
+verified package snapshot.
 
 The demo writes artifacts under `experiments/synthetic_demo/` and appends a worklog entry under `logs/worklog/`.
 
