@@ -27,6 +27,9 @@ The Reasonix cache-hit study in `docs/reasonix_cache_hit_study.md` explains how
 DeepSeek prefix-cache stability, append-only logs, repair, and telemetry produce
 the reported high cache-hit ratios and which pieces are transferable to
 HyperAgent.
+The feature design summary in `docs/hyperagent_feature_design_summary.md`
+describes the planned product capabilities, implementation phases, acceptance
+criteria, and repository governance rules.
 
 ## Quick Start
 

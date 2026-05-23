@@ -12,6 +12,8 @@ Agent、Claude Code 参考和 DeepSeek Reasonix。
 `docs/reasonix_cache_hit_study.md` 记录了本轮 Reasonix 命中率研究，说明
 DeepSeek prefix cache、append-only log、tool-call repair 和 telemetry 是如何共同
 支撑高命中率的，以及哪些策略可迁移到 HyperAgent。
+`docs/hyperagent_feature_design_summary.md` 汇总了计划设计实现的功能、阶段路线、
+验收标准和仓库治理规则。
 
 ## 快速开始
 
