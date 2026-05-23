@@ -40,15 +40,16 @@ Large local videos and reference PDFs are ignored by Git via `参考/`.
 | `/plugin` | Implemented as lightweight plugin registry |
 | `/simplify` | Implemented as local council prompt scaffold |
 | Accept Edits mode | Partially covered by `--permission ask` and `deny-write` |
-| Status line | Not yet persistent; `/context` gives status details |
-| Rich TUI | Not yet; stdlib REPL only |
-| Remembered command approvals | Not yet; permission mode is per run |
+| Status line | First-round TUI status line shows provider/model, session, permission, context, tokens, cache, and wait status |
+| Rich TUI | First-round stdlib TUI exists with side panel for context, usage, subagents, jobs, suggestions, todos, artifacts, and permission counts |
+| Remembered command approvals | First-round exact remembered approvals stored locally under `.hyperagent/permissions/remembered.json` |
 
 ## Next Gaps
 
-- Persistent command approval rules, similar to remembered permissions.
-- Full-screen TUI with status line and context meter.
+- Broader permission UI, such as grouped risk views and expiry policies.
+- Deeper TUI interaction polish, such as a command palette and permission-detail panel.
 - Native multi-agent simplify council that runs three reviewers and applies a
   guarded patch.
-- Hook execution lifecycle around commits, tests, and task completion.
+- Hook execution lifecycle around commits and tests; task completion now has a
+  lightweight `TaskComplete` event.
 - Plugin bundles that package skills, subagents, hooks, and MCP specs together.

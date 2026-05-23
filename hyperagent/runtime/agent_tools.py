@@ -11,6 +11,7 @@ from uuid import uuid4
 from hyperagent.core.io import read_yaml, write_json
 from hyperagent.runtime.checkpoints import CheckpointStore, paths_from_unified_diff
 from hyperagent.runtime.events import RuntimeEventLog
+from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.repo_context import SKIP_DIRS, TEXT_SUFFIXES
 from hyperagent.runtime.web_tools import (
     configured_search_provider,
@@ -298,6 +299,7 @@ class SafeAgentToolExecutor:
         allow_arbitrary_commands: bool = False,
         hook_engine: Optional[Any] = None,
         event_log: Optional[RuntimeEventLog] = None,
+        remembered_permission_store: Optional[RememberedPermissionStore] = None,
     ) -> None:
         self.project_root = project_root.resolve()
         self.workspace_dir = workspace_dir.resolve()
@@ -310,6 +312,11 @@ class SafeAgentToolExecutor:
         self.allow_arbitrary_commands = allow_arbitrary_commands
         self.hook_engine = hook_engine
         self.event_log = event_log or RuntimeEventLog(self.workspace_dir)
+        self.remembered_permission_store = (
+            remembered_permission_store
+            if remembered_permission_store is not None
+            else RememberedPermissionStore(self.workspace_dir)
+        )
 
     def read_file(
         self,
@@ -1294,6 +1301,11 @@ class SafeAgentToolExecutor:
             reason=reason,
             run_id=call.run_id,
         )
+        if (
+            self.permission_policy in {"ask", "session-ask"}
+            and self.remembered_permission_store.is_allowed(request)
+        ):
+            return None
         if self.permission_policy == "deny" or (
             self.permission_policy == "deny-write"
             and write_like
@@ -1318,7 +1330,8 @@ class SafeAgentToolExecutor:
                     f"Permission required for {call.tool_name}, but no confirmation callback is configured.",
                     warnings=["permission confirmation is required"],
                 )
-            approved = bool(self.permission_callback(request))
+            decision = self.permission_callback(request)
+            approved = bool(decision)
             if not approved:
                 return self._record(
                     call,
@@ -1326,6 +1339,8 @@ class SafeAgentToolExecutor:
                     f"User denied permission for {call.tool_name}: {reason}",
                     warnings=["permission denied by user"],
                 )
+            if self._decision_remembers_permission(decision):
+                self.remembered_permission_store.remember(request)
             if self.permission_policy == "session-ask":
                 self.session_permission_cache[cache_key] = True
             return None
@@ -1754,3 +1769,8 @@ class SafeAgentToolExecutor:
 
     def _permission_cache_key(self, request: ToolPermissionRequest) -> str:
         return f"{request.risk_level}:{request.tool_name}"
+
+    def _decision_remembers_permission(self, decision: object) -> bool:
+        if isinstance(decision, str):
+            return decision.strip().lower() in {"a", "always", "remember"}
+        return bool(getattr(decision, "remember", False))

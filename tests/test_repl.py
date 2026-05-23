@@ -163,6 +163,61 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertIn("status: blocked", text)
             self.assertIn("permission denied by user", text)
 
+    def test_repl_remembers_lists_forgets_and_clears_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            package = root / "hyperagent"
+            package.mkdir()
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            command = (
+                "/tool run "
+                + sys.executable
+                + " -m compileall -q hyperagent"
+            )
+            outputs = []
+            lines = iter([command, "a", "/exit"])
+
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                permission_policy="ask",
+                input_func=lambda prompt: next(lines),
+                output_func=outputs.append,
+            )
+            self.assertEqual(repl.run(), 0)
+            rules = repl.remembered_permissions.list_rules()
+            self.assertEqual(len(rules), 1)
+            self.assertIn("remembered permission", "\n".join(outputs))
+
+            outputs = []
+            lines = iter([
+                "/permissions",
+                f"/permissions forget {rules[0].id}",
+                "/permissions",
+                "/permissions clear",
+                "/exit",
+            ])
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                permission_policy="ask",
+                input_func=lambda prompt: next(lines),
+                output_func=outputs.append,
+            )
+            self.assertEqual(repl.run(), 0)
+            text = "\n".join(outputs)
+            self.assertIn(rules[0].id, text)
+            self.assertIn("remembered permission removed: True", text)
+            self.assertIn("remembered permissions cleared: 0", text)
+
     def test_plain_chat_auto_routes_tool_intent_to_action_loop(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -10,8 +10,9 @@ from hyperagent.agents import CoordinatorAgent
 from hyperagent.cli import main
 from hyperagent.core.io import read_json
 from hyperagent.data.synthetic import write_synthetic_mat
-from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
+from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, ToolPermissionRequest
 from hyperagent.runtime.mcp import MCPServerStore
+from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 from hyperagent.schemas import AgentToolResult, MCPServerSpec
 
@@ -110,6 +111,70 @@ class AgentToolsTest(unittest.TestCase):
             self.assertEqual(first.status, "ok")
             self.assertEqual(second.status, "ok")
             self.assertEqual(len(approvals), 1)
+
+    def test_remembered_permission_reuses_exact_args_across_executors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            package = root / "hyperagent"
+            package.mkdir()
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            store = RememberedPermissionStore(workspace.workspace_dir)
+            approvals = []
+
+            first = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: approvals.append(request) or "remember",
+                remembered_permission_store=store,
+            ).run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+            self.assertEqual(first.status, "ok")
+            self.assertEqual(len(approvals), 1)
+            self.assertEqual(len(store.list_rules()), 1)
+
+            second_prompts = []
+            second = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: second_prompts.append(request) or False,
+                remembered_permission_store=RememberedPermissionStore(workspace.workspace_dir),
+            ).run_command([sys.executable, "-m", "compileall", "-q", "hyperagent"])
+            self.assertEqual(second.status, "ok")
+            self.assertEqual(second_prompts, [])
+
+            changed = SafeAgentToolExecutor(
+                root,
+                workspace.workspace_dir,
+                permission_policy="ask",
+                permission_callback=lambda request: second_prompts.append(request) or False,
+                remembered_permission_store=RememberedPermissionStore(workspace.workspace_dir),
+            ).run_command([sys.executable, "-m", "compileall", "-q", "different"])
+            self.assertEqual(changed.status, "blocked")
+            self.assertEqual(len(second_prompts), 1)
+
+    def test_remembered_permission_redacts_secret_shaped_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            store = RememberedPermissionStore(workspace.workspace_dir)
+            secret = "sk-" + ("a" * 32)
+
+            store.remember(
+                ToolPermissionRequest(
+                    tool_name="web_search",
+                    args={"query": f"baseline {secret}", "api_key": secret},
+                    risk_level="network",
+                    reason=f"use token {secret}",
+                )
+            )
+
+            text = store.path.read_text(encoding="utf-8")
+            self.assertNotIn(secret, text)
+            self.assertIn("[REDACTED_SECRET]", text)
 
     def test_arbitrary_command_requires_explicit_executor_mode(self):
         with tempfile.TemporaryDirectory() as tmp:

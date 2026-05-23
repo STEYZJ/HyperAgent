@@ -97,13 +97,14 @@ class AgentActionLoop:
         self._active_provider = ""
         self._active_model: Optional[str] = None
         self.event_log = RuntimeEventLog(workspace.workspace_dir)
+        self.hook_engine = HookEngine(workspace.workspace_dir)
         self.repair_pipeline = ActionRepairPipeline()
         self.tool_executor = tool_executor or SafeAgentToolExecutor(
             workspace.project_root,
             workspace.workspace_dir,
             permission_policy=permission_policy,
             permission_callback=permission_callback,
-            hook_engine=HookEngine(workspace.workspace_dir),
+            hook_engine=self.hook_engine,
             event_log=self.event_log,
         )
 
@@ -231,6 +232,7 @@ class AgentActionLoop:
                     message=run.warnings[-1],
                     payload={"usage_summary": self._usage_summary(run)},
                 )
+                self._emit_task_complete_hook(run)
                 self._persist(run)
                 return run
             if response.warnings:
@@ -246,6 +248,7 @@ class AgentActionLoop:
                     status="failed",
                     message="; ".join(response.warnings)[:500],
                 )
+                self._emit_task_complete_hook(run)
                 self._persist(run)
                 return run
 
@@ -297,6 +300,7 @@ class AgentActionLoop:
                     message=final[:500],
                     payload={"steps": len(run.steps), "usage_summary": self._usage_summary(run)},
                 )
+                self._emit_task_complete_hook(run)
                 self._persist(run)
                 return run
 
@@ -313,6 +317,7 @@ class AgentActionLoop:
                         parse_source=parsed_result.source,
                     )
                 )
+                self._emit_task_complete_hook(run)
                 self._persist(run)
                 return run
 
@@ -420,6 +425,7 @@ class AgentActionLoop:
             message=run.warnings[-1],
             payload={"steps": len(run.steps), "usage_summary": self._usage_summary(run)},
         )
+        self._emit_task_complete_hook(run)
         self._persist(run)
         return run
 
@@ -576,6 +582,22 @@ class AgentActionLoop:
                     "action": getattr(parsed_result, "action", {}),
                 },
             )
+
+    def _emit_task_complete_hook(self, run: AgentActionRun) -> None:
+        result = self.hook_engine.run(
+            "TaskComplete",
+            {
+                "session_id": run.session_id,
+                "run_id": run.run_id,
+                "status": run.status,
+                "final_response": run.final_response[:500],
+                "warnings": list(run.warnings),
+            },
+        )
+        for warning in result.warnings:
+            run.warnings.append(f"TaskComplete hook: {warning}")
+        for message in result.system_messages:
+            run.warnings.append(f"TaskComplete hook message: {message}")
 
     def _task_context(self, task_id: Optional[str]) -> str:
         if not task_id:

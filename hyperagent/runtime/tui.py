@@ -20,6 +20,7 @@ from hyperagent.runtime.feature_state import (
 from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.mcp import MCPServerStore
+from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
 from hyperagent.runtime.slash_registry import command_names
@@ -489,26 +490,10 @@ class HyperAgentTui:
         height, width = self.stdscr.getmaxyx()
         side_width = max(28, min(44, width // 3)) if width >= 90 else 0
         main_width = width - side_width - (1 if side_width else 0)
-        reasoning = "collapsed"
-        if self.repl is not None:
-            reasoning = self.repl._reasoning_display_mode()
-        reasoning_label = self._reasoning_label(reasoning)
-        mouse_label = self._mouse_label(self.mouse_mode)
-        status = (
-            f" HyperAgent TUI | {self._t('tui.status.provider', 'provider')}={self.provider} "
-            f"| {self._t('tui.status.permission', 'permission')}={self.permission_policy} "
-            f"| {self._t('tui.status.reasoning', 'reasoning')}={reasoning_label} "
-            f"| /help /exit "
-        )
-        if self.wait_status:
-            status += f"| {self.wait_status} "
-        if self.locale_warning:
-            status += f"| {self.locale_warning} "
-        status += f"| {self._t('tui.status.mouse', 'mouse')}={mouse_label} "
         self._addstr(
             0,
             0,
-            self._clip_to_width(status, max(width - 1, 0)),
+            self._build_status_line(width),
             curses.A_REVERSE,
         )
         log_height = max(1, height - 3)
@@ -604,15 +589,21 @@ class HyperAgentTui:
         if self.repl is not None:
             try:
                 usage = self.repl.usage.summarize()
+                context = self._context_status()
                 ide = IDEContextStore(self.workspace.workspace_dir).load()
                 plan_mode = PlanModeStore(self.workspace.workspace_dir).load()
                 web = web_status()
                 image = image_status()
+                permission_counts = self._permission_counts()
                 lines.extend(
                     [
                         self._panel_kv("llm_requests", "llm_requests", usage["request_count"]),
                         self._panel_kv("tokens", "tokens", usage["total_tokens"]),
                         self._panel_kv("cache_hit", "cache_hit", usage["cache_hit_ratio"]),
+                        self._panel_kv("context", "context", self._format_context_meter(context)),
+                        self._panel_kv("summaries", "summaries", context.get("summary_count", 0)),
+                        self._panel_kv("session_grants", "session grants", permission_counts["session_grants"]),
+                        self._panel_kv("remembered_grants", "remembered grants", permission_counts["remembered_grants"]),
                         self._panel_kv("loop", "loop", self.repl.action_loop_mode),
                         self._panel_kv("budget", "budget", self.repl.action_token_budget),
                         self._panel_kv("ide_context", "IDE context", self._on_off(ide.get("enabled"))),
@@ -653,8 +644,105 @@ class HyperAgentTui:
         lines.extend([line.text for line in artifact_lines[-10:]] or [self._t("tui.panel.none", "none")])
         return lines
 
+    def _build_status_line(self, width: int) -> str:
+        reasoning = "collapsed"
+        if self.repl is not None:
+            reasoning = self.repl._reasoning_display_mode()
+        usage = self._usage_status()
+        context = self._context_status()
+        model = self.model or self._t("tui.value.profile_default", "profile/default")
+        session = self._short_session_id()
+        parts = [
+            " HyperAgent TUI",
+            f"{self._t('tui.status.provider', 'provider')}={self.provider}",
+            f"{self._t('tui.status.model', 'model')}={model}",
+            f"{self._t('tui.status.session', 'session')}={session}",
+            f"{self._t('tui.status.permission', 'permission')}={self.permission_policy}",
+            f"{self._t('tui.status.context', 'context')}={self._format_context_meter(context)}",
+            f"{self._t('tui.status.tokens', 'tokens')}={usage.get('total_tokens', 0)}",
+            f"{self._t('tui.status.cache', 'cache')}={self._format_cache_ratio(usage.get('cache_hit_ratio'))}",
+            f"{self._t('tui.status.reasoning', 'reasoning')}={self._reasoning_label(reasoning)}",
+            f"{self._t('tui.status.mouse', 'mouse')}={self._mouse_label(self.mouse_mode)}",
+            "/help /exit",
+        ]
+        if self.wait_status:
+            parts.append(self.wait_status)
+        if self.locale_warning:
+            parts.append(self.locale_warning)
+        return self._clip_to_width(" | ".join(parts) + " ", max(width - 1, 0))
+
     def _panel_kv(self, key: str, default: str, value: object) -> str:
         return f"{self._t(f'tui.panel.{key}', default)}: {value}"
+
+    def _context_status(self) -> Dict[str, object]:
+        session_id = self.repl.session_id if self.repl is not None else self.session_id
+        if not session_id or self.conversations is None:
+            return {
+                "current_chars": 0,
+                "max_chars": self.max_context_chars,
+                "summary_count": 0,
+            }
+        try:
+            status = self.conversations.context_status(
+                session_id,
+                max_chars=self.max_context_chars,
+                keep_last=self.keep_last,
+            )
+            return {
+                "current_chars": status.current_chars,
+                "max_chars": status.max_chars,
+                "summary_count": status.summary_count,
+            }
+        except Exception:
+            return {
+                "current_chars": 0,
+                "max_chars": self.max_context_chars,
+                "summary_count": 0,
+            }
+
+    def _usage_status(self) -> Dict[str, object]:
+        if self.repl is None:
+            return {"total_tokens": 0, "cache_hit_ratio": None}
+        try:
+            return self.repl.usage.summarize()
+        except Exception:
+            return {"total_tokens": 0, "cache_hit_ratio": None}
+
+    def _permission_counts(self) -> Dict[str, int]:
+        session_grants = len(getattr(self.repl, "permission_cache", {}) or {})
+        store = getattr(self.repl, "remembered_permissions", None)
+        if store is None and self.workspace is not None:
+            store = RememberedPermissionStore(self.workspace.workspace_dir)
+        remembered_grants = 0
+        if store is not None:
+            try:
+                remembered_grants = int(store.summary().get("count", 0))
+            except Exception:
+                remembered_grants = 0
+        return {
+            "session_grants": session_grants,
+            "remembered_grants": remembered_grants,
+        }
+
+    def _short_session_id(self) -> str:
+        session = self.repl.session_id if self.repl is not None else self.session_id
+        if not session:
+            return "-"
+        text = str(session)
+        return text[:10]
+
+    def _format_context_meter(self, context: Dict[str, object]) -> str:
+        current = int(context.get("current_chars") or 0)
+        maximum = int(context.get("max_chars") or self.max_context_chars or 0)
+        return f"{current}/{maximum}"
+
+    def _format_cache_ratio(self, value: object) -> str:
+        if value in {None, ""}:
+            return "n/a"
+        try:
+            return f"{float(value):.2f}"
+        except (TypeError, ValueError):
+            return str(value)
 
     def _reasoning_label(self, value: str) -> str:
         normalized = str(value).strip().lower()

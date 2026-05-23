@@ -4,7 +4,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from hyperagent.runtime.agent_tools import ToolPermissionRequest
+from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.i18n import I18nStore
+from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.tui import HyperAgentTui, TuiLine
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 
@@ -323,6 +326,84 @@ class HyperAgentTuiTest(unittest.TestCase):
             self.assertIn("命令建议:", text)
             self.assertNotIn("reasoning:", text)
             self.assertNotIn("mouse:", text)
+
+    def test_status_line_includes_context_tokens_cache_and_clips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            session = conversations.new("tui")
+            conversations.add_message(session.session_id, "user", "x" * 40)
+            tui = HyperAgentTui(
+                workspace=workspace,
+                conversations=conversations,
+                providers=None,
+                prompt_library=None,
+                provider="deepseek",
+                model="deepseek-chat",
+                max_context_chars=100,
+            )
+            tui.repl = SimpleNamespace(
+                session_id=session.session_id,
+                _reasoning_display_mode=lambda: "collapsed",
+                usage=SimpleNamespace(
+                    summarize=lambda: {"total_tokens": 12, "cache_hit_ratio": 0.5}
+                ),
+            )
+
+            status = tui._build_status_line(180)
+
+            self.assertLessEqual(tui._display_width(status), 179)
+            self.assertIn("context=40/100", status)
+            self.assertIn("tokens=12", status)
+            self.assertIn("cache=0.50", status)
+
+    def test_panel_shows_context_and_permission_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            conversations = ConversationStore(workspace.workspace_dir)
+            session = conversations.new("tui")
+            conversations.add_message(session.session_id, "user", "context")
+            store = RememberedPermissionStore(workspace.workspace_dir)
+            store.remember(
+                ToolPermissionRequest(
+                    tool_name="run_command",
+                    args={"argv": ["python", "-m", "compileall"], "cwd": "", "timeout_sec": 60},
+                    risk_level="execute",
+                    reason="test remembered permission",
+                )
+            )
+            tui = HyperAgentTui(
+                workspace=workspace,
+                conversations=conversations,
+                providers=None,
+                prompt_library=None,
+                max_context_chars=100,
+            )
+            tui.repl = SimpleNamespace(
+                session_id=session.session_id,
+                _reasoning_display_mode=lambda: "expanded",
+                usage=SimpleNamespace(
+                    summarize=lambda: {
+                        "request_count": 1,
+                        "total_tokens": 12,
+                        "cache_hit_ratio": 0.5,
+                    }
+                ),
+                action_loop_mode="standard",
+                action_token_budget=None,
+                permission_cache={"execute:run_command": True},
+                remembered_permissions=store,
+            )
+
+            text = "\n".join(tui._panel_lines())
+
+            self.assertIn("context: 7/100", text)
+            self.assertIn("session grants: 1", text)
+            self.assertIn("remembered grants: 1", text)
 
     def test_main_prompt_uses_cwd_and_hyperagent_marker(self):
         tui = self._tui()

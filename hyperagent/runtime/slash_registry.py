@@ -39,7 +39,7 @@ COMMAND_REGISTRY: List[SlashCommandDef] = [
     SlashCommandDef("commands", "List or render Markdown slash commands", "Tools", aliases=("command",), cli_command="command-list"),
     SlashCommandDef("todos", "Show or update TodoWrite state", "Tools", cli_command="todos"),
     SlashCommandDef("hooks", "List or manage runtime hooks", "Tools"),
-    SlashCommandDef("permissions", "Show current permission policy", "Safety"),
+    SlashCommandDef("permissions", "Show or manage session and remembered permissions", "Safety", args_hint="[list|forget <id|key>|clear]"),
     SlashCommandDef("rollback", "Alias for checkpoint restore/list", "Safety", cli_command="checkpoint"),
     SlashCommandDef("snapshot", "Create a file checkpoint", "Safety", cli_command="checkpoint"),
     SlashCommandDef("checkpoint", "List or create file checkpoints", "Safety", cli_command="checkpoint"),

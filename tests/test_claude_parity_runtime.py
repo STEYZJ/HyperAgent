@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hyperagent.core.io import write_json
+from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.background_jobs import BackgroundJobStore
@@ -43,9 +43,11 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
         self.assertIn("agents", command_names())
         self.assertIn("background", command_names())
         self.assertEqual(resolve_command("channels").cli_command, "channel-list")
+        self.assertIn("forget", resolve_command("permissions").args_hint)
         self.assertIn("status", gateway_command_names())
         help_text = grouped_help()
         self.assertIn("/hsi", help_text)
+        self.assertIn("/permissions [list|forget", help_text)
         self.assertIn("/snapshot", help_text)
         self.assertEqual(
             normalize_hyperagent_args(["/agents", "pause", "maintenance"]),
@@ -163,6 +165,47 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
 
             self.assertEqual(result.status, "blocked")
             self.assertIn("shell disabled", result.content)
+
+    def test_action_loop_emits_task_complete_hook(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            write_json(
+                workspace.workspace_dir / "runtime_extensions" / "hooks.json",
+                {
+                    "hooks": [
+                        {
+                            "id": "hook-task-complete",
+                            "name": "task complete",
+                            "event": "TaskComplete",
+                            "action": "warn",
+                            "message": "task finished hook",
+                            "enabled": True,
+                        }
+                    ]
+                },
+            )
+            conversations = ConversationStore(workspace.workspace_dir)
+            session = conversations.new("task complete")
+            providers = LLMProviderStore(workspace.workspace_dir)
+            fake = _FakeLLMClient(['{"action":"final","final":"done"}'])
+
+            run = AgentActionLoop(
+                conversations,
+                providers,
+                workspace,
+                llm_client=fake,
+                permission_policy="auto",
+            ).run(session.session_id, "deepseek", "finish")
+
+            self.assertEqual(run.status, "completed")
+            self.assertIn("TaskComplete hook: task finished hook", run.warnings)
+            hook_runs = list((workspace.workspace_dir / "hook_runs").glob("*TaskComplete.json"))
+            self.assertEqual(len(hook_runs), 1)
+            payload = read_json(hook_runs[0])
+            self.assertEqual(payload["payload"]["status"], "completed")
+            self.assertEqual(payload["payload"]["final_response"], "done")
 
     def test_action_loop_task_tool_runs_registered_subagent(self):
         with tempfile.TemporaryDirectory() as tmp:

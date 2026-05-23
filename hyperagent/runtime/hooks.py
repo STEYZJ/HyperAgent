@@ -15,6 +15,7 @@ HOOK_EVENTS = {
     "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
+    "TaskComplete",
     "Stop",
 }
 
@@ -179,9 +180,11 @@ class HookEngine:
             "userpromptsubmit": "UserPromptSubmit",
             "pretooluse": "PreToolUse",
             "posttooluse": "PostToolUse",
+            "taskcomplete": "TaskComplete",
             "stop": "Stop",
             "beforetool": "PreToolUse",
             "aftertool": "PostToolUse",
+            "taskdone": "TaskComplete",
         }
         key = str(event).replace("-", "").replace("_", "").lower()
         if key in aliases:

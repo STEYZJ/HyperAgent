@@ -31,6 +31,7 @@ from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
 from hyperagent.runtime.memory import MemoryStore
 from hyperagent.runtime.mcp import MCPServerStore
+from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
     SkillInstaller,
@@ -123,6 +124,7 @@ class HyperAgentRepl:
         self.personality = PersonalityStore(workspace.workspace_dir)
         self.feedback = FeedbackStore(workspace.workspace_dir)
         self.usage = LLMUsageLedger(workspace.workspace_dir)
+        self.remembered_permissions = RememberedPermissionStore(workspace.workspace_dir)
         self.permission_cache: Dict[str, bool] = {}
         self.session_id = self._ensure_session(session_id, new_title)
         self.expand_reasoning_content = self._default_expand_reasoning_content()
@@ -244,7 +246,7 @@ class HyperAgentRepl:
         elif command == "/todos":
             self._todos(args)
         elif command == "/permissions":
-            self._permissions()
+            self._permissions(args)
         elif command == "/export":
             self._export(args)
         elif command == "/doctor":
@@ -433,6 +435,7 @@ class HyperAgentRepl:
                 session_permission_cache=self.permission_cache,
                 allow_arbitrary_commands=self.permission_policy in {"ask", "session-ask"},
                 hook_engine=self.hooks,
+                remembered_permission_store=self.remembered_permissions,
             ),
         ).run(
             session_id=self.session_id,
@@ -891,6 +894,7 @@ class HyperAgentRepl:
             permission_callback=self._confirm_permission,
             session_permission_cache=self.permission_cache,
             hook_engine=self.hooks,
+            remembered_permission_store=self.remembered_permissions,
         )
         rendered = self.command_store.render(
             name,
@@ -988,14 +992,50 @@ class HyperAgentRepl:
         for item in todo_list.items:
             self.output(f"{item.id}\t{item.status}\t{item.priority}\t{item.content}")
 
-    def _permissions(self) -> None:
+    def _permissions(self, args: Optional[List[str]] = None) -> None:
+        action = (args or ["list"])[0]
+        if action in {"forget", "remove"}:
+            if len(args or []) < 2:
+                self.output(self._t("repl.usage.permissions_forget", "usage: /permissions forget <id|key>"))
+                return
+            removed = self.remembered_permissions.forget((args or [])[1])
+            self.output(
+                self._t(
+                    "repl.permissions_removed",
+                    "remembered permission removed: {removed}",
+                    removed=removed,
+                )
+            )
+            return
+        if action == "clear":
+            count = self.remembered_permissions.clear()
+            self.output(
+                self._t(
+                    "repl.permissions_cleared",
+                    "remembered permissions cleared: {count}",
+                    count=count,
+                )
+            )
+            return
+        if action not in {"list", "status"}:
+            self.output(self._t("repl.usage.permissions", "usage: /permissions [list|forget <id|key>|clear]"))
+            return
         self.output(self._kv("permission_policy", "permission_policy", self.permission_policy))
         self.output(f"{self._label('session_grants', 'session grants')}:")
         if not self.permission_cache:
             self.output(f"  {self._t('repl.none', 'none')}")
+        else:
+            for key, allowed in sorted(self.permission_cache.items()):
+                self.output(f"  {key}: {allowed}")
+        self.output(f"{self._label('remembered_grants', 'remembered grants')}:")
+        rules = self.remembered_permissions.list_rules()
+        if not rules:
+            self.output(f"  {self._t('repl.none', 'none')}")
             return
-        for key, allowed in sorted(self.permission_cache.items()):
-            self.output(f"  {key}: {allowed}")
+        for rule in rules:
+            self.output(
+                f"  {rule.id}\t{rule.key}\tuses={rule.uses}\tlast={rule.last_used_at}"
+            )
 
     def _export(self, args: List[str]) -> None:
         session = self.conversations.load(self.session_id)
@@ -1291,6 +1331,7 @@ class HyperAgentRepl:
             permission_callback=self._confirm_permission,
             session_permission_cache=self.permission_cache,
             hook_engine=self.hooks,
+            remembered_permission_store=self.remembered_permissions,
         )
         if action == "search":
             query = " ".join(args[1:]).strip()
@@ -1332,6 +1373,7 @@ class HyperAgentRepl:
             permission_callback=self._confirm_permission,
             session_permission_cache=self.permission_cache,
             hook_engine=self.hooks,
+            remembered_permission_store=self.remembered_permissions,
         )
         if action == "generate":
             prompt = " ".join(args[1:]).strip()
@@ -1649,6 +1691,7 @@ class HyperAgentRepl:
             permission_callback=self._confirm_permission,
             session_permission_cache=self.permission_cache,
             hook_engine=self.hooks,
+            remembered_permission_store=self.remembered_permissions,
         )
         tool = args[0]
         rest = args[1:]
@@ -1713,7 +1756,18 @@ class HyperAgentRepl:
                 reason=request.reason,
             )
         )
-        answer = self.input(self._t("repl.allow_prompt", "allow? [y/N] ")).strip().lower()
+        answer = self.input(self._t("repl.allow_prompt", "allow? [y/N/a] ")).strip().lower()
+        if answer in {"a", "always", "remember"}:
+            rule = self.remembered_permissions.remember(request)
+            self._emit(
+                "tool",
+                self._t(
+                    "repl.permission_remembered",
+                    "remembered permission: {id}",
+                    id=rule.id,
+                ),
+            )
+            return True
         return answer in {"y", "yes"}
 
     def _tool_names(self) -> List[str]:
@@ -1774,7 +1828,7 @@ class HyperAgentRepl:
             "/commands ...         list/render Markdown slash commands\n"
             "/todos ...            list/clear/export TodoWrite state\n"
             "/hooks ...            list/add/enable/disable/test project hooks\n"
-            "/permissions          show current permission policy and session grants\n"
+            "/permissions ...      list/forget/clear session and remembered grants\n"
             "/export [path]        export current session as Markdown\n"
             "/doctor               run a local workspace self-check\n"
             "/plugin ...           list/add project plugins\n"

@@ -241,7 +241,9 @@ HyperAgent /doctor
 HyperAgent /help
 ```
 
-Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/ide-context`, `/plan-mode`, `/web`, `/image`, `/feedback`, `/worktree`, `/mcp status`, `/tools`, `/tool read hyperagent/cli.py`, `/tool web-fetch https://example.org`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; write operations can be blocked with `--permission deny-write`.
+Inside the REPL, use slash commands such as `/context`, `/compact`, `/clear`, `/usage`, `/init`, `/memory`, `/agents`, `/agents run`, `/commands`, `/todos`, `/hooks`, `/permissions`, `/export`, `/doctor`, `/plugin`, `/rewind`, `/reasonix`, `/btw`, `/ide-context`, `/plan-mode`, `/web`, `/image`, `/feedback`, `/worktree`, `/mcp status`, `/tools`, `/tool read hyperagent/cli.py`, `/tool web-fetch https://example.org`, `/tool run python -m unittest discover -s tests`, `/plan ...`, and `/act ...`. Risky local tools can require confirmation with `--permission ask`; answer `a` at the prompt to remember the exact tool/risk/args approval under `.hyperagent/permissions/remembered.json`, inspect it with `/permissions`, and remove it with `/permissions forget <id|key>` or `/permissions clear`. Write operations can be blocked with `--permission deny-write`.
+
+The fullscreen TUI shares the same REPL runtime and now exposes a Claude-style status line with provider/model, short session id, permission mode, context meter, token usage, cache-hit ratio, and wait status. Its side panel also shows context summaries plus session and remembered permission counts. Action-loop terminal states emit a lightweight `TaskComplete` hook, so local hook rules can react to completed, paused, or failed agent tasks without expanding commit/test automation.
 
 Canonical subcommands still work, so automation scripts can keep using explicit names such as `HyperAgent run-suite` or `HyperAgent experiment-cycle`.
 
