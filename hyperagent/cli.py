@@ -17,6 +17,7 @@ from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.agent_tools import SafeAgentToolExecutor, tool_catalog
 from hyperagent.runtime.channels import (
     ChannelConfigStore,
+    ChannelDeliveryStore,
     ChannelRouter,
     register_builtin_channel_platforms,
 )
@@ -59,6 +60,7 @@ from hyperagent.runtime.platform_runtime import (
     SessionSearchIndex,
     SkillTelemetryStore,
     skill_bundle_name,
+    summarize_skill_bundles,
 )
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.skill_installer import (
@@ -903,6 +905,8 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     stats.add_argument("--json", action="store_true")
 
     platform_status = subparsers.add_parser("platform-status", help="Summarize Hermes-style platform health")
+    platform_status.add_argument("--live", action="store_true")
+    platform_status.add_argument("--timeout-sec", type=float, default=2.0)
     platform_status.add_argument("--json", action="store_true")
 
     prune_sessions = subparsers.add_parser("prune-sessions", help="List or prune archived sessions")
@@ -1102,6 +1106,14 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
         ),
     )
     channel_test.add_argument("--json", action="store_true")
+
+    channel_retry = subparsers.add_parser(
+        "channel-retry",
+        help="Retry pending external channel delivery attempts without re-running the LLM",
+    )
+    channel_retry.add_argument("--provider", default="")
+    channel_retry.add_argument("--limit", type=int, default=20)
+    channel_retry.add_argument("--json", action="store_true")
 
     language_list = subparsers.add_parser(
         "language-list",
@@ -1334,7 +1346,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             llm_store,
             channel_store=channel_store,
             skill_roots=skill_roots(workspace),
-        ).report()
+        ).report(live=args.live, timeout_sec=args.timeout_sec)
         if args.json:
             print_json(payload)
         else:
@@ -1359,6 +1371,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(
                 f"{_label(translator, 'skills', 'skills')}: "
                 f"{payload['skills']['total']} bundles={payload['skills']['bundles']}"
+            )
+            print(
+                f"{_label(translator, 'channel_delivery', 'channel_delivery')}: "
+                f"{payload['channel_delivery']}"
             )
             if payload["warnings"]:
                 print(f"{_label(translator, 'warnings', 'warnings')}:")
@@ -1430,6 +1446,26 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(_kv(translator, "reply", "reply", result.outbound.text))
             for warning in result.warnings:
                 print(_warning(translator, warning))
+        return 0
+
+    if args.command == "channel-retry":
+        delivery = ChannelDeliveryStore(workspace.workspace_dir)
+        retried = delivery.retry_pending(
+            config_store=channel_store,
+            provider=args.provider,
+            limit=args.limit,
+        )
+        payload = {
+            "retried": [record.to_dict() for record in retried],
+            "summary": delivery.summary(),
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(_kv(translator, "retried", "retried", len(retried)))
+            print(_kv(translator, "pending", "pending", payload["summary"]["pending"]))
+            for record in retried:
+                print(f"{record.id}\t{record.provider}\t{record.status}\tattempts={record.attempts}")
         return 0
 
     if args.command == "status":
@@ -2813,6 +2849,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "skill-bundles":
         roots = skill_roots(workspace)
         bundles = SkillStore(roots).bundles()
+        bundle_summary = summarize_skill_bundles(
+            [skill for skills in bundles.values() for skill in skills]
+        )
         SkillTelemetryStore(workspace.workspace_dir).record(
             "bundles",
             source="cli",
@@ -2822,7 +2861,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             "bundles": {
                 name: [skill.to_dict() for skill in skills]
                 for name, skills in bundles.items()
-            }
+            },
+            "bundle_metadata": bundle_summary["bundles"],
+            "missing_bundle_metadata": bundle_summary["missing_bundle_metadata"],
         }
         if args.json:
             print_json(payload)

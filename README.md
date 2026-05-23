@@ -63,11 +63,13 @@ The generated `.hyperagent/channels.yaml` stores only environment variable names
 
 ## Hermes-Style Platform Runtime
 
-HyperAgent now exposes a local platform view inspired by Hermes Agent while keeping external channels chat/query only. `HyperAgent platform-status` aggregates provider config health, channel env health, session counts, skill/bundle counts, runtime event summaries, and skill usage totals without making live provider calls or storing secret values. The channel gateway serves the same read-only payload at `GET /status`.
+HyperAgent now exposes a local platform view inspired by Hermes Agent while keeping external channels chat/query only. `HyperAgent platform-status` aggregates provider config health, channel env health, session counts, skill/bundle counts, runtime event summaries, channel delivery status, and skill usage totals without making live provider calls or storing secret values. Live reachability is explicit with `--live`, and the channel gateway serves the same read-only payload at `GET /status`.
 
 ```bash
 HyperAgent platform-status
 HyperAgent platform-status --json
+HyperAgent platform-status --live --json
+HyperAgent channel-retry --provider feishu --limit 5
 HyperAgent session-search --query "spectral result" --limit 5
 HyperAgent skill-usage --json
 HyperAgent /platforms
@@ -75,7 +77,7 @@ HyperAgent /sessions search "spectral result"
 HyperAgent /skills usage
 ```
 
-Session search writes a lightweight local index to `.hyperagent/sessions/session_index.json` and returns only short snippets, not full conversation contents. Skill usage telemetry is append-only under `.hyperagent/skills/usage.jsonl`; the curator summary highlights unused skills, high-frequency skills, and skills missing bundle metadata without rewriting skill files.
+Session search writes a lightweight local index to `.hyperagent/sessions/session_index.json` and returns only short snippets, not full conversation contents. Channel delivery telemetry is append-only under `.hyperagent/channels/delivery.jsonl`; retry re-sends the already generated outbound message and does not rerun the LLM. Skill usage telemetry is append-only under `.hyperagent/skills/usage.jsonl`; the curator summary highlights unused skills, high-frequency skills, and skills missing bundle metadata without rewriting skill files.
 
 ## Controlled Web And Feature Panel
 

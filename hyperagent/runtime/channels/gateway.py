@@ -52,13 +52,13 @@ def create_channel_app(router: ChannelRouter, config_store: ChannelConfigStore):
         }
 
     @app.get("/status")
-    def status() -> Dict[str, object]:
+    def status(live: bool = False, timeout_sec: float = 2.0) -> Dict[str, object]:
         return PlatformStatusReporter(
             router.workspace,
             router.conversations,
             router.providers,
             channel_store=config_store,
-        ).report()
+        ).report(live=live, timeout_sec=timeout_sec)
 
     @app.post("/webhooks/feishu")
     async def feishu(request: Request):

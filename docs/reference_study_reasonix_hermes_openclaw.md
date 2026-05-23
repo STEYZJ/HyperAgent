@@ -65,6 +65,16 @@ Implemented in Hermes first round:
 - skill usage events from CLI, REPL, framework commands, action-loop
   `run_skill`, and `install_skill`
 
+Implemented in Hermes reliability round:
+
+- append-only channel delivery records under `.hyperagent/channels/delivery.jsonl`
+- `HyperAgent channel-retry` for pending Feishu/QQ outbound replies without
+  re-running the LLM
+- opt-in `platform-status --live` and gateway `/status?live=1` reachability
+  checks that never send API keys
+- channel LLM provider fallback via `fallback_llm_providers`
+- richer skill bundle metadata summaries for bundle/source/owner gaps
+
 ## OpenClaw
 
 Source: <https://github.com/openclaw/openclaw>

@@ -21,6 +21,7 @@ class ChannelBotConfig:
     api_base_url: str = ""
     default_llm_provider: str = "deepseek"
     default_model: Optional[str] = None
+    fallback_llm_providers: List[str] = field(default_factory=list)
     default_mode: str = "research"
     max_context_chars: int = 12000
     send_enabled: bool = True
@@ -49,6 +50,11 @@ class ChannelBotConfig:
                 if data.get("default_model") in {None, ""}
                 else str(data.get("default_model"))
             ),
+            fallback_llm_providers=[
+                str(item)
+                for item in data.get("fallback_llm_providers", [])
+                if str(item).strip()
+            ],
             default_mode=str(data.get("default_mode", "research")),
             max_context_chars=int(data.get("max_context_chars", 12000)),
             send_enabled=bool(data.get("send_enabled", True)),

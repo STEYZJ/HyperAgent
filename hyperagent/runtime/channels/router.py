@@ -8,6 +8,7 @@ from typing import Callable, Dict, Optional
 from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.agent_loop import AgentLoop
 from hyperagent.runtime.channels.config import ChannelConfigStore
+from hyperagent.runtime.channels.delivery import ChannelDeliveryStore
 from hyperagent.runtime.channels.registry import (
     ChannelPlatformRegistry,
     register_builtin_channel_platforms,
@@ -152,6 +153,7 @@ class ChannelRouter:
         send_result.session_id = session_id
         send_result.inbound = inbound
         send_result.warnings = warnings + send_result.warnings
+        ChannelDeliveryStore(self.workspace.workspace_dir).record(send_result)
         return send_result
 
     def _run_agent(
@@ -173,6 +175,7 @@ class ChannelRouter:
             user_message=inbound.text,
             mode=config.default_mode,
             max_context_chars=config.max_context_chars,
+            fallback_providers=config.fallback_llm_providers,
         )
         return result.response.content, result
 

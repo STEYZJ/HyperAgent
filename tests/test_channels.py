@@ -7,6 +7,7 @@ from pathlib import Path
 from hyperagent.core.io import read_yaml
 from hyperagent.runtime.channels import (
     ChannelConfigStore,
+    ChannelDeliveryStore,
     ChannelRouter,
     register_builtin_channel_platforms,
 )
@@ -14,7 +15,8 @@ from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.workspace import HyperAgentWorkspace
-from hyperagent.schemas import ChannelInboundMessage
+from hyperagent.schemas import ChannelInboundMessage, LLMResponse
+from unittest.mock import patch
 
 try:
     from fastapi.testclient import TestClient
@@ -223,6 +225,108 @@ class ChannelGatewayTest(unittest.TestCase):
             first = router.handle_message(inbound, config)
             second = router.handle_message(inbound, config)
             self.assertEqual(first.session_id, second.session_id)
+
+    def test_failed_channel_send_is_recorded_and_retried_without_llm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_token = os.environ.pop("FEISHU_APP_ID", None)
+            old_secret = os.environ.pop("FEISHU_APP_SECRET", None)
+            old_access = os.environ.pop("FEISHU_ACCESS_TOKEN", None)
+            try:
+                router, store, _conversations = self._router(Path(tmp))
+                configs = store.ensure_defaults()
+                for config in configs:
+                    if config.provider == "feishu":
+                        config.dry_run = False
+                        config.send_enabled = True
+                store.save_all(configs)
+                config = store.get("feishu")
+                inbound = ChannelInboundMessage(
+                    provider="feishu",
+                    channel_user_id="same-user",
+                    chat_id="same-chat",
+                    message_id="m1",
+                    text="hello",
+                )
+
+                result = router.handle_message(inbound, config, dry_run_agent=True)
+                delivery = ChannelDeliveryStore(router.workspace.workspace_dir)
+                pending = delivery.list_pending(provider="feishu")
+
+                self.assertEqual(result.status, "replied")
+                self.assertEqual(len(pending), 1)
+                self.assertIn("missing", "\n".join(pending[0].warnings).lower())
+
+                configs = store.ensure_defaults()
+                for config in configs:
+                    if config.provider == "feishu":
+                        config.dry_run = True
+                        config.send_enabled = False
+                store.save_all(configs)
+                retried = delivery.retry_pending(config_store=store, provider="feishu")
+
+                self.assertEqual(len(retried), 1)
+                self.assertEqual(retried[0].status, "dry_run")
+                self.assertEqual(delivery.summary()["pending"], 0)
+            finally:
+                if old_token is not None:
+                    os.environ["FEISHU_APP_ID"] = old_token
+                if old_secret is not None:
+                    os.environ["FEISHU_APP_SECRET"] = old_secret
+                if old_access is not None:
+                    os.environ["FEISHU_ACCESS_TOKEN"] = old_access
+
+    def test_channel_agent_turn_falls_back_to_configured_provider(self):
+        class FakeClient:
+            def __init__(self):
+                self.calls = []
+
+            def send(self, spec, messages, **kwargs):
+                self.calls.append(spec.name)
+                if spec.name == "deepseek":
+                    return LLMResponse(
+                        provider=spec.name,
+                        model=spec.default_model,
+                        content="",
+                        warnings=["Missing required environment variable: DEEPSEEK_API_KEY"],
+                    )
+                return LLMResponse(
+                    provider=spec.name,
+                    model=spec.default_model,
+                    content="fallback answer",
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace, conversations, providers, prompts, store = self._workspace(Path(tmp))
+            configs = store.ensure_defaults()
+            for config in configs:
+                config.dry_run = True
+                if config.provider == "feishu":
+                    config.default_llm_provider = "deepseek"
+                    config.fallback_llm_providers = ["openai"]
+            store.save_all(configs)
+            config = store.get("feishu")
+            router = ChannelRouter(
+                workspace,
+                conversations,
+                providers,
+                prompt_library=prompts,
+                config_store=store,
+            )
+            fake_client = FakeClient()
+            inbound = ChannelInboundMessage(
+                provider="feishu",
+                channel_user_id="same-user",
+                chat_id="same-chat",
+                message_id="m1",
+                text="hello",
+            )
+
+            with patch("hyperagent.runtime.agent_loop.LLMClient", return_value=fake_client):
+                result = router.handle_message(inbound, config)
+
+            self.assertEqual(fake_client.calls, ["deepseek", "openai"])
+            self.assertEqual(result.outbound.text, "fallback answer")
+            self.assertIn("fallback attempted", "\n".join(result.warnings))
 
     def test_config_stores_env_names_not_secret_values(self):
         with tempfile.TemporaryDirectory() as tmp:

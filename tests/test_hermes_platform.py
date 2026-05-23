@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hyperagent.runtime.channels import ChannelConfigStore
 from hyperagent.runtime.conversations import ConversationStore
@@ -11,6 +12,7 @@ from hyperagent.runtime.platform_runtime import (
     PlatformStatusReporter,
     SessionSearchIndex,
     SkillTelemetryStore,
+    summarize_skill_bundles,
 )
 from hyperagent.runtime.slash_registry import resolve_command
 from hyperagent.runtime.workspace import HyperAgentWorkspace, utc_now
@@ -55,11 +57,43 @@ class HermesPlatformRuntimeTest(unittest.TestCase):
             self.assertIn("channels", report)
             self.assertIn("sessions", report)
             self.assertIn("skills", report)
+            self.assertIn("channel_delivery", report)
             self.assertIn("DEEPSEEK_API_KEY", text)
             self.assertIn("FEISHU_VERIFICATION_TOKEN", text)
             self.assertNotIn("fake-deepseek-value", text)
             self.assertNotIn("fake-feishu-token", text)
             self.assertTrue(all(channel["chat_query_only"] for channel in report["channels"]))
+            self.assertTrue(all(channel["live"]["checked"] is False for channel in report["channels"]))
+
+    def test_platform_status_live_probe_is_opt_in_and_secret_free(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace, conversations, providers = self._workspace(root)
+            old_deepseek = os.environ.get("DEEPSEEK_API_KEY")
+            os.environ["DEEPSEEK_API_KEY"] = "fake-deepseek-value"
+            try:
+                with patch.object(
+                    PlatformStatusReporter,
+                    "_probe_url",
+                    return_value={"checked": True, "reachable": True, "host": "example.test"},
+                ):
+                    report = PlatformStatusReporter(
+                        workspace,
+                        conversations,
+                        providers,
+                        skill_roots=[root / "skills"],
+                    ).report(live=True, timeout_sec=0.001)
+            finally:
+                if old_deepseek is None:
+                    os.environ.pop("DEEPSEEK_API_KEY", None)
+                else:
+                    os.environ["DEEPSEEK_API_KEY"] = old_deepseek
+
+            text = json.dumps(report, ensure_ascii=False)
+            self.assertTrue(report["live"])
+            self.assertTrue(all(provider["live"]["checked"] for provider in report["providers"]))
+            self.assertIn("DEEPSEEK_API_KEY", text)
+            self.assertNotIn("fake-deepseek-value", text)
 
     def test_session_search_hits_title_message_summary_and_writes_index(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,6 +164,7 @@ class HermesPlatformRuntimeTest(unittest.TestCase):
             telemetry.record("install", skill="demo-skill", bundle="hsi", source="test")
             summary = telemetry.summarize()
             curator = telemetry.curate(skill_store.list())
+            bundle_summary = summarize_skill_bundles(skill_store.list())
 
             self.assertEqual(summary["total_events"], 3)
             self.assertEqual(summary["by_action"]["run"], 1)
@@ -137,6 +172,8 @@ class HermesPlatformRuntimeTest(unittest.TestCase):
             self.assertEqual(summary["by_bundle"]["hsi"], 2)
             self.assertIn("quiet-skill", curator["unused_skills"])
             self.assertIn("quiet-skill", curator["missing_bundle_metadata"])
+            self.assertEqual(bundle_summary["bundles"]["hsi"]["owners"], [])
+            self.assertIn("quiet-skill", bundle_summary["bundles"]["skills"]["skills"])
             self.assertNotIn("fake-token-value", json.dumps(summary, ensure_ascii=False))
 
     def test_slash_registry_exposes_hermes_commands(self):

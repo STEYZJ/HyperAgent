@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from hyperagent.core.io import write_json
 from hyperagent.core.worklog import redact_secrets
 from hyperagent.runtime.channels.config import ChannelConfigStore
+from hyperagent.runtime.channels.delivery import ChannelDeliveryStore
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.events import RuntimeEventLog
 from hyperagent.runtime.llm import LLMProviderStore
@@ -42,7 +45,7 @@ def skill_bundle_name(skill: object) -> str:
 
 
 class PlatformStatusReporter:
-    """Aggregates local platform health without contacting external providers."""
+    """Aggregates platform health; live network checks are explicit opt-in."""
 
     def __init__(
         self,
@@ -63,22 +66,25 @@ class PlatformStatusReporter:
             else default_skill_roots(workspace.project_root, workspace.workspace_dir)
         )
 
-    def report(self) -> Dict[str, Any]:
+    def report(self, *, live: bool = False, timeout_sec: float = 2.0) -> Dict[str, Any]:
         warnings: List[str] = []
-        providers = self._provider_status(warnings)
-        channels = self._channel_status(warnings)
+        providers = self._provider_status(warnings, live=live, timeout_sec=timeout_sec)
+        channels = self._channel_status(warnings, live=live, timeout_sec=timeout_sec)
         sessions = self._session_status()
         skills = self._skill_status(warnings)
         events = RuntimeEventLog(self.workspace.workspace_dir).summarize()
         skill_usage = SkillTelemetryStore(self.workspace.workspace_dir).summarize()
+        channel_delivery = ChannelDeliveryStore(self.workspace.workspace_dir).summary()
         return {
             "status": "ok" if not warnings else "degraded",
             "workspace": str(self.workspace.workspace_dir),
+            "live": bool(live),
             "providers": providers,
             "channels": channels,
             "sessions": sessions,
             "skills": skills,
             "events": events,
+            "channel_delivery": channel_delivery,
             "skill_usage": {
                 "total_events": skill_usage["total_events"],
                 "by_action": skill_usage["by_action"],
@@ -86,13 +92,23 @@ class PlatformStatusReporter:
             "warnings": warnings,
         }
 
-    def _provider_status(self, warnings: List[str]) -> List[Dict[str, Any]]:
+    def _provider_status(
+        self,
+        warnings: List[str],
+        *,
+        live: bool,
+        timeout_sec: float,
+    ) -> List[Dict[str, Any]]:
         rows = []
         for provider in self.providers.ensure_defaults():
             configured = bool(os.environ.get(provider.api_key_env, "").strip())
             health = "configured" if configured else "missing_api_key"
             if not configured:
                 warnings.append(f"provider {provider.name} missing env {provider.api_key_env}")
+            live_probe = self._probe_url(provider.base_url, timeout_sec) if live else {"checked": False}
+            if live and configured and not live_probe.get("reachable"):
+                health = "unreachable"
+                warnings.append(f"provider {provider.name} base URL is not reachable")
             rows.append(
                 {
                     "name": provider.name,
@@ -101,11 +117,18 @@ class PlatformStatusReporter:
                     "api_key_env": provider.api_key_env,
                     "api_key_configured": configured,
                     "health": health,
+                    "live": live_probe,
                 }
             )
         return rows
 
-    def _channel_status(self, warnings: List[str]) -> List[Dict[str, Any]]:
+    def _channel_status(
+        self,
+        warnings: List[str],
+        *,
+        live: bool,
+        timeout_sec: float,
+    ) -> List[Dict[str, Any]]:
         configs = self.channel_store.ensure_defaults()
         env_summary = self.channel_store.env_summary()
         env_configured = self.channel_store.env_configured_summary()
@@ -120,6 +143,10 @@ class PlatformStatusReporter:
                 warnings.append(f"channel {config.provider} missing env: {', '.join(missing)}")
             else:
                 health = "ready"
+            live_probe = self._probe_url(config.api_base_url, timeout_sec) if live else {"checked": False}
+            if live and config.enabled and not live_probe.get("reachable"):
+                health = "unreachable" if health == "ready" else health
+                warnings.append(f"channel {config.provider} API base URL is not reachable")
             rows.append(
                 {
                     "provider": config.provider,
@@ -132,6 +159,7 @@ class PlatformStatusReporter:
                     "env_configured": provider_env,
                     "chat_query_only": True,
                     "health": health,
+                    "live": live_probe,
                 }
             )
         return rows
@@ -158,24 +186,80 @@ class PlatformStatusReporter:
 
     def _skill_status(self, warnings: List[str]) -> Dict[str, Any]:
         skills = SkillStore(self.skill_roots).list()
-        bundles: Dict[str, int] = {}
         by_run_as: Dict[str, int] = {}
-        missing_bundle_metadata = 0
         for skill in skills:
-            bundle = skill_bundle_name(skill)
-            bundles[bundle] = bundles.get(bundle, 0) + 1
             by_run_as[skill.run_as] = by_run_as.get(skill.run_as, 0) + 1
-            metadata = skill.metadata or {}
-            if "bundle" not in metadata and "category" not in metadata:
-                missing_bundle_metadata += 1
+        bundle_summary = summarize_skill_bundles(skills)
+        missing_bundle_metadata = bundle_summary["missing_bundle_metadata"]
         if missing_bundle_metadata:
             warnings.append(f"{missing_bundle_metadata} skills have no bundle/category metadata")
         return {
             "total": len(skills),
-            "bundles": dict(sorted(bundles.items())),
+            "bundles": {
+                name: int(item["count"])
+                for name, item in sorted(bundle_summary["bundles"].items())
+            },
+            "bundle_metadata": bundle_summary["bundles"],
             "by_run_as": dict(sorted(by_run_as.items())),
             "missing_bundle_metadata": missing_bundle_metadata,
         }
+
+    def _probe_url(self, url: str, timeout_sec: float) -> Dict[str, Any]:
+        parsed = urlparse(str(url or ""))
+        host = parsed.hostname or ""
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if not host:
+            return {"checked": True, "reachable": False, "host": "", "error": "missing_host"}
+        try:
+            with socket.create_connection((host, int(port)), timeout=float(timeout_sec)):
+                return {"checked": True, "reachable": True, "host": host, "port": int(port)}
+        except OSError as exc:
+            return {
+                "checked": True,
+                "reachable": False,
+                "host": host,
+                "port": int(port),
+                "error": type(exc).__name__,
+            }
+
+
+def summarize_skill_bundles(skills: Iterable[object]) -> Dict[str, Any]:
+    bundles: Dict[str, Dict[str, Any]] = {}
+    missing_bundle_metadata = 0
+    for skill in skills:
+        metadata = getattr(skill, "metadata", {}) or {}
+        bundle = skill_bundle_name(skill)
+        source = str(getattr(skill, "source", "") or "")
+        owner = str(metadata.get("owner") or metadata.get("maintainer") or "").strip()
+        missing = "bundle" not in metadata and "category" not in metadata
+        if missing:
+            missing_bundle_metadata += 1
+        row = bundles.setdefault(
+            bundle,
+            {
+                "count": 0,
+                "skills": [],
+                "sources": [],
+                "owners": [],
+                "missing_metadata": 0,
+            },
+        )
+        row["count"] += 1
+        row["skills"].append(str(getattr(skill, "name", "")))
+        if source and source not in row["sources"]:
+            row["sources"].append(source)
+        if owner and owner not in row["owners"]:
+            row["owners"].append(owner)
+        if missing:
+            row["missing_metadata"] += 1
+    for row in bundles.values():
+        row["skills"] = sorted(row["skills"])
+        row["sources"] = sorted(row["sources"])
+        row["owners"] = sorted(row["owners"])
+    return {
+        "bundles": dict(sorted(bundles.items())),
+        "missing_bundle_metadata": missing_bundle_metadata,
+    }
 
 
 @dataclass

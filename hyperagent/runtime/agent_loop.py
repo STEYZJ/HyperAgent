@@ -85,6 +85,7 @@ class AgentLoop:
         output_path: Optional[Path] = None,
         thinking_displayed: Optional[bool] = None,
         reasoning_content_expanded: Optional[bool] = None,
+        fallback_providers: Optional[Iterable[str]] = None,
     ) -> AgentTurnResult:
         if auto_compress:
             self.conversations.auto_compress(
@@ -100,7 +101,6 @@ class AgentLoop:
             max_context_chars=max_context_chars,
         )
         self.providers.ensure_defaults()
-        spec = self.providers.get(provider)
         turn_started_at = utc_now()
         started = time.monotonic()
         self.event_log.append(
@@ -109,10 +109,11 @@ class AgentLoop:
             session_id=session_id,
             status="running",
             message=user_message[:500],
-            payload={"provider": provider, "model": model or spec.default_model, "mode": mode},
+            payload={"provider": provider, "model": model, "mode": mode},
         )
-        response = self.llm_client.send(
-            spec,
+        spec, response, attempted_providers = self._send_with_fallback(
+            provider,
+            fallback_providers or [],
             messages,
             model=model,
             temperature=temperature,
@@ -133,6 +134,7 @@ class AgentLoop:
         )
         context_chars = sum(len(message.content) for message in messages)
         context_message_count = len(messages)
+        turn_warnings = self._attempt_warnings(attempted_providers, response.warnings)
         LLMUsageLedger(self.workspace.workspace_dir).record_response(
             response,
             spec=spec,
@@ -143,26 +145,28 @@ class AgentLoop:
                 "mode": mode,
                 "task_id": task_id,
                 "model_wait_elapsed_sec": elapsed_sec,
+                "attempted_providers": attempted_providers,
             },
         )
         self.event_log.append(
             "agent_loop.response",
             source="agent_loop",
             session_id=session_id,
-            status="ok" if not response.warnings else "warning",
-            message=(response.content or "\n".join(response.warnings))[:500],
+            status="ok" if not turn_warnings else "warning",
+            message=(response.content or "\n".join(turn_warnings))[:500],
             payload={
                 "provider": spec.name,
-                "model": model or spec.default_model,
+                "model": response.model,
                 "mode": mode,
                 "context_chars": context_chars,
                 "context_message_count": context_message_count,
                 "model_wait_elapsed_sec": elapsed_sec,
                 "usage": response.usage,
-                "warnings": response.warnings,
+                "warnings": turn_warnings,
+                "attempted_providers": attempted_providers,
             },
         )
-        assistant_content = response.content or "\n".join(response.warnings)
+        assistant_content = response.content or "\n".join(turn_warnings)
         expanded = bool(
             reasoning_content_expanded
             if reasoning_content_expanded is not None
@@ -179,7 +183,7 @@ class AgentLoop:
                 "context_chars": context_chars,
                 "context_message_count": context_message_count,
                 "provider": spec.name,
-                "model": model or spec.default_model,
+                "model": response.model,
                 "mode": mode,
                 "reasoning_content_chars": len(response.reasoning_content or ""),
                 "thinking_displayed": expanded,
@@ -189,19 +193,84 @@ class AgentLoop:
         result = AgentTurnResult(
             session_id=session_id,
             provider=spec.name,
-            model=model or spec.default_model,
+            model=response.model,
             mode=mode,
             task_id=task_id,
             response=response,
             context_message_count=context_message_count,
             context_chars=context_chars,
             output_path=str(output_path) if output_path else None,
-            warnings=list(response.warnings),
+            warnings=turn_warnings,
             timing=timing,
         )
         if output_path:
             write_json(output_path, result)
         return result
+
+    def _send_with_fallback(
+        self,
+        provider: str,
+        fallback_providers: Iterable[str],
+        messages: Iterable[LLMMessage],
+        **kwargs: Any,
+    ):
+        candidates: List[str] = []
+        for name in [provider, *list(fallback_providers)]:
+            normalized = str(name or "").strip()
+            if normalized and normalized not in candidates:
+                candidates.append(normalized)
+        if not candidates:
+            candidates = [provider]
+        attempted: List[Dict[str, Any]] = []
+        final_spec = self.providers.get(candidates[0])
+        final_response = None
+        for index, name in enumerate(candidates):
+            spec = self.providers.get(name)
+            send_kwargs = dict(kwargs)
+            if name != provider:
+                send_kwargs["model"] = None
+            response = self.llm_client.send(spec, messages, **send_kwargs)
+            attempted.append(
+                {
+                    "provider": spec.name,
+                    "model": response.model,
+                    "warnings": list(response.warnings),
+                    "content_chars": len(response.content or ""),
+                }
+            )
+            final_spec = spec
+            final_response = response
+            if index >= len(candidates) - 1 or not self._should_try_fallback(response):
+                break
+        return final_spec, final_response, attempted
+
+    def _should_try_fallback(self, response) -> bool:
+        if str(response.content or "").strip():
+            return False
+        warnings = "\n".join(str(item) for item in response.warnings)
+        markers = (
+            "Missing required environment variable",
+            "HTTPError",
+            "URLError",
+            "TimeoutError",
+        )
+        return any(marker in warnings for marker in markers)
+
+    def _attempt_warnings(
+        self,
+        attempted_providers: List[Dict[str, Any]],
+        final_warnings: Iterable[str],
+    ) -> List[str]:
+        warnings = [str(item) for item in final_warnings]
+        if len(attempted_providers) <= 1:
+            return warnings
+        route = " -> ".join(str(item.get("provider", "")) for item in attempted_providers)
+        combined = [f"LLM provider fallback attempted: {route}"]
+        for item in attempted_providers[:-1]:
+            for warning in item.get("warnings", []):
+                combined.append(f"{item.get('provider')}: {warning}")
+        combined.extend(warnings)
+        return combined
 
     def build_messages(
         self,

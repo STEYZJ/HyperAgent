@@ -32,13 +32,13 @@ HyperAgent 的第一项改进是把 agent 行为落在科研对象上。数据�
 
 第三项改进是交互信任。Claude 方向已加入本地 remembered permissions、`/permissions list|forget|clear`、TUI status/context/cache/permission 面板和 `TaskComplete` hook，降低了本地工具执行的不透明性。
 
-第四项改进是平台可观测。Hermes 方向已加入 `platform-status`、gateway `GET /status`、`session-search` 和 `skill-usage`，把 provider、channel、session、skill 和 runtime event 放到同一平台视角中，同时不把外部 channel 暴露为本地工具循环入口。
+第四项改进是平台可观测与可靠性。Hermes 方向已加入 `platform-status`、gateway `GET /status`、`session-search`、`skill-usage`、channel delivery retry、显式 live health 和 LLM route fallback，把 provider、channel、session、skill 和 runtime event 放到同一平台视角中，同时不把外部 channel 暴露为本地工具循环入口。
 
 ## HyperAgent 的不足
 
-HyperAgent 仍然不是成熟平台产品。它已经有 Feishu/QQ gateway 和平台状态聚合，但缺少更完整的消息重试、路由回退、live provider health、部署管理和多租户边界。
+HyperAgent 仍然不是成熟平台产品。它已经有 Feishu/QQ gateway、平台状态聚合、消息重试、路由回退和显式 live provider health，但部署管理、多租户边界、队列调度策略和长期运维面板仍然不足。
 
-HyperAgent 的 skill 生态仍处在早期。当前已有 list/search/run/install/usage 和 curator summary，但还缺 marketplace、版本约束、bundle metadata 规范、更新机制和审计报告。
+HyperAgent 的 skill 生态仍处在早期。当前已有 list/search/run/install/usage、curator summary 和 bundle metadata 汇总，但还缺 marketplace、版本约束、bundle schema 校验、更新机制和审计报告。
 
 HyperAgent 的开发者体验仍需补齐。命令、权限、TUI 和 hooks 已有第一轮，但与 Claude Code 相比，command palette、权限详情面板、插件包组合和任务模板仍不完整。
 
