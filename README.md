@@ -19,6 +19,11 @@ dataset audit -> spectral diagnosis -> model recommendation -> experiment plan -
 - `data/`, `models/`, `training/`, and `evaluation/` are replaceable implementation layers.
 - `hermes_plugin/` is a thin adapter and contains no model or training logic.
 
+Generated architecture and comparison diagrams are kept under `描述文件/设计结构/`.
+The comparison set in `描述文件/设计结构/对比/` contrasts HyperAgent with
+Hermes Agent, Claude Code references, and DeepSeek Reasonix across topology,
+workflow, use-case coverage, and module communication.
+
 ## Quick Start
 
 Use the project Python environment:

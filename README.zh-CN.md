@@ -6,6 +6,10 @@ HyperAgent 是一个面向高光谱图像分类研究的解耦式 Agent 框架�
 数据审计 -> 光谱诊断 -> 模型推荐 -> 实验计划 -> baseline 训练 -> 报告
 ```
 
+架构图和横向对比图保存在 `描述文件/设计结构/`。其中 `描述文件/设计结构/对比/`
+按结构拓扑、业务流程、用例覆盖和模块通信四类图，对比 HyperAgent、Hermes
+Agent、Claude Code 参考和 DeepSeek Reasonix。
+
 ## 快速开始
 
 推荐使用项目 conda 环境：

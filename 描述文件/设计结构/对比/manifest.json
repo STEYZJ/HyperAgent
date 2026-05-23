@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-05-23",
+  "output_dir": "/data2/lzj/HyperAgent/描述文件/设计结构/对比",
+  "style": "fireworks-tech-graph style-1 flat icon, direct SVG + Pillow PNG",
+  "comparison_subjects": [
+    "HyperAgent",
+    "Hermes Agent",
+    "Claude Code 参考",
+    "DeepSeek Reasonix"
+  ],
+  "source_dirs": {
+    "HyperAgent": "/data2/lzj/HyperAgent/描述文件/设计结构",
+    "DeepSeek Reasonix": "/data2/lzj/HyperAgent/描述文件/设计结构/DeepSeek-Reasonix",
+    "Claude Code 参考": "/data2/lzj/HyperAgent/描述文件/设计结构/claude-code",
+    "Hermes Agent": "/data2/lzj/HyperAgent/描述文件/设计结构/hermes-agent"
+  },
+  "diagram_types": [
+    {
+      "type": "structure_topology",
+      "source_pattern": "01-project-topology.svg",
+      "comparison_svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/01-topology-comparison.svg"
+    },
+    {
+      "type": "business_workflow",
+      "source_pattern": "02-business-workflow.svg",
+      "comparison_svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/02-workflow-comparison.svg"
+    },
+    {
+      "type": "use_case_coverage",
+      "source_pattern": "03-use-case.svg",
+      "comparison_svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/03-use-case-comparison.svg"
+    },
+    {
+      "type": "module_communication",
+      "source_pattern": "04-module-communication.svg",
+      "comparison_svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/04-module-communication-comparison.svg"
+    }
+  ],
+  "files": [
+    {
+      "title": "结构拓扑对比图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/01-topology-comparison.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/01-topology-comparison.png"
+    },
+    {
+      "title": "业务流程对比图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/02-workflow-comparison.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/02-workflow-comparison.png"
+    },
+    {
+      "title": "用例覆盖对比图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/03-use-case-comparison.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/03-use-case-comparison.png"
+    },
+    {
+      "title": "模块通信机制对比图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/04-module-communication-comparison.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/04-module-communication-comparison.png"
+    }
+  ],
+  "analysis": "/data2/lzj/HyperAgent/描述文件/设计结构/对比/comparison-analysis.md",
+  "verification": {
+    "svg_xml_parse": "passed",
+    "png_open_check": "passed",
+    "privacy_review": "design docs only; no .env, API keys, private notes, restricted PDFs, or runtime state"
+  }
+}

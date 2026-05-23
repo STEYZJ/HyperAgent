@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1080" width="1500" height="1080">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
+
+<defs>
+  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
+  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
+  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
+  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
+</defs>
+
+<rect width="1500" height="1080" fill="#ffffff"/>
+<text x="750.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">模块通信机制对比图</text>
+<text x="750.0" y="62" fill="#6b7280" font-size="13" text-anchor="middle">比较内部通信方式：请求如何进 loop，LLM 如何调用工具，结果如何回写，安全与状态如何落盘。</text>
+<rect x="70" y="95" width="292" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="70" y="95" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="86" y="120" fill="#111827" font-size="14" font-weight="600">HyperAgent</text>
+<rect x="70" y="185" width="292" height="128" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="70" y="185" width="8" height="128" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="86" y="210" fill="#111827" font-size="14" font-weight="600">主链路</text>
+<text x="86" y="230" fill="#6b7280" font-size="11">TUI/REPL/CLI → AgentLoop → LLM →</text>
+<text x="86" y="244" fill="#6b7280" font-size="11">ActionLoop → ToolExecutor →</text>
+<text x="86" y="258" fill="#6b7280" font-size="11">artifacts/events → final</text>
+<rect x="70" y="331" width="292" height="128" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="70" y="331" width="8" height="128" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="86" y="356" fill="#111827" font-size="14" font-weight="600">通信特点</text>
+<text x="86" y="376" fill="#6b7280" font-size="11">schema 驱动，工具层不依赖 Hermes/CLI；</text>
+<text x="86" y="390" fill="#6b7280" font-size="11">HSI tools 与 training/eval 解耦</text>
+<rect x="70" y="477" width="292" height="128" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="70" y="477" width="8" height="128" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="86" y="502" fill="#111827" font-size="14" font-weight="600">改进方向</text>
+<text x="86" y="522" fill="#6b7280" font-size="11">统一 command registry、增强 action</text>
+<text x="86" y="536" fill="#6b7280" font-size="11">repair、事件 replay、TUI 权限面板</text>
+<rect x="388" y="95" width="292" height="66" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="388" y="95" width="8" height="66" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="404" y="120" fill="#111827" font-size="14" font-weight="600">Hermes Agent</text>
+<rect x="388" y="185" width="292" height="128" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="388" y="185" width="8" height="128" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="404" y="210" fill="#111827" font-size="14" font-weight="600">主链路</text>
+<text x="404" y="230" fill="#6b7280" font-size="11">CLI/Gateway/TUI → AIAgent → provider</text>
+<text x="404" y="244" fill="#6b7280" font-size="11">adapter → tool registry →</text>
+<text x="404" y="258" fill="#6b7280" font-size="11">terminal/platform/memory</text>
+<rect x="388" y="331" width="292" height="128" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="388" y="331" width="8" height="128" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="404" y="356" fill="#111827" font-size="14" font-weight="600">通信特点</text>
+<text x="404" y="376" fill="#6b7280" font-size="11">central command registry 同时驱动</text>
+<text x="404" y="390" fill="#6b7280" font-size="11">CLI/gateway/help/autocomplete；TUI 走</text>
+<text x="404" y="404" fill="#6b7280" font-size="11">JSON-RPC</text>
+<rect x="388" y="477" width="292" height="128" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="388" y="477" width="8" height="128" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="404" y="502" fill="#111827" font-size="14" font-weight="600">可借鉴</text>
+<text x="404" y="522" fill="#6b7280" font-size="11">多平台 gateway、delegate_task、skills</text>
+<text x="404" y="536" fill="#6b7280" font-size="11">hub、自我记忆与 skill 改进</text>
+<rect x="706" y="95" width="292" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="706" y="95" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="722" y="120" fill="#111827" font-size="14" font-weight="600">Claude Code 参考</text>
+<rect x="706" y="185" width="292" height="128" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="706" y="185" width="8" height="128" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="722" y="210" fill="#111827" font-size="14" font-weight="600">主链路</text>
+<text x="722" y="230" fill="#6b7280" font-size="11">User → slash/markdown command → plugin</text>
+<text x="722" y="244" fill="#6b7280" font-size="11">agents/hooks/skills → tools/Git/PR</text>
+<text x="722" y="258" fill="#6b7280" font-size="11">output</text>
+<rect x="706" y="331" width="292" height="128" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="706" y="331" width="8" height="128" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="722" y="356" fill="#111827" font-size="14" font-weight="600">通信特点</text>
+<text x="722" y="376" fill="#6b7280" font-size="11">插件目录约定清晰，命令</text>
+<text x="722" y="390" fill="#6b7280" font-size="11">/agents/hooks/skills 都是声明式资产</text>
+<rect x="706" y="477" width="292" height="128" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="706" y="477" width="8" height="128" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="722" y="502" fill="#111827" font-size="14" font-weight="600">可借鉴</text>
+<text x="722" y="522" fill="#6b7280" font-size="11">命令 palette、plugin namespace、</text>
+<text x="722" y="536" fill="#6b7280" font-size="11">allowed-tools、hook lifecycle、工作流模</text>
+<text x="722" y="550" fill="#6b7280" font-size="11">板</text>
+<rect x="1024" y="95" width="292" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1024" y="95" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1040" y="120" fill="#111827" font-size="14" font-weight="600">DeepSeek Reasonix</text>
+<rect x="1024" y="185" width="292" height="128" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1024" y="185" width="8" height="128" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1040" y="210" fill="#111827" font-size="14" font-weight="600">主链路</text>
+<text x="1040" y="230" fill="#6b7280" font-size="11">TUI/Desktop → CacheFirstLoop → DeepSeek</text>
+<text x="1040" y="244" fill="#6b7280" font-size="11"> → repair pipeline → tool dispatch →</text>
+<text x="1040" y="258" fill="#6b7280" font-size="11">event/usage</text>
+<rect x="1024" y="331" width="292" height="128" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1024" y="331" width="8" height="128" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1040" y="356" fill="#111827" font-size="14" font-weight="600">通信特点</text>
+<text x="1040" y="376" fill="#6b7280" font-size="11">immutable prefix + append-only log；</text>
+<text x="1040" y="390" fill="#6b7280" font-size="11">reasoning tool-call repair；</text>
+<text x="1040" y="404" fill="#6b7280" font-size="11">parallelSafe 工具并发</text>
+<rect x="1024" y="477" width="292" height="128" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1024" y="477" width="8" height="128" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1040" y="502" fill="#111827" font-size="14" font-weight="600">可借鉴</text>
+<text x="1040" y="522" fill="#6b7280" font-size="11">cache stats、storm breaker、event</text>
+<text x="1040" y="536" fill="#6b7280" font-size="11">replay、/pro、turn-end compaction</text>
+<rect x="115" y="700" width="1270" height="205" rx="14" ry="14" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="135" y="735" fill="#111827" font-size="16" font-weight="600">对 HyperAgent 的通信机制启发</text>
+<rect x="145" y="775" width="270" height="48" rx="9" ry="9" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+<rect x="145" y="775" width="8" height="48" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="161" y="800" fill="#111827" font-size="14" font-weight="600">Hermes → HyperAgent</text>
+<text x="440" y="804" fill="#6b7280" font-size="12">多端 gateway、delegate/subagent tree、central command registry</text>
+<rect x="145" y="821" width="270" height="48" rx="9" ry="9" fill="#ffffff" stroke="#9333ea" stroke-width="1.5"/>
+<rect x="145" y="821" width="8" height="48" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="161" y="846" fill="#111827" font-size="14" font-weight="600">Claude → HyperAgent</text>
+<text x="440" y="850" fill="#6b7280" font-size="12">声明式 plugin/command/agent/hook + 统一操作逻辑</text>
+<rect x="145" y="867" width="270" height="48" rx="9" ry="9" fill="#ffffff" stroke="#f97316" stroke-width="1.5"/>
+<rect x="145" y="867" width="8" height="48" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="161" y="892" fill="#111827" font-size="14" font-weight="600">Reasonix → HyperAgent</text>
+<text x="440" y="896" fill="#6b7280" font-size="12">cache-first、tool repair、event replay、cost/cached-token 可视化</text>
+<rect x="145" y="913" width="270" height="48" rx="9" ry="9" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+<rect x="145" y="913" width="8" height="48" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="161" y="938" fill="#111827" font-size="14" font-weight="600">HyperAgent 自身</text>
+<text x="440" y="942" fill="#6b7280" font-size="12">HSI schema、实验 cycle、光谱规则、council 决策证据链</text>
+<text x="115" y="955" fill="#111827" font-size="14" font-weight="600">通信结论：HyperAgent 已经有“科研闭环通信”雏形，但要成为 Claude/Hermes 级产品，需要把 slash、tool、skill、agent、event 全部纳入同一运行协议。</text>
+</svg>

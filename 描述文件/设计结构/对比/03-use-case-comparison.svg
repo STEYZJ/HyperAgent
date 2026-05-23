@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1080" width="1500" height="1080">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
+
+<defs>
+  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
+  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
+  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
+  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
+</defs>
+
+<rect width="1500" height="1080" fill="#ffffff"/>
+<text x="750.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">用例覆盖对比图</text>
+<text x="750.0" y="62" fill="#6b7280" font-size="13" text-anchor="middle">比较用户能完成的事情：通用编码、插件/skill、联网、实验、报告、多端接入和科研证据链。</text>
+<rect x="45" y="92" width="1430" height="846" rx="10" ry="10" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<rect x="45" y="92" width="1430" height="54" rx="10" ry="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="61" y="124" fill="#111827" font-size="13" font-weight="600">对比维度</text>
+<text x="407.5" y="124" fill="#16a34a" font-size="13" font-weight="600" text-anchor="middle">HyperAgent</text>
+<line x1="255" y1="92" x2="255" y2="938" stroke="#d1d5db" stroke-width="1"/>
+<text x="712.5" y="124" fill="#2563eb" font-size="13" font-weight="600" text-anchor="middle">Hermes Agent</text>
+<line x1="560" y1="92" x2="560" y2="938" stroke="#d1d5db" stroke-width="1"/>
+<text x="1017.5" y="124" fill="#9333ea" font-size="13" font-weight="600" text-anchor="middle">Claude Code 参考</text>
+<line x1="865" y1="92" x2="865" y2="938" stroke="#d1d5db" stroke-width="1"/>
+<text x="1322.5" y="124" fill="#f97316" font-size="13" font-weight="600" text-anchor="middle">DeepSeek Reasonix</text>
+<line x1="1170" y1="92" x2="1170" y2="938" stroke="#d1d5db" stroke-width="1"/>
+<rect x="45" y="146" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="179" fill="#111827" font-size="12" font-weight="600">终端对话与上下文</text>
+<text x="267" y="167" fill="#6b7280" font-size="10">已具备，会话/压缩/中文/TUI</text>
+<text x="572" y="167" fill="#6b7280" font-size="10">成熟，多端连续会话</text>
+<text x="877" y="167" fill="#6b7280" font-size="10">商业产品强；参考仓库只展示文档/插件</text>
+<text x="1182" y="167" fill="#6b7280" font-size="10">成熟，TUI/desktop/dashboard</text>
+<rect x="45" y="218" width="1430" height="72" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="251" fill="#111827" font-size="12" font-weight="600">代码编辑/Git 工作流</text>
+<text x="267" y="239" fill="#6b7280" font-size="10">有工具雏形，Git 工作流仍不如 Claude/Hermes</text>
+<text x="572" y="239" fill="#6b7280" font-size="10">通用 coding 和工具运行强</text>
+<text x="877" y="239" fill="#6b7280" font-size="10">最强范式：feature-dev/review/commit</text>
+<text x="1182" y="239" fill="#6b7280" font-size="10">强：SEARCH/REPLACE、/apply、diff</text>
+<rect x="45" y="290" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="323" fill="#111827" font-size="12" font-weight="600">Shell/文件系统工具</text>
+<text x="267" y="311" fill="#6b7280" font-size="10">受控可用，权限和工具输出仍需进一步稳定</text>
+<text x="572" y="311" fill="#6b7280" font-size="10">terminal backend 最丰富</text>
+<text x="877" y="311" fill="#6b7280" font-size="10">商业核心支持，参考代码不可见</text>
+<text x="1182" y="311" fill="#6b7280" font-size="10">强：filesystem/shell/jobs 权限化</text>
+<rect x="45" y="362" width="1430" height="72" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="395" fill="#111827" font-size="12" font-weight="600">Skill/插件生态</text>
+<text x="267" y="383" fill="#6b7280" font-size="10">支持第三方 skill 安装和 slash skill，生态仍小</text>
+<text x="572" y="383" fill="#6b7280" font-size="10">最强之一：skills hub、plugins、self-improve</text>
+<text x="877" y="383" fill="#6b7280" font-size="10">插件示例很完整</text>
+<text x="1182" y="383" fill="#6b7280" font-size="10">支持 skill/subagent，兼容 Claude-format skill</text>
+<rect x="45" y="434" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="467" fill="#111827" font-size="12" font-weight="600">MCP/外部工具</text>
+<text x="267" y="455" fill="#6b7280" font-size="10">有 MCP 状态/接口雏形</text>
+<text x="572" y="455" fill="#6b7280" font-size="10">成熟 MCP/browser/computer-use</text>
+<text x="877" y="455" fill="#6b7280" font-size="10">插件开发文档覆盖 MCP</text>
+<text x="1182" y="455" fill="#6b7280" font-size="10">强：MCP runtime</text>
+<rect x="45" y="506" width="1430" height="72" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="539" fill="#111827" font-size="12" font-weight="600">多端 Bot/Gateway</text>
+<text x="267" y="527" fill="#6b7280" font-size="10">Feishu/QQ v1，安全查询优先</text>
+<text x="572" y="527" fill="#6b7280" font-size="10">最强：</text>
+<text x="572" y="540" fill="#6b7280" font-size="10">Telegram/Discord/Slack/WhatsApp/Feishu/QQ 等</text>
+<text x="877" y="527" fill="#6b7280" font-size="10">偏终端/IDE/GitHub</text>
+<text x="1182" y="527" fill="#6b7280" font-size="10">QQ channel + desktop，平台少于 Hermes</text>
+<rect x="45" y="578" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="611" fill="#111827" font-size="12" font-weight="600">自动实验与评估</text>
+<text x="267" y="599" fill="#6b7280" font-size="10">最强：HSI audit/plan/run/eval/council</text>
+<text x="572" y="599" fill="#6b7280" font-size="10">无 HSI 实验专用</text>
+<text x="877" y="599" fill="#6b7280" font-size="10">无科研实验专用</text>
+<text x="1182" y="599" fill="#6b7280" font-size="10">无 HSI 实验专用</text>
+<rect x="45" y="650" width="1430" height="72" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="683" fill="#111827" font-size="12" font-weight="600">领域知识推理</text>
+<text x="267" y="671" fill="#6b7280" font-size="10">最强：光谱规则、数据集、模型选择依据</text>
+<text x="572" y="671" fill="#6b7280" font-size="10">通用 memory，不含 HSI 光谱专家系统</text>
+<text x="877" y="671" fill="#6b7280" font-size="10">无 HSI 领域知识</text>
+<text x="1182" y="671" fill="#6b7280" font-size="10">无 HSI 领域知识</text>
+<rect x="45" y="722" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="755" fill="#111827" font-size="12" font-weight="600">论文/文献证据</text>
+<text x="267" y="743" fill="#6b7280" font-size="10">已有 web/literature/module proposal，RAG 需加</text>
+<text x="267" y="756" fill="#6b7280" font-size="10">强</text>
+<text x="572" y="743" fill="#6b7280" font-size="10">有 web/tools，非 HSI 文献证据链</text>
+<text x="877" y="743" fill="#6b7280" font-size="10">无 HSI 文献证据链</text>
+<text x="1182" y="743" fill="#6b7280" font-size="10">web search/fetch 强，非 HSI evidence workflow</text>
+<rect x="45" y="794" width="1430" height="72" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="827" fill="#111827" font-size="12" font-weight="600">成本/缓存可视化</text>
+<text x="267" y="815" fill="#6b7280" font-size="10">有 usage/Reasonix profile，缓存策略不如</text>
+<text x="267" y="828" fill="#6b7280" font-size="10">Reasonix</text>
+<text x="572" y="815" fill="#6b7280" font-size="10">有预算/usage，但不是 DeepSeek cache-first 核</text>
+<text x="572" y="828" fill="#6b7280" font-size="10">心</text>
+<text x="877" y="815" fill="#6b7280" font-size="10">非重点</text>
+<text x="1182" y="815" fill="#6b7280" font-size="10">最强：cache hit、token、cost、/pro</text>
+<rect x="45" y="866" width="1430" height="72" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
+<text x="61" y="899" fill="#111827" font-size="12" font-weight="600">事件回放/检查点</text>
+<text x="267" y="887" fill="#6b7280" font-size="10">有 event/checkpoint 雏形，成熟度不如 Reasonix</text>
+<text x="572" y="887" fill="#6b7280" font-size="10">trajectory/logs 强</text>
+<text x="877" y="887" fill="#6b7280" font-size="10">公开参考主要展示 hooks/workflows</text>
+<text x="1182" y="887" fill="#6b7280" font-size="10">最强：events/replay/diff/stats</text>
+<text x="70" y="985" fill="#111827" font-size="14" font-weight="600">用例结论：HyperAgent 的“科研实验+领域知识”独特，但通用编码体验、生态规模、事件回放和缓存成本控制需要继续向三个参考项目借力。</text>
+</svg>
