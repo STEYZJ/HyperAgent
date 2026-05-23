@@ -40,7 +40,7 @@ HyperAgent 仍然不是成熟平台产品。它已经有 Feishu/QQ gateway、平
 
 HyperAgent 的 skill 生态仍处在早期。当前已有 list/search/run/install/usage、curator summary 和 bundle metadata 汇总，但还缺 marketplace、版本约束、bundle schema 校验、更新机制和审计报告。
 
-HyperAgent 的开发者体验仍需补齐。命令、权限、TUI 和 hooks 已有第一轮，但与 Claude Code 相比，command palette、权限详情面板、插件包组合和任务模板仍不完整。
+HyperAgent 的开发者体验仍需补齐。命令、权限、TUI 和 hooks 已有两轮增强，已补 command palette、权限详情和 plugin bundle 只读视图；但与 Claude Code 相比，命令模板生态、插件安装/版本治理和更精细的权限过期策略仍不完整。
 
 HyperAgent 的科研评估还需要更强的实证支撑。当前框架能够组织证据链，但论文级声称仍需要多数据集、多 seed、固定 split、强 baseline、消融和公平对比来支撑。
 

@@ -1,5 +1,6 @@
 """Interactive HyperAgent REPL."""
 
+import json
 import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -13,7 +14,6 @@ from hyperagent.runtime.coding_agent import CodingAgent
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.events import RuntimeEventLog
-from hyperagent.runtime.extensions import RuntimeExtensionStore
 from hyperagent.runtime.feature_state import (
     FeedbackStore,
     IDEContextStore,
@@ -25,6 +25,7 @@ from hyperagent.runtime.feature_state import (
 )
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
+from hyperagent.runtime.extensions import PluginBundleStore, RuntimeExtensionStore
 from hyperagent.runtime.i18n import Translator
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.llm_usage import LLMUsageLedger
@@ -118,6 +119,7 @@ class HyperAgentRepl:
         self.wait_indicator_factory = wait_indicator_factory
         self.memory = MemoryStore(workspace.project_root, workspace.workspace_dir)
         self.extensions = RuntimeExtensionStore(workspace.workspace_dir)
+        self.plugin_bundles = PluginBundleStore(workspace.workspace_dir, workspace.project_root)
         self.command_store = SlashCommandStore(workspace.project_root, workspace.workspace_dir)
         self.hooks = HookEngine(workspace.workspace_dir)
         self.todos = TodoStore(workspace.workspace_dir)
@@ -999,6 +1001,25 @@ class HyperAgentRepl:
 
     def _permissions(self, args: Optional[List[str]] = None) -> None:
         action = (args or ["list"])[0]
+        if action in {"show", "inspect"}:
+            if len(args or []) < 2:
+                self.output(self._t("repl.usage.permissions_show", "usage: /permissions show <id|key>"))
+                return
+            rule = self.remembered_permissions.get((args or [])[1])
+            if rule is None:
+                self.output(self._t("repl.permissions_not_found", "permission not found"))
+                return
+            self.output(f"id: {rule.id}")
+            self.output(f"key: {rule.key}")
+            self.output(f"tool: {rule.tool_name}")
+            self.output(f"risk: {rule.risk_level}")
+            self.output(f"fingerprint: {rule.args_fingerprint}")
+            self.output(f"uses: {rule.uses}")
+            self.output(f"last: {rule.last_used_at}")
+            if rule.reason:
+                self.output(f"reason: {rule.reason}")
+            self.output("args: " + json.dumps(rule.args, ensure_ascii=False, sort_keys=True))
+            return
         if action in {"forget", "remove"}:
             if len(args or []) < 2:
                 self.output(self._t("repl.usage.permissions_forget", "usage: /permissions forget <id|key>"))
@@ -1023,7 +1044,7 @@ class HyperAgentRepl:
             )
             return
         if action not in {"list", "status"}:
-            self.output(self._t("repl.usage.permissions", "usage: /permissions [list|forget <id|key>|clear]"))
+            self.output(self._t("repl.usage.permissions", "usage: /permissions [list|show <id|key>|forget <id|key>|clear]"))
             return
         self.output(self._kv("permission_policy", "permission_policy", self.permission_policy))
         self.output(f"{self._label('session_grants', 'session grants')}:")
@@ -1073,6 +1094,34 @@ class HyperAgentRepl:
         self.output("\n".join(lines))
 
     def _plugins(self, args: List[str]) -> None:
+        if args and args[0] == "bundles":
+            if len(args) > 1:
+                bundle = self.plugin_bundles.inspect(args[1])
+                if bundle is None:
+                    self.output(self._t("repl.plugin_bundle_not_found", "plugin bundle not found"))
+                    return
+                self.output(f"{bundle.id}\t{bundle.name}\tenabled={bundle.enabled}")
+                self.output(f"description: {bundle.description}")
+                self.output(f"source: {bundle.source}")
+                self.output(f"skills: {', '.join(bundle.skills)}")
+                self.output(f"agents: {', '.join(bundle.agents)}")
+                self.output(f"hooks: {', '.join(bundle.hooks)}")
+                self.output(f"mcp: {', '.join(bundle.mcp)}")
+                self.output(f"commands: {', '.join(bundle.commands)}")
+                if bundle.warnings:
+                    self.output(f"warnings: {', '.join(bundle.warnings)}")
+                return
+            bundles = self.plugin_bundles.list()
+            if not bundles:
+                self.output(self._t("repl.no_plugin_bundles", "no plugin bundles"))
+                return
+            for bundle in bundles:
+                self.output(
+                    f"{bundle.id}\t{bundle.name}\t{bundle.enabled}\t"
+                    f"skills={len(bundle.skills)} agents={len(bundle.agents)} "
+                    f"hooks={len(bundle.hooks)} mcp={len(bundle.mcp)} commands={len(bundle.commands)}"
+                )
+            return
         if not args or args[0] == "list":
             plugins = self.extensions.list_plugins()
             if not plugins:
@@ -1091,7 +1140,7 @@ class HyperAgentRepl:
             item = self.extensions.add_plugin(args[1], description=" ".join(args[2:]))
             self.output(self._t("repl.plugin_added", "plugin added: {id}", id=item["id"]))
             return
-        self.output(self._t("repl.usage.plugin", "usage: /plugin [list|add <name> [description]]"))
+        self.output(self._t("repl.usage.plugin", "usage: /plugin [list|add <name> [description]|bundles [id]]"))
 
     def _rewind(self, args: List[str]) -> None:
         if args and args[0] == "save":

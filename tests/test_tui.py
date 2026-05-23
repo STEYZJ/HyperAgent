@@ -8,7 +8,12 @@ from hyperagent.runtime.agent_tools import ToolPermissionRequest
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.i18n import I18nStore
 from hyperagent.runtime.permissions import RememberedPermissionStore
-from hyperagent.runtime.tui import HyperAgentTui, TuiLine
+from hyperagent.runtime.tui import (
+    HyperAgentTui,
+    TuiLine,
+    build_command_palette_entries,
+    filter_command_palette,
+)
 from hyperagent.runtime.workspace import HyperAgentWorkspace
 
 
@@ -404,6 +409,8 @@ class HyperAgentTuiTest(unittest.TestCase):
             self.assertIn("context: 7/100", text)
             self.assertIn("session grants: 1", text)
             self.assertIn("remembered grants: 1", text)
+            self.assertIn("permissions:", text)
+            self.assertIn("remembered run_command", text)
 
     def test_main_prompt_uses_cwd_and_hyperagent_marker(self):
         tui = self._tui()
@@ -619,6 +626,47 @@ class HyperAgentTuiTest(unittest.TestCase):
 
         self.assertIn("/skill open-design", tui._suggest_commands("/open"))
         self.assertIn("/skills", tui._suggest_commands("/"))
+
+    def test_command_palette_filters_builtins_skills_and_plugin_bundles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            bundle_dir = root / "plugins" / "dev-pack"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "bundle.json").write_text(
+                "{"
+                '"id":"dev-pack",'
+                '"name":"Developer Pack",'
+                '"description":"Claude-style development commands",'
+                '"commands":["feature-dev"]'
+                "}",
+                encoding="utf-8",
+            )
+            repl = SimpleNamespace(
+                workspace=workspace,
+                command_store=SimpleNamespace(
+                    discover=lambda: [
+                        SimpleNamespace(
+                            name="feature-dev",
+                            description="Implement a feature",
+                            source="markdown",
+                        )
+                    ]
+                ),
+                skill_names=lambda: ["open-design"],
+            )
+
+            entries = build_command_palette_entries(repl, workspace)
+            commands = [entry.command for entry in entries]
+
+            self.assertIn("/help", commands)
+            self.assertIn("/feature-dev", commands)
+            self.assertIn("/skill open-design", commands)
+            self.assertIn("/plugin bundles dev-pack", commands)
+            filtered = filter_command_palette(entries, "dev", limit=5)
+            self.assertTrue(any(entry.command == "/feature-dev" for entry in filtered))
+            self.assertTrue(any(entry.command == "/plugin bundles dev-pack" for entry in filtered))
 
 
 if __name__ == "__main__":

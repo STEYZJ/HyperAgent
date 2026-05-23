@@ -37,7 +37,7 @@ from hyperagent.runtime.feature_state import (
 )
 from hyperagent.runtime.general_agent import GeneralAgentRunner
 from hyperagent.runtime.hooks import HookEngine
-from hyperagent.runtime.extensions import RuntimeExtensionStore
+from hyperagent.runtime.extensions import PluginBundleStore, RuntimeExtensionStore
 from hyperagent.runtime.repo_context import RepoContextBuilder
 from hyperagent.runtime.tui import HyperAgentTui
 from hyperagent.runtime.todos import TodoStore
@@ -989,6 +989,9 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
 
     skill_usage = subparsers.add_parser("skill-usage", help="Summarize skill usage telemetry")
     skill_usage.add_argument("--json", action="store_true")
+
+    plugin_bundles = subparsers.add_parser("plugin-bundles", help="List local plugin bundle manifests")
+    plugin_bundles.add_argument("--json", action="store_true")
 
     skill_run = subparsers.add_parser("skill-run", help="Render or run a SKILL.md skill")
     skill_run.add_argument("--name", required=True)
@@ -2889,6 +2892,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             curator = payload["curator"]
             print(_kv(translator, "unused_skills", "unused_skills", curator["unused_skills"]))
             print(_kv(translator, "missing_bundle_metadata", "missing_bundle_metadata", curator["missing_bundle_metadata"]))
+        return 0
+
+    if args.command == "plugin-bundles":
+        store = PluginBundleStore(workspace.workspace_dir, workspace.project_root)
+        payload = store.summary()
+        if args.json:
+            print_json(payload)
+        else:
+            print(_kv(translator, "plugin_bundles", "plugin_bundles", payload["total"]))
+            for bundle in payload["bundles"]:
+                print(
+                    f"{bundle['id']}\t{bundle['name']}\tenabled={bundle['enabled']}\t"
+                    f"skills={len(bundle['skills'])} agents={len(bundle['agents'])} "
+                    f"hooks={len(bundle['hooks'])} mcp={len(bundle['mcp'])} commands={len(bundle['commands'])}"
+                )
         return 0
 
     if args.command == "skill-run":

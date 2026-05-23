@@ -1,5 +1,6 @@
 """Lightweight registries for subagents, hooks, plugins, and rewind snapshots."""
 
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -8,6 +9,102 @@ import yaml
 
 from hyperagent.core.io import read_json, write_json
 from hyperagent.runtime.workspace import utc_now
+
+
+@dataclass
+class PluginBundle:
+    id: str
+    name: str
+    description: str = ""
+    enabled: bool = True
+    skills: List[str] = field(default_factory=list)
+    agents: List[str] = field(default_factory=list)
+    hooks: List[str] = field(default_factory=list)
+    mcp: List[str] = field(default_factory=list)
+    commands: List[str] = field(default_factory=list)
+    metadata: Dict[str, object] = field(default_factory=dict)
+    source: str = ""
+    warnings: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, object], *, source: str = "") -> "PluginBundle":
+        return cls(
+            id=str(data.get("id") or Path(source).parent.name),
+            name=str(data.get("name") or data.get("id") or Path(source).parent.name),
+            description=str(data.get("description", "")),
+            enabled=bool(data.get("enabled", True)),
+            skills=_string_list(data.get("skills", [])),
+            agents=_string_list(data.get("agents", [])),
+            hooks=_string_list(data.get("hooks", [])),
+            mcp=_string_list(data.get("mcp", [])),
+            commands=_string_list(data.get("commands", [])),
+            metadata=dict(data.get("metadata", {}) if isinstance(data.get("metadata"), dict) else {}),
+            source=source,
+        )
+
+    def to_dict(self) -> Dict[str, object]:
+        return asdict(self)
+
+
+class PluginBundleStore:
+    """Scans local plugin bundle manifests without executing them."""
+
+    def __init__(self, workspace_dir: Path, project_root: Optional[Path] = None) -> None:
+        self.workspace_dir = Path(workspace_dir)
+        self.project_root = Path(project_root) if project_root is not None else self.workspace_dir.parent
+
+    def list(self) -> List[PluginBundle]:
+        bundles: List[PluginBundle] = []
+        for root in self._roots():
+            if not root.exists():
+                continue
+            for path in sorted(root.glob("*/bundle.json")):
+                try:
+                    bundle = PluginBundle.from_dict(read_json(path), source=str(path))
+                except Exception as exc:
+                    bundle = PluginBundle(
+                        id=path.parent.name,
+                        name=path.parent.name,
+                        enabled=False,
+                        source=str(path),
+                        warnings=[f"{type(exc).__name__}: {exc}"],
+                    )
+                bundle.warnings.extend(self.validate(bundle))
+                bundles.append(bundle)
+        return sorted(bundles, key=lambda item: (item.name.lower(), item.id))
+
+    def inspect(self, id_or_name: str) -> Optional[PluginBundle]:
+        needle = str(id_or_name).strip().lower()
+        for bundle in self.list():
+            if bundle.id.lower() == needle or bundle.name.lower() == needle:
+                return bundle
+        return None
+
+    def validate(self, bundle: PluginBundle) -> List[str]:
+        warnings: List[str] = []
+        if not bundle.id:
+            warnings.append("bundle id is missing")
+        if not bundle.name:
+            warnings.append("bundle name is missing")
+        if not any([bundle.skills, bundle.agents, bundle.hooks, bundle.mcp, bundle.commands]):
+            warnings.append("bundle has no skills, agents, hooks, mcp, or commands")
+        return warnings
+
+    def summary(self) -> Dict[str, object]:
+        bundles = self.list()
+        return {
+            "total": len(bundles),
+            "enabled": sum(1 for bundle in bundles if bundle.enabled),
+            "disabled": sum(1 for bundle in bundles if not bundle.enabled),
+            "with_warnings": sum(1 for bundle in bundles if bundle.warnings),
+            "bundles": [bundle.to_dict() for bundle in bundles],
+        }
+
+    def _roots(self) -> List[Path]:
+        return [
+            self.workspace_dir / "plugins",
+            self.project_root / "plugins",
+        ]
 
 
 class RuntimeExtensionStore:
@@ -154,3 +251,11 @@ class RuntimeExtensionStore:
                 }
                 items.append(item)
         return items
+
+
+def _string_list(value: object) -> List[str]:
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    return []

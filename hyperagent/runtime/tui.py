@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 from hyperagent.runtime.conversations import ConversationStore
 from hyperagent.runtime.background_jobs import BackgroundJobStore
+from hyperagent.runtime.extensions import PluginBundleStore
 from hyperagent.runtime.feature_state import (
     IDEContextStore,
     PlanModeStore,
@@ -23,7 +24,7 @@ from hyperagent.runtime.mcp import MCPServerStore
 from hyperagent.runtime.permissions import RememberedPermissionStore
 from hyperagent.runtime.prompts import PromptLibrary
 from hyperagent.runtime.repl import HyperAgentRepl
-from hyperagent.runtime.slash_registry import command_names
+from hyperagent.runtime.slash_registry import command_names, public_commands
 from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.runtime.wait_indicator import WaitIndicator
 from hyperagent.runtime.workspace import HyperAgentWorkspace
@@ -49,6 +50,117 @@ class TuiLine:
         if isinstance(other, TuiLine):
             return self.kind == other.kind and self.text == other.text
         return False
+
+
+@dataclass(frozen=True)
+class CommandPaletteEntry:
+    command: str
+    title: str
+    category: str
+    description: str = ""
+    source: str = "builtin"
+
+
+def build_command_palette_entries(
+    repl: Optional[object] = None,
+    workspace: Optional[HyperAgentWorkspace] = None,
+) -> List[CommandPaletteEntry]:
+    entries: List[CommandPaletteEntry] = []
+    seen = set()
+
+    def add(entry: CommandPaletteEntry) -> None:
+        if entry.command in seen:
+            return
+        seen.add(entry.command)
+        entries.append(entry)
+
+    for command in public_commands():
+        add(
+            CommandPaletteEntry(
+                command="/" + command.name,
+                title="/" + command.name,
+                category=command.category,
+                description=command.description,
+                source="builtin",
+            )
+        )
+    command_store = getattr(repl, "command_store", None)
+    if command_store is not None:
+        try:
+            for command in command_store.discover():
+                add(
+                    CommandPaletteEntry(
+                        command="/" + command.name,
+                        title="/" + command.name,
+                        category="Markdown",
+                        description=getattr(command, "description", ""),
+                        source=getattr(command, "source", "markdown"),
+                    )
+                )
+        except Exception:
+            pass
+    try:
+        skills = repl.skill_names() if repl is not None and hasattr(repl, "skill_names") else []
+    except Exception:
+        skills = []
+    for skill in skills:
+        add(
+            CommandPaletteEntry(
+                command="/skill " + skill,
+                title=skill,
+                category="Skills",
+                description="Run skill",
+                source="skill",
+            )
+        )
+    workspace_obj = workspace or getattr(repl, "workspace", None)
+    if workspace_obj is not None:
+        try:
+            for bundle in PluginBundleStore(
+                workspace_obj.workspace_dir,
+                workspace_obj.project_root,
+            ).list():
+                add(
+                    CommandPaletteEntry(
+                        command="/plugin bundles " + bundle.id,
+                        title=bundle.name,
+                        category="Plugin Bundles",
+                        description=bundle.description,
+                        source=bundle.source,
+                    )
+                )
+        except Exception:
+            pass
+    return entries
+
+
+def filter_command_palette(
+    entries: List[CommandPaletteEntry],
+    query: str,
+    *,
+    limit: int = 12,
+) -> List[CommandPaletteEntry]:
+    needle = str(query or "").strip().lower().lstrip("/")
+    if not needle:
+        return entries[: max(limit, 0)]
+    terms = [term for term in needle.split() if term]
+    scored = []
+    for index, entry in enumerate(entries):
+        haystack = " ".join(
+            [entry.command, entry.title, entry.category, entry.description, entry.source]
+        ).lower()
+        if not all(term in haystack for term in terms):
+            continue
+        command = entry.command.lower().lstrip("/")
+        title = entry.title.lower()
+        score = 0
+        if command.startswith(needle):
+            score += 50
+        if title.startswith(needle):
+            score += 30
+        score += sum(haystack.count(term) for term in terms)
+        scored.append((-score, index, entry))
+    return [entry for _, _, entry in sorted(scored)[: max(limit, 0)]]
 
 
 class TuiWaitIndicator(WaitIndicator):
@@ -371,6 +483,13 @@ class HyperAgentTui:
                 buffer, cursor_index = self._delete_previous_word(buffer, cursor_index)
                 self._reset_history_browse()
                 continue
+            if key == "\x10":  # Ctrl-P
+                selected = self._command_palette_dialog(buffer)
+                if selected:
+                    buffer = selected
+                    cursor_index = len(buffer)
+                    self._reset_history_browse()
+                continue
             if key in ("\b", "\x7f") or key == curses.KEY_BACKSPACE:
                 buffer, cursor_index = self._backspace_text(buffer, cursor_index)
                 self._reset_history_browse()
@@ -613,6 +732,8 @@ class HyperAgentTui:
                         self._panel_kv("image", "image", self._t("tui.value.configured", "configured") if image["configured"] else self._t("tui.value.missing_key", "missing key")),
                     ]
                 )
+                lines.extend(["", self._t("tui.panel.permissions", "permissions:")])
+                lines.extend(self._permission_detail_lines())
             except Exception:
                 pass
         lines.extend(["", self._t("tui.panel.subagents", "active subagents:")])
@@ -724,6 +845,27 @@ class HyperAgentTui:
             "remembered_grants": remembered_grants,
         }
 
+    def _permission_detail_lines(self) -> List[str]:
+        if self.repl is None:
+            return [self._t("tui.panel.none", "none")]
+        lines: List[str] = []
+        permission_cache = getattr(self.repl, "permission_cache", {}) or {}
+        for key, allowed in sorted(permission_cache.items())[-3:]:
+            lines.append(f"- session {key}={allowed}")
+        store = getattr(self.repl, "remembered_permissions", None)
+        if store is None and self.workspace is not None:
+            store = RememberedPermissionStore(self.workspace.workspace_dir)
+        if store is not None:
+            try:
+                for rule in store.list_rules()[-3:]:
+                    lines.append(
+                        f"- remembered {rule.tool_name} {rule.risk_level} "
+                        f"fp={rule.args_fingerprint} uses={rule.uses}"
+                    )
+            except Exception:
+                pass
+        return lines or [self._t("tui.panel.none", "none")]
+
     def _short_session_id(self) -> str:
         session = self.repl.session_id if self.repl is not None else self.session_id
         if not session:
@@ -818,6 +960,42 @@ class HyperAgentTui:
         suggestions = ["/" + name for name in command_matches]
         suggestions.extend("/skill " + name for name in skill_matches)
         return suggestions[:8]
+
+    def _command_palette_entries(self) -> List[CommandPaletteEntry]:
+        return build_command_palette_entries(self.repl, self.workspace)
+
+    def _command_palette_dialog(self, current_buffer: str = "") -> Optional[str]:
+        if self.stdscr is None:
+            return None
+        query = current_buffer.strip()
+        if query.startswith("/"):
+            query = query[1:]
+        selected = 0
+        while True:
+            entries = filter_command_palette(self._command_palette_entries(), query, limit=8)
+            if selected >= len(entries):
+                selected = max(0, len(entries) - 1)
+            self.command_suggestions = [
+                ("› " if index == selected else "  ") + entry.command
+                for index, entry in enumerate(entries)
+            ] or [self._t("tui.panel.none", "none")]
+            self._draw("palette> " + query)
+            key = self.stdscr.get_wch()
+            if key in ("\n", "\r"):
+                return entries[selected].command if entries else None
+            if key in ("\x1b",):
+                return None
+            if key in ("\b", "\x7f") or key == curses.KEY_BACKSPACE:
+                query = query[:-1]
+                continue
+            if key == curses.KEY_UP:
+                selected = max(0, selected - 1)
+                continue
+            if key == curses.KEY_DOWN:
+                selected = min(max(len(entries) - 1, 0), selected + 1)
+                continue
+            if isinstance(key, str) and key.isprintable():
+                query += key
 
     def _addstr(self, y: int, x: int, text: str, attr: int = 0) -> None:
         assert self.stdscr is not None

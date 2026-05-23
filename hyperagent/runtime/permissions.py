@@ -74,6 +74,13 @@ class RememberedPermissionStore:
     def list_rules(self) -> List[RememberedPermissionRule]:
         return sorted(self._load(), key=lambda rule: (rule.created_at, rule.id))
 
+    def get(self, rule_id_or_key: str) -> Optional[RememberedPermissionRule]:
+        needle = str(rule_id_or_key)
+        for rule in self._load():
+            if rule.id == needle or rule.key == needle or rule.args_fingerprint == needle:
+                return rule
+        return None
+
     def remember(self, request: Any, *, scope: str = "project") -> RememberedPermissionRule:
         tool_name = str(getattr(request, "tool_name", ""))
         risk_level = str(getattr(request, "risk_level", ""))

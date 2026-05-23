@@ -8,7 +8,7 @@ from hyperagent.runtime.agent_tools import SafeAgentToolExecutor
 from hyperagent.runtime.background_jobs import BackgroundJobStore
 from hyperagent.runtime.commands import SlashCommandStore
 from hyperagent.runtime.conversations import ConversationStore
-from hyperagent.runtime.extensions import RuntimeExtensionStore
+from hyperagent.runtime.extensions import PluginBundleStore, RuntimeExtensionStore
 from hyperagent.runtime.hooks import HookEngine
 from hyperagent.runtime.llm import LLMProviderStore
 from hyperagent.runtime.multi_agent import MultiAgentTaskRunner
@@ -44,21 +44,61 @@ class ClaudeParityRuntimeTest(unittest.TestCase):
         self.assertIn("background", command_names())
         self.assertIn("session-search", command_names())
         self.assertIn("skill-usage", command_names())
+        self.assertIn("plugin-bundles", command_names())
         self.assertEqual(resolve_command("channels").cli_command, "channel-list")
         self.assertEqual(resolve_command("platforms").cli_command, "platform-status")
+        self.assertEqual(resolve_command("plugin-bundles").cli_command, "plugin-bundles")
         self.assertIn("forget", resolve_command("permissions").args_hint)
+        self.assertIn("show", resolve_command("permissions").args_hint)
         self.assertIn("status", gateway_command_names())
         self.assertIn("platforms", gateway_command_names())
         help_text = grouped_help()
         self.assertIn("/hsi", help_text)
-        self.assertIn("/permissions [list|forget", help_text)
+        self.assertIn("/permissions [list|show", help_text)
         self.assertIn("/session-search", help_text)
         self.assertIn("/skill-usage", help_text)
+        self.assertIn("/plugin-bundles", help_text)
         self.assertIn("/snapshot", help_text)
         self.assertEqual(
             normalize_hyperagent_args(["/agents", "pause", "maintenance"]),
             ["agent-pause", "maintenance"],
         )
+
+    def test_plugin_bundle_store_scans_project_and_workspace_manifests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            project_bundle = root / "plugins" / "project-pack"
+            runtime_bundle = workspace.workspace_dir / "plugins" / "runtime-pack"
+            project_bundle.mkdir(parents=True)
+            runtime_bundle.mkdir(parents=True)
+            write_json(
+                project_bundle / "bundle.json",
+                {
+                    "id": "project-pack",
+                    "name": "Project Pack",
+                    "skills": ["review-experiment"],
+                    "commands": ["feature-dev"],
+                },
+            )
+            write_json(
+                runtime_bundle / "bundle.json",
+                {
+                    "id": "runtime-pack",
+                    "name": "Runtime Pack",
+                    "agents": ["reviewer"],
+                    "hooks": ["TaskComplete"],
+                    "mcp": ["hypervault"],
+                },
+            )
+
+            store = PluginBundleStore(workspace.workspace_dir, workspace.project_root)
+            summary = store.summary()
+
+            self.assertEqual(summary["total"], 2)
+            self.assertIsNotNone(store.inspect("project-pack"))
+            self.assertEqual(store.inspect("runtime-pack").mcp, ["hypervault"])
         self.assertEqual(
             normalize_hyperagent_args(["/skills", "bundles"]),
             ["skill-bundles"],

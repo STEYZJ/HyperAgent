@@ -198,6 +198,7 @@ class HyperAgentReplTest(unittest.TestCase):
             outputs = []
             lines = iter([
                 "/permissions",
+                f"/permissions show {rules[0].id}",
                 f"/permissions forget {rules[0].id}",
                 "/permissions",
                 "/permissions clear",
@@ -215,8 +216,50 @@ class HyperAgentReplTest(unittest.TestCase):
             self.assertEqual(repl.run(), 0)
             text = "\n".join(outputs)
             self.assertIn(rules[0].id, text)
+            self.assertIn("tool: run_command", text)
+            self.assertIn("fingerprint:", text)
+            self.assertIn("args:", text)
             self.assertIn("remembered permission removed: True", text)
             self.assertIn("remembered permissions cleared: 0", text)
+
+    def test_repl_lists_and_inspects_plugin_bundles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            bundle_dir = root / "plugins" / "dev-pack"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "bundle.json").write_text(
+                "{"
+                '"id":"dev-pack",'
+                '"name":"Developer Pack",'
+                '"description":"Commands and hooks for development",'
+                '"skills":["review-experiment"],'
+                '"agents":["reviewer"],'
+                '"hooks":["TaskComplete"],'
+                '"mcp":["hypervault"],'
+                '"commands":["feature-dev"]'
+                "}",
+                encoding="utf-8",
+            )
+            conversations = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            outputs = []
+            lines = iter(["/plugin bundles", "/plugin bundles dev-pack", "/exit"])
+            repl = HyperAgentRepl(
+                workspace=workspace,
+                conversations=conversations,
+                providers=providers,
+                prompt_library=PromptLibrary([PROMPT_ROOT]),
+                input_func=lambda prompt: next(lines),
+                output_func=outputs.append,
+            )
+
+            self.assertEqual(repl.run(), 0)
+            text = "\n".join(outputs)
+            self.assertIn("dev-pack\tDeveloper Pack", text)
+            self.assertIn("skills: review-experiment", text)
+            self.assertIn("mcp: hypervault", text)
 
     def test_plain_chat_auto_routes_tool_intent_to_action_loop(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -43,13 +43,16 @@ Large local videos and reference PDFs are ignored by Git via `参考/`.
 | Status line | First-round TUI status line shows provider/model, session, permission, context, tokens, cache, and wait status |
 | Rich TUI | First-round stdlib TUI exists with side panel for context, usage, subagents, jobs, suggestions, todos, artifacts, and permission counts |
 | Remembered command approvals | First-round exact remembered approvals stored locally under `.hyperagent/permissions/remembered.json` |
+| Command palette | Second-round TUI `Ctrl-P` palette covers built-in slash commands, Markdown commands, skills, and plugin bundles |
+| Permission detail panel | Second-round `/permissions show <id|key>` and TUI side-panel details expose redacted tool/risk/fingerprint/uses |
+| Plugin bundles | Second-round `PluginBundleStore` scans local `bundle.json` manifests for skills, agents, hooks, MCP, and commands |
 
 ## Next Gaps
 
 - Broader permission UI, such as grouped risk views and expiry policies.
-- Deeper TUI interaction polish, such as a command palette and permission-detail panel.
+- Deeper TUI interaction polish beyond the initial command palette, such as richer keyboard navigation and grouped permission views.
 - Native multi-agent simplify council that runs three reviewers and applies a
   guarded patch.
 - Hook execution lifecycle around commits and tests; task completion now has a
   lightweight `TaskComplete` event.
-- Plugin bundles that package skills, subagents, hooks, and MCP specs together.
+- Plugin bundle installation, version constraints, and marketplace-style update/audit flows.
