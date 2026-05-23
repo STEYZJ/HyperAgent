@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" width="1280" height="860">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; letter-spacing:0; }</style>
+<defs><marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker><marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker><marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker><marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker><marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker><marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/></marker></defs>
+<rect width="1280" height="860" fill="#ffffff"/>
+<text x="34" y="42" fill="#111827" font-size="24" font-weight="600" text-anchor="start">HyperAgent 模块通信图</text>
+<text x="34" y="68" fill="#6b7280" font-size="13" text-anchor="start">通信协议以 append-only runtime ledgers 和本地状态为审计边界；工具、skill、session 与平台状态被统一到可复盘路径。</text>
+<line x1="225" y1="155" x2="275" y2="155" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="214.0" y="139.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="250.0" y="155.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">command</text>
+<line x1="445" y1="155" x2="495" y2="155" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="434.0" y="139.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="470.0" y="155.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">context</text>
+<line x1="685" y1="155" x2="735" y2="155" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="674.0" y="139.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="710.0" y="155.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">messages</text>
+<line x1="925" y1="155" x2="975" y2="155" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arrow-purple)"/>
+<rect x="914.0" y="139.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="950.0" y="155.0" fill="#9333ea" font-size="11" font-weight="600" text-anchor="middle">response</text>
+<line x1="1070" y1="193" x2="252" y2="330" stroke="#ea580c" stroke-width="2" fill="none" marker-end="url(#arrow-orange)"/>
+<rect x="622.5" y="245.5" width="77" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="661.0" y="261.5" fill="#ea580c" font-size="11" font-weight="600" text-anchor="middle">tool intent</text>
+<line x1="345" y1="372" x2="405" y2="372" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="336.5" y="356.0" width="77" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="375.0" y="372.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">research op</text>
+<line x1="590" y1="372" x2="650" y2="372" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="584.0" y="356.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="620.0" y="372.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">events</text>
+<line x1="835" y1="372" x2="895" y2="372" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="829.0" y="356.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="865.0" y="372.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">index</text>
+<line x1="742" y1="415" x2="505" y2="565" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="587.5" y="474.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="623.5" y="490.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">summary</text>
+<line x1="987" y1="415" x2="790" y2="565" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="850.0" y="474.0" width="77" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="888.5" y="490.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">local state</text>
+<line x1="505" y1="565" x2="140" y2="193" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)" stroke-dasharray="7,5"/>
+<rect x="286.5" y="363.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="322.5" y="379.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">reply</text>
+<rect x="55" y="118" width="170" height="75" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="55" y="118" width="8" height="75" rx="8" fill="#2563eb" opacity="0.9"/>
+<text x="140.0" y="142" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">User / Channel</text>
+<text x="69" y="164" fill="#6b7280" font-size="11" text-anchor="start">CLI, REPL, TUI</text>
+<text x="69" y="180" fill="#6b7280" font-size="11" text-anchor="start">Feishu/QQ chat</text>
+<rect x="275" y="118" width="170" height="75" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="275" y="118" width="8" height="75" rx="8" fill="#9333ea" opacity="0.9"/>
+<text x="360.0" y="142" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Slash Registry</text>
+<text x="289" y="164" fill="#6b7280" font-size="11" text-anchor="start">aliases + command de</text>
+<text x="289" y="180" fill="#6b7280" font-size="11" text-anchor="start">fs</text>
+<rect x="495" y="118" width="190" height="75" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="495" y="118" width="8" height="75" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="590.0" y="142" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Session Context</text>
+<text x="509" y="164" fill="#6b7280" font-size="11" text-anchor="start">messages, summaries</text>
+<text x="509" y="180" fill="#6b7280" font-size="11" text-anchor="start">repo/task context</text>
+<rect x="735" y="118" width="190" height="75" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="735" y="118" width="8" height="75" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="830.0" y="142" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">LLM Runtime</text>
+<text x="749" y="164" fill="#6b7280" font-size="11" text-anchor="start">provider profiles</text>
+<text x="749" y="180" fill="#6b7280" font-size="11" text-anchor="start">cache-first prefix</text>
+<rect x="975" y="118" width="190" height="75" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="975" y="118" width="8" height="75" rx="8" fill="#9333ea" opacity="0.9"/>
+<text x="1070.0" y="142" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Action Parser</text>
+<text x="989" y="164" fill="#6b7280" font-size="11" text-anchor="start">native tool_calls</text>
+<text x="989" y="180" fill="#6b7280" font-size="11" text-anchor="start">JSON repair/scavenge</text>
+<rect x="160" y="330" width="185" height="85" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="160" y="330" width="8" height="85" rx="8" fill="#ea580c" opacity="0.9"/>
+<text x="252.5" y="354" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Safe Tools</text>
+<text x="174" y="376" fill="#6b7280" font-size="11" text-anchor="start">permission + remembere</text>
+<text x="174" y="392" fill="#6b7280" font-size="11" text-anchor="start">d</text>
+<text x="174" y="408" fill="#6b7280" font-size="11" text-anchor="start">checkpoint + hook</text>
+<rect x="405" y="330" width="185" height="85" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="405" y="330" width="8" height="85" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="497.5" y="354" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Research Tools</text>
+<text x="419" y="376" fill="#6b7280" font-size="11" text-anchor="start">audit/train/eval</text>
+<text x="419" y="392" fill="#6b7280" font-size="11" text-anchor="start">paper-to-module</text>
+<rect x="650" y="330" width="185" height="85" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="650" y="330" width="8" height="85" rx="8" fill="#0f766e" opacity="0.9"/>
+<text x="742.5" y="354" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Runtime Ledgers</text>
+<text x="664" y="376" fill="#6b7280" font-size="11" text-anchor="start">events, usage</text>
+<text x="664" y="392" fill="#6b7280" font-size="11" text-anchor="start">replay/stats</text>
+<rect x="895" y="330" width="185" height="85" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="895" y="330" width="8" height="85" rx="8" fill="#0f766e" opacity="0.9"/>
+<text x="987.5" y="354" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Platform Index</text>
+<text x="909" y="376" fill="#6b7280" font-size="11" text-anchor="start">session index</text>
+<text x="909" y="392" fill="#6b7280" font-size="11" text-anchor="start">skill usage</text>
+<rect x="410" y="565" width="190" height="75" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="410" y="565" width="8" height="75" rx="8" fill="#2563eb" opacity="0.9"/>
+<text x="505.0" y="589" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Final Response</text>
+<text x="424" y="611" fill="#6b7280" font-size="11" text-anchor="start">answer + warnings</text>
+<text x="424" y="627" fill="#6b7280" font-size="11" text-anchor="start">TaskComplete hook</text>
+<rect x="695" y="565" width="190" height="75" rx="8" ry="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<rect x="695" y="565" width="8" height="75" rx="8" fill="#111827" opacity="0.9"/>
+<text x="790.0" y="589" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Artifacts</text>
+<text x="709" y="611" fill="#6b7280" font-size="11" text-anchor="start">reports, JSON</text>
+<text x="709" y="627" fill="#6b7280" font-size="11" text-anchor="start">local state only</text>
+<rect x="22" y="780" width="430" height="48" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<line x1="34" y1="802" x2="62" y2="802" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="70" y="806" fill="#6b7280" font-size="11" text-anchor="start">请求/响应</text>
+<line x1="174" y1="802" x2="202" y2="802" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="210" y="806" fill="#6b7280" font-size="11" text-anchor="start">工具/执行</text>
+<line x1="314" y1="802" x2="342" y2="802" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<text x="350" y="806" fill="#6b7280" font-size="11" text-anchor="start">日志/索引</text>
+</svg>

@@ -1,82 +1,115 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1060" width="1500" height="1060">
-<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
-
-<defs>
-  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
-  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
-  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
-  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
-  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
-  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
-  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
-</defs>
-
-<rect width="1500" height="1060" fill="#ffffff"/>
-<text x="750.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">业务流程对比图</text>
-<text x="750.0" y="62" fill="#6b7280" font-size="13" text-anchor="middle">比较四个系统的主业务闭环：从用户输入到工具执行、评审、归档以及下一轮自动化。</text>
-<rect x="60" y="95" width="1410" height="790" rx="10" ry="10" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
-<rect x="60" y="95" width="1410" height="54" rx="10" ry="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
-<text x="76" y="127" fill="#111827" font-size="13" font-weight="600">对比维度</text>
-<text x="420.0" y="127" fill="#16a34a" font-size="13" font-weight="600" text-anchor="middle">HyperAgent</text>
-<line x1="270" y1="95" x2="270" y2="885" stroke="#d1d5db" stroke-width="1"/>
-<text x="720.0" y="127" fill="#2563eb" font-size="13" font-weight="600" text-anchor="middle">Hermes Agent</text>
-<line x1="570" y1="95" x2="570" y2="885" stroke="#d1d5db" stroke-width="1"/>
-<text x="1020.0" y="127" fill="#9333ea" font-size="13" font-weight="600" text-anchor="middle">Claude Code 参考</text>
-<line x1="870" y1="95" x2="870" y2="885" stroke="#d1d5db" stroke-width="1"/>
-<text x="1320.0" y="127" fill="#f97316" font-size="13" font-weight="600" text-anchor="middle">DeepSeek Reasonix</text>
-<line x1="1170" y1="95" x2="1170" y2="885" stroke="#d1d5db" stroke-width="1"/>
-<rect x="60" y="149" width="1410" height="92" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="182" fill="#111827" font-size="12" font-weight="600">核心闭环</text>
-<text x="282" y="170" fill="#6b7280" font-size="10">数据审计→模型推荐→实验→评估→Council→下一轮</text>
-<text x="582" y="170" fill="#6b7280" font-size="10">多端对话→AIAgent→工具/子代理→记忆/skill 自改</text>
-<text x="582" y="183" fill="#6b7280" font-size="10">进</text>
-<text x="882" y="170" fill="#6b7280" font-size="10">开发任务→slash command/plugin→agents/hooks→代</text>
-<text x="882" y="183" fill="#6b7280" font-size="10">码/Git 输出</text>
-<text x="1182" y="170" fill="#6b7280" font-size="10">cache-stable request→repair→tool</text>
-<text x="1182" y="183" fill="#6b7280" font-size="10">dispatch→cost stats</text>
-<rect x="60" y="241" width="1410" height="92" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="274" fill="#111827" font-size="12" font-weight="600">计划/执行边界</text>
-<text x="282" y="262" fill="#6b7280" font-size="10">支持 plan-mode、权限确认、实验 cycle</text>
-<text x="582" y="262" fill="#6b7280" font-size="10">工具集、审批、cron、gateway 共享命令</text>
-<text x="882" y="262" fill="#6b7280" font-size="10">操作逻辑清晰，权限/命令/插件体验强</text>
-<text x="1182" y="262" fill="#6b7280" font-size="10">强调 /apply、plan gate、shell permission</text>
-<rect x="60" y="333" width="1410" height="92" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="366" fill="#111827" font-size="12" font-weight="600">工具调用</text>
-<text x="282" y="354" fill="#6b7280" font-size="10">web/skill/shell/training 等受控工具，仍需继续</text>
-<text x="282" y="367" fill="#6b7280" font-size="10">打磨稳定性</text>
-<text x="582" y="354" fill="#6b7280" font-size="10">工具面广，平台和 terminal backend 丰富</text>
-<text x="882" y="354" fill="#6b7280" font-size="10">公开仓库展示工作流，核心闭源不可直接复用</text>
-<text x="1182" y="354" fill="#6b7280" font-size="10">工具可靠性、并发、安全和事件记录强</text>
-<rect x="60" y="425" width="1410" height="92" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="458" fill="#111827" font-size="12" font-weight="600">多 Agent 协作</text>
-<text x="282" y="446" fill="#6b7280" font-size="10">HSI Council + subagent runtime，偏科研评审</text>
-<text x="582" y="446" fill="#6b7280" font-size="10">delegate/subagents/kanban/swarm 更产品化</text>
-<text x="882" y="446" fill="#6b7280" font-size="10">feature-dev/code-review/pr-review 多代理模板</text>
-<text x="882" y="459" fill="#6b7280" font-size="10">强</text>
-<text x="1182" y="446" fill="#6b7280" font-size="10">subagent/skill 支持，但核心不是大规模协同</text>
-<rect x="60" y="517" width="1410" height="92" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="550" fill="#111827" font-size="12" font-weight="600">结果评审</text>
-<text x="282" y="538" fill="#6b7280" font-size="10">OA/AA/Kappa、报告、证据、消融计划</text>
-<text x="582" y="538" fill="#6b7280" font-size="10">偏通用任务完成和轨迹生成</text>
-<text x="882" y="538" fill="#6b7280" font-size="10">代码审查、PR、commit、issue triage</text>
-<text x="1182" y="538" fill="#6b7280" font-size="10">更重 replay/diff/stats 和 cost/cache 透明</text>
-<rect x="60" y="609" width="1410" height="92" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="642" fill="#111827" font-size="12" font-weight="600">长期积累</text>
-<text x="282" y="630" fill="#6b7280" font-size="10">worklog、sessions、usage、research experience</text>
-<text x="582" y="630" fill="#6b7280" font-size="10">memory、skills hub、session search、Honcho</text>
-<text x="882" y="630" fill="#6b7280" font-size="10">插件/skill/hook 复用，团队设置</text>
-<text x="1182" y="630" fill="#6b7280" font-size="10">append-only log、usage、semantic index</text>
-<rect x="60" y="701" width="1410" height="92" rx="0" ry="0" fill="#ffffff" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="734" fill="#111827" font-size="12" font-weight="600">领域适配</text>
-<text x="282" y="722" fill="#6b7280" font-size="10">最强：HSI 数据/光谱/实验知识内建</text>
-<text x="582" y="722" fill="#6b7280" font-size="10">无 HSI 专属科研协议</text>
-<text x="882" y="722" fill="#6b7280" font-size="10">无 HSI 专属流程</text>
-<text x="1182" y="722" fill="#6b7280" font-size="10">无 HSI 专属流程</text>
-<rect x="60" y="793" width="1410" height="92" rx="0" ry="0" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
-<text x="76" y="826" fill="#111827" font-size="12" font-weight="600">成熟度风险</text>
-<text x="282" y="814" fill="#6b7280" font-size="10">产品化、TUI、插件生态不如参考项目成熟</text>
-<text x="582" y="814" fill="#6b7280" font-size="10">通用复杂度高，领域科研可解释性需二次设计</text>
-<text x="882" y="814" fill="#6b7280" font-size="10">核心不可见，参考价值主要在交互范式</text>
-<text x="1182" y="814" fill="#6b7280" font-size="10">DeepSeek-specific，跨厂商抽象弱于通用框架</text>
-<text x="80" y="920" fill="#111827" font-size="14" font-weight="600">流程结论：HyperAgent 的流程创新是“实验结果驱动下一轮实验”的科研闭环；需要继续吸收 Reasonix 的事件/回放与 Hermes/Claude 的命令/TUI成熟度。</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" width="1280" height="860">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; letter-spacing:0; }</style>
+<defs><marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker><marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker><marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker><marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker><marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker><marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/></marker></defs>
+<rect width="1280" height="860" fill="#ffffff"/>
+<text x="34" y="42" fill="#111827" font-size="24" font-weight="600" text-anchor="start">业务流程对比图</text>
+<text x="34" y="68" fill="#6b7280" font-size="13" text-anchor="start">四个系统的流程目标不同：HyperAgent 以实验决策为终点，Hermes 以平台运行为终点，Claude 以开发任务完成为终点，Reasonix 以可靠低成本工具循环为终点。</text>
+<line x1="315" y1="162" x2="350" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="455" y1="162" x2="490" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="595" y1="162" x2="630" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="735" y1="162" x2="770" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="875" y1="162" x2="910" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="1015" y1="162" x2="1050" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="170" y1="162" x2="210" y2="162" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<line x1="315" y1="282" x2="350" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="455" y1="282" x2="490" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="595" y1="282" x2="630" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="735" y1="282" x2="770" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="875" y1="282" x2="910" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="1015" y1="282" x2="1050" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="170" y1="282" x2="210" y2="282" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="315" y1="402" x2="350" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="455" y1="402" x2="490" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="595" y1="402" x2="630" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="735" y1="402" x2="770" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="875" y1="402" x2="910" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="1015" y1="402" x2="1050" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="170" y1="402" x2="210" y2="402" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="315" y1="522" x2="350" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="455" y1="522" x2="490" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="595" y1="522" x2="630" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="735" y1="522" x2="770" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="875" y1="522" x2="910" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="1015" y1="522" x2="1050" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<line x1="170" y1="522" x2="210" y2="522" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="60" y="130" width="110" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="115.0" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">HyperAgent</text>
+<text x="74" y="176" fill="#6b7280" font-size="11" text-anchor="start">workflow</text>
+<rect x="210" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="262.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">audit</text>
+<rect x="350" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="402.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">diagnosis</text>
+<rect x="490" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="542.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">plan</text>
+<rect x="630" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="682.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">action</text>
+<rect x="770" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="822.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">experiment</text>
+<rect x="910" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="962.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">council</text>
+<rect x="1050" y="130" width="105" height="64" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="1102.5" y="154" fill="#111827" font-size="14" font-weight="600" text-anchor="middle"><tspan x="1102.5" dy="0">next paper </tspan><tspan x="1102.5" dy="18">claim</tspan></text>
+<rect x="60" y="250" width="110" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="115.0" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Hermes</text>
+<text x="74" y="296" fill="#6b7280" font-size="11" text-anchor="start">workflow</text>
+<rect x="210" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="262.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">gateway</text>
+<rect x="350" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="402.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">agent</text>
+<rect x="490" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="542.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">tools</text>
+<rect x="630" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="682.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">memory</text>
+<rect x="770" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="822.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">skill</text>
+<rect x="910" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="962.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">deploy</text>
+<rect x="1050" y="250" width="105" height="64" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="1102.5" y="274" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">feedback</text>
+<rect x="60" y="370" width="110" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="115.0" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Claude</text>
+<text x="74" y="416" fill="#6b7280" font-size="11" text-anchor="start">workflow</text>
+<rect x="210" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="262.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">prompt</text>
+<rect x="350" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="402.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">command</text>
+<rect x="490" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="542.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">permission</text>
+<rect x="630" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="682.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">tool</text>
+<rect x="770" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="822.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">hook</text>
+<rect x="910" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="962.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">TUI</text>
+<rect x="1050" y="370" width="105" height="64" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="1102.5" y="394" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">finish</text>
+<rect x="60" y="490" width="110" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="115.0" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Reasonix</text>
+<text x="74" y="536" fill="#6b7280" font-size="11" text-anchor="start">workflow</text>
+<rect x="210" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="262.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">prefix</text>
+<rect x="350" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="402.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">LLM</text>
+<rect x="490" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="542.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">repair</text>
+<rect x="630" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="682.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">tool</text>
+<rect x="770" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="822.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">usage</text>
+<rect x="910" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="962.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">replay</text>
+<rect x="1050" y="490" width="105" height="64" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="1102.5" y="514" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">budget</text>
+<rect x="250" y="655" width="760" height="72" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="250" y="655" width="8" height="72" rx="8" fill="#ea580c" opacity="0.9"/>
+<text x="630.0" y="679" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">流程判断</text>
+<text x="264" y="701" fill="#6b7280" font-size="11" text-anchor="start">HyperAgent 的改进在于把通用 agent 的 command、repair、platform status 变成科研实验闭环的可审</text>
+<text x="264" y="717" fill="#6b7280" font-size="11" text-anchor="start">计支撑；不足是产品化和生态治理还没有 Hermes/Claude 成熟。</text>
+<rect x="22" y="780" width="430" height="48" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<line x1="34" y1="802" x2="62" y2="802" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="70" y="806" fill="#6b7280" font-size="11" text-anchor="start">HyperAgent 主流程</text>
+<line x1="174" y1="802" x2="202" y2="802" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="210" y="806" fill="#6b7280" font-size="11" text-anchor="start">参考流程</text>
+<line x1="314" y1="802" x2="342" y2="802" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="350" y="806" fill="#6b7280" font-size="11" text-anchor="start">结论</text>
 </svg>

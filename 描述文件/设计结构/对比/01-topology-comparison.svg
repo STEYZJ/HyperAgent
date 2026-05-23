@@ -1,120 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1060" width="1500" height="1060">
-<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
-
-<defs>
-  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
-  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
-  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
-  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
-  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
-  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
-  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
-</defs>
-
-<rect width="1500" height="1060" fill="#ffffff"/>
-<text x="750.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">结构拓扑对比图</text>
-<text x="750.0" y="62" fill="#6b7280" font-size="13" text-anchor="middle">从项目结构看四者的定位：HyperAgent 是 HSI 科研闭环，Hermes 是通用 agent 产品，Claude Code 参考偏插件工作流，Reasonix 偏 DeepSeek cache-first coding loop。</text>
-<rect x="70" y="95" width="292" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-<rect x="70" y="95" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
-<text x="86" y="120" fill="#111827" font-size="14" font-weight="600">HyperAgent</text>
-<rect x="70" y="185" width="292" height="96" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-<rect x="70" y="185" width="8" height="96" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
-<text x="86" y="210" fill="#111827" font-size="14" font-weight="600">入口层</text>
-<text x="86" y="230" fill="#6b7280" font-size="11">CLI/REPL/TUI + Feishu/QQ channel，命令</text>
-<text x="86" y="244" fill="#6b7280" font-size="11">统一仍在演进</text>
-<rect x="70" y="299" width="292" height="96" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-<rect x="70" y="299" width="8" height="96" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
-<text x="86" y="324" fill="#111827" font-size="14" font-weight="600">Agent 层</text>
-<text x="86" y="344" fill="#6b7280" font-size="11">ActionLoop、AgentLoop、MultiAgent、</text>
-<text x="86" y="358" fill="#6b7280" font-size="11">Experiment Council</text>
-<rect x="70" y="413" width="292" height="96" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-<rect x="70" y="413" width="8" height="96" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
-<text x="86" y="438" fill="#111827" font-size="14" font-weight="600">领域层</text>
-<text x="86" y="458" fill="#6b7280" font-size="11">data/models/training/evaluation/knowled</text>
-<text x="86" y="472" fill="#6b7280" font-size="11">ge/tools 强解耦</text>
-<rect x="70" y="527" width="292" height="96" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
-<rect x="70" y="527" width="8" height="96" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
-<text x="86" y="552" fill="#111827" font-size="14" font-weight="600">工件层</text>
-<text x="86" y="572" fill="#6b7280" font-size="11">.hyperagent、experiments、reports、</text>
-<text x="86" y="586" fill="#6b7280" font-size="11">worklog、dataset docs</text>
-<rect x="388" y="95" width="292" height="66" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-<rect x="388" y="95" width="8" height="66" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
-<text x="404" y="120" fill="#111827" font-size="14" font-weight="600">Hermes Agent</text>
-<rect x="388" y="185" width="292" height="96" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-<rect x="388" y="185" width="8" height="96" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
-<text x="404" y="210" fill="#111827" font-size="14" font-weight="600">入口层</text>
-<text x="404" y="230" fill="#6b7280" font-size="11">CLI、Ink TUI、Messaging Gateway、ACP、</text>
-<text x="404" y="244" fill="#6b7280" font-size="11">Web Dashboard</text>
-<rect x="388" y="299" width="292" height="96" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-<rect x="388" y="299" width="8" height="96" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
-<text x="404" y="324" fill="#111827" font-size="14" font-weight="600">Agent 层</text>
-<text x="404" y="344" fill="#6b7280" font-size="11">AIAgent、provider adapters、</text>
-<text x="404" y="358" fill="#6b7280" font-size="11">context/memory、budget</text>
-<rect x="388" y="413" width="292" height="96" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-<rect x="388" y="413" width="8" height="96" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
-<text x="404" y="438" fill="#111827" font-size="14" font-weight="600">扩展层</text>
-<text x="404" y="458" fill="#6b7280" font-size="11">tools、terminal backends、delegate、</text>
-<text x="404" y="472" fill="#6b7280" font-size="11">skills hub、plugins、cron</text>
-<rect x="388" y="527" width="292" height="96" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-<rect x="388" y="527" width="8" height="96" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
-<text x="404" y="552" fill="#111827" font-size="14" font-weight="600">工件层</text>
-<text x="404" y="572" fill="#6b7280" font-size="11">SQLite/FTS5、logs、trajectories、</text>
-<text x="404" y="586" fill="#6b7280" font-size="11">website、tests</text>
-<rect x="706" y="95" width="292" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
-<rect x="706" y="95" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
-<text x="722" y="120" fill="#111827" font-size="14" font-weight="600">Claude Code 参考</text>
-<rect x="706" y="185" width="292" height="96" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
-<rect x="706" y="185" width="8" height="96" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
-<text x="722" y="210" fill="#111827" font-size="14" font-weight="600">入口层</text>
-<text x="722" y="230" fill="#6b7280" font-size="11">终端/IDE/GitHub，参考目录主要提供</text>
-<text x="722" y="244" fill="#6b7280" font-size="11">README 和插件示例</text>
-<rect x="706" y="299" width="292" height="96" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
-<rect x="706" y="299" width="8" height="96" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
-<text x="722" y="324" fill="#111827" font-size="14" font-weight="600">运行层</text>
-<text x="722" y="344" fill="#6b7280" font-size="11">闭源核心不可见；公开部分集中在</text>
-<text x="722" y="358" fill="#6b7280" font-size="11">plugin/command/agent/hook</text>
-<rect x="706" y="413" width="292" height="96" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
-<rect x="706" y="413" width="8" height="96" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
-<text x="722" y="438" fill="#111827" font-size="14" font-weight="600">扩展层</text>
-<text x="722" y="458" fill="#6b7280" font-size="11">feature-dev、code-review、commit、</text>
-<text x="722" y="472" fill="#6b7280" font-size="11">plugin-dev、hookify</text>
-<rect x="706" y="527" width="292" height="96" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
-<rect x="706" y="527" width="8" height="96" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
-<text x="722" y="552" fill="#111827" font-size="14" font-weight="600">工件层</text>
-<text x="722" y="572" fill="#6b7280" font-size="11">plugins、settings、MDM、hook examples、</text>
-<text x="722" y="586" fill="#6b7280" font-size="11">issue scripts</text>
-<rect x="1024" y="95" width="292" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
-<rect x="1024" y="95" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
-<text x="1040" y="120" fill="#111827" font-size="14" font-weight="600">DeepSeek Reasonix</text>
-<rect x="1024" y="185" width="292" height="96" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
-<rect x="1024" y="185" width="8" height="96" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
-<text x="1040" y="210" fill="#111827" font-size="14" font-weight="600">入口层</text>
-<text x="1040" y="230" fill="#6b7280" font-size="11">CLI、Ink TUI、Desktop、Dashboard、QQ</text>
-<text x="1040" y="244" fill="#6b7280" font-size="11">channel</text>
-<rect x="1024" y="299" width="292" height="96" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
-<rect x="1024" y="299" width="8" height="96" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
-<text x="1040" y="324" fill="#111827" font-size="14" font-weight="600">Agent 层</text>
-<text x="1040" y="344" fill="#6b7280" font-size="11">CacheFirstLoop、DeepSeek client、repair</text>
-<text x="1040" y="358" fill="#6b7280" font-size="11">、telemetry</text>
-<rect x="1024" y="413" width="292" height="96" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
-<rect x="1024" y="413" width="8" height="96" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
-<text x="1040" y="438" fill="#111827" font-size="14" font-weight="600">工具层</text>
-<text x="1040" y="458" fill="#6b7280" font-size="11">filesystem/shell/jobs/web/memory/skills</text>
-<text x="1040" y="472" fill="#6b7280" font-size="11">/subagent/MCP</text>
-<rect x="1024" y="527" width="292" height="96" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
-<rect x="1024" y="527" width="8" height="96" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
-<text x="1040" y="552" fill="#111827" font-size="14" font-weight="600">工件层</text>
-<text x="1040" y="572" fill="#6b7280" font-size="11">JSONL sessions、usage、events、</text>
-<text x="1040" y="586" fill="#6b7280" font-size="11">benchmarks、desktop bundles</text>
-<text x="70" y="930" fill="#111827" font-size="14" font-weight="600">结构结论：HyperAgent 的结构差异不在“通用 agent 产品完整度”，而在把 HSI 数据、光谱、模型、训练、评估、论文证据作为一等模块接入 agent loop。</text>
-<rect x="70" y="960" width="270" height="112" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
-<text x="82" y="980" fill="#111827" font-size="12" font-weight="600">图例</text>
-<line x1="84" y1="998" x2="120" y2="998" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
-<text x="130" y="1002" fill="#6b7280" font-size="11">HyperAgent：领域科研闭环</text>
-<line x1="84" y1="1020" x2="120" y2="1020" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
-<text x="130" y="1024" fill="#6b7280" font-size="11">Hermes：通用多平台产品</text>
-<line x1="84" y1="1042" x2="120" y2="1042" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
-<text x="130" y="1046" fill="#6b7280" font-size="11">Claude：插件/命令工作流范式</text>
-<line x1="84" y1="1064" x2="120" y2="1064" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
-<text x="130" y="1068" fill="#6b7280" font-size="11">Reasonix：DeepSeek 成本/可靠性优化</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" width="1280" height="860">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; letter-spacing:0; }</style>
+<defs><marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker><marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker><marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker><marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker><marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker><marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/></marker></defs>
+<rect width="1280" height="860" fill="#ffffff"/>
+<text x="34" y="42" fill="#111827" font-size="24" font-weight="600" text-anchor="start">结构拓扑对比图</text>
+<text x="34" y="68" fill="#6b7280" font-size="13" text-anchor="start">HyperAgent 当前结构已吸收 Reasonix/Claude/Hermes 的关键运行机制，但系统目标仍是 HSI 科研证据闭环。</text>
+<line x1="185" y1="290" x2="240" y2="430" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="176.5" y="344.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="212.5" y="360.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">领域收敛</text>
+<line x1="485" y1="290" x2="630" y2="430" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="521.5" y="344.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="557.5" y="360.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">平台差距</text>
+<line x1="785" y1="290" x2="630" y2="430" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arrow-purple)"/>
+<rect x="671.5" y="344.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="707.5" y="360.0" fill="#9333ea" font-size="11" font-weight="600" text-anchor="middle">体验差距</text>
+<line x1="1085" y1="290" x2="240" y2="430" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)" stroke-dasharray="7,5"/>
+<rect x="626.5" y="344.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="662.5" y="360.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">可靠性已吸收</text>
+<line x1="365" y1="480" x2="505" y2="480" stroke="#dc2626" stroke-width="2" fill="none" marker-end="url(#arrow-red)"/>
+<rect x="399.0" y="464.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="435.0" y="480.0" fill="#dc2626" font-size="11" font-weight="600" text-anchor="middle">剩余 gap</text>
+<line x1="755" y1="480" x2="895" y2="480" stroke="#ea580c" stroke-width="2" fill="none" marker-end="url(#arrow-orange)"/>
+<rect x="789.0" y="464.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="825.0" y="480.0" fill="#ea580c" font-size="11" font-weight="600" text-anchor="middle">创新叙事</text>
+<rect x="70" y="140" width="230" height="150" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="185.0" y="164" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">HyperAgent</text>
+<text x="84" y="186" fill="#6b7280" font-size="11" text-anchor="start">HSI 科研闭环</text>
+<text x="84" y="202" fill="#6b7280" font-size="11" text-anchor="start">Reasonix 可靠性</text>
+<text x="84" y="218" fill="#6b7280" font-size="11" text-anchor="start">Claude 体验</text>
+<text x="84" y="234" fill="#6b7280" font-size="11" text-anchor="start">Hermes 可观测</text>
+<rect x="370" y="140" width="230" height="150" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="485.0" y="164" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Hermes Agent</text>
+<text x="384" y="186" fill="#6b7280" font-size="11" text-anchor="start">通用平台</text>
+<text x="384" y="202" fill="#6b7280" font-size="11" text-anchor="start">多端 gateway</text>
+<text x="384" y="218" fill="#6b7280" font-size="11" text-anchor="start">skills/memory</text>
+<text x="384" y="234" fill="#6b7280" font-size="11" text-anchor="start">部署/产品化</text>
+<rect x="670" y="140" width="230" height="150" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="785.0" y="164" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">Claude Code</text>
+<text x="684" y="186" fill="#6b7280" font-size="11" text-anchor="start">命令/插件范式</text>
+<text x="684" y="202" fill="#6b7280" font-size="11" text-anchor="start">权限体验</text>
+<text x="684" y="218" fill="#6b7280" font-size="11" text-anchor="start">TUI/工作流</text>
+<text x="684" y="234" fill="#6b7280" font-size="11" text-anchor="start">开发任务模板</text>
+<rect x="970" y="140" width="230" height="150" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="1085.0" y="164" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">DeepSeek Reasonix</text>
+<text x="984" y="186" fill="#6b7280" font-size="11" text-anchor="start">DeepSeek-native</text>
+<text x="984" y="202" fill="#6b7280" font-size="11" text-anchor="start">cache-first</text>
+<text x="984" y="218" fill="#6b7280" font-size="11" text-anchor="start">repair/replay</text>
+<text x="984" y="234" fill="#6b7280" font-size="11" text-anchor="start">成本可见</text>
+<rect x="115" y="430" width="250" height="100" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="115" y="430" width="8" height="100" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="240.0" y="454" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">HyperAgent 的改进</text>
+<text x="129" y="476" fill="#6b7280" font-size="11" text-anchor="start">把三类通用能力收敛到 HSI evide</text>
+<text x="129" y="492" fill="#6b7280" font-size="11" text-anchor="start">nce loop</text>
+<text x="129" y="508" fill="#6b7280" font-size="11" text-anchor="start">不是横向克隆，而是机制吸收</text>
+<rect x="505" y="430" width="250" height="100" rx="8" ry="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+<rect x="505" y="430" width="8" height="100" rx="8" fill="#dc2626" opacity="0.9"/>
+<text x="630.0" y="454" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">仍弱于参考项</text>
+<text x="519" y="476" fill="#6b7280" font-size="11" text-anchor="start">marketplace/版本治理</text>
+<text x="519" y="492" fill="#6b7280" font-size="11" text-anchor="start">多平台重试与部署</text>
+<text x="519" y="508" fill="#6b7280" font-size="11" text-anchor="start">更完整 command palette</text>
+<rect x="895" y="430" width="250" height="100" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="895" y="430" width="8" height="100" rx="8" fill="#ea580c" opacity="0.9"/>
+<text x="1020.0" y="454" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">创新定位</text>
+<text x="909" y="476" fill="#6b7280" font-size="11" text-anchor="start">Domain-first research agent</text>
+<text x="909" y="492" fill="#6b7280" font-size="11" text-anchor="start">paper-to-module-to-ablation</text>
+<text x="909" y="508" fill="#6b7280" font-size="11" text-anchor="start">实验证据链叙事</text>
+<rect x="22" y="780" width="430" height="48" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<line x1="34" y1="802" x2="62" y2="802" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="70" y="806" fill="#6b7280" font-size="11" text-anchor="start">已吸收机制</text>
+<line x1="174" y1="802" x2="202" y2="802" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+<text x="210" y="806" fill="#6b7280" font-size="11" text-anchor="start">差距</text>
+<line x1="314" y1="802" x2="342" y2="802" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="350" y="806" fill="#6b7280" font-size="11" text-anchor="start">创新</text>
 </svg>

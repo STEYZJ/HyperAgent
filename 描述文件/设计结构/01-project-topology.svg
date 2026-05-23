@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" width="1280" height="860">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; letter-spacing:0; }</style>
+<defs><marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker><marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker><marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker><marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker><marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker><marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/></marker></defs>
+<rect width="1280" height="860" fill="#ffffff"/>
+<text x="34" y="42" fill="#111827" font-size="24" font-weight="600" text-anchor="start">HyperAgent 当前项目结构拓扑</text>
+<text x="34" y="68" fill="#6b7280" font-size="13" text-anchor="start">HSI 科研闭环是中心；Reasonix 可靠运行、Claude 风格交互、Hermes 平台可观测作为三层增强围绕闭环服务。</text>
+<line x1="230" y1="157" x2="270" y2="157" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="214.0" y="141.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="250.0" y="157.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">命令/消息</text>
+<line x1="480" y1="157" x2="520" y2="157" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="464.0" y="141.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="500.0" y="157.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">稳定上下文</text>
+<line x1="740" y1="157" x2="780" y2="157" stroke="#ea580c" stroke-width="2" fill="none" marker-end="url(#arrow-orange)"/>
+<rect x="724.0" y="141.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="760.0" y="157.0" fill="#ea580c" font-size="11" font-weight="600" text-anchor="middle">工具意图</text>
+<line x1="990" y1="157" x2="1030" y2="157" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="974.0" y="141.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="1010.0" y="157.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">状态聚合</text>
+<line x1="165" y1="204" x2="185" y2="310" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="139.0" y="241.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="175.0" y="257.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">科研任务</text>
+<line x1="420" y1="204" x2="465" y2="310" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="406.5" y="241.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="442.5" y="257.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">计划/会话</text>
+<line x1="650" y1="204" x2="735" y2="310" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arrow-purple)"/>
+<rect x="654.0" y="241.0" width="77" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="692.5" y="257.0" fill="#9333ea" font-size="11" font-weight="600" text-anchor="middle">repair loop</text>
+<line x1="895" y1="204" x2="1008" y2="310" stroke="#ea580c" stroke-width="2" fill="none" marker-end="url(#arrow-orange)"/>
+<rect x="913.0" y="241.0" width="77" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="951.5" y="257.0" fill="#ea580c" font-size="11" font-weight="600" text-anchor="middle">tool result</text>
+<line x1="185" y1="422" x2="250" y2="560" stroke="#16a34a" stroke-width="2" fill="none" marker-end="url(#arrow-green)"/>
+<rect x="181.5" y="475.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="217.5" y="491.0" fill="#16a34a" font-size="11" font-weight="600" text-anchor="middle">证据</text>
+<line x1="465" y1="422" x2="270" y2="560" stroke="#2563eb" stroke-width="2" fill="none" marker-end="url(#arrow-blue)"/>
+<rect x="331.5" y="475.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="367.5" y="491.0" fill="#2563eb" font-size="11" font-weight="600" text-anchor="middle">实验产物</text>
+<line x1="735" y1="422" x2="632" y2="560" stroke="#9333ea" stroke-width="2" fill="none" marker-end="url(#arrow-purple)"/>
+<rect x="647.5" y="475.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="683.5" y="491.0" fill="#9333ea" font-size="11" font-weight="600" text-anchor="middle">审计</text>
+<line x1="1008" y1="422" x2="992" y2="560" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#arrow-teal)"/>
+<rect x="964.0" y="475.0" width="72" height="22" rx="5" fill="#ffffff" opacity="0.96"/><text x="1000.0" y="491.0" fill="#0f766e" font-size="11" font-weight="600" text-anchor="middle">索引/遥测</text>
+<rect x="40" y="110" width="190" height="94" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="40" y="110" width="8" height="94" rx="8" fill="#2563eb" opacity="0.9"/>
+<text x="135.0" y="134" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">入口层</text>
+<text x="54" y="156" fill="#6b7280" font-size="11" text-anchor="start">CLI / launcher</text>
+<text x="54" y="172" fill="#6b7280" font-size="11" text-anchor="start">REPL / TUI / slash</text>
+<text x="54" y="188" fill="#6b7280" font-size="11" text-anchor="start">Feishu/QQ gateway</text>
+<rect x="270" y="110" width="210" height="94" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="270" y="110" width="8" height="94" rx="8" fill="#9333ea" opacity="0.9"/>
+<text x="375.0" y="134" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">上下文与协议</text>
+<text x="284" y="156" fill="#6b7280" font-size="11" text-anchor="start">Prompt library, commands</text>
+<text x="284" y="172" fill="#6b7280" font-size="11" text-anchor="start">sessions, memory, IDE con</text>
+<text x="284" y="188" fill="#6b7280" font-size="11" text-anchor="start">text</text>
+<text x="284" y="204" fill="#6b7280" font-size="11" text-anchor="start">permissions, hooks, todos</text>
+<rect x="520" y="110" width="220" height="94" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="520" y="110" width="8" height="94" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="630.0" y="134" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">LLM 与 Reasonix 运行时</text>
+<text x="534" y="156" fill="#6b7280" font-size="11" text-anchor="start">LLM providers</text>
+<text x="534" y="172" fill="#6b7280" font-size="11" text-anchor="start">cache-first prefix</text>
+<text x="534" y="188" fill="#6b7280" font-size="11" text-anchor="start">repair, budget, usage</text>
+<rect x="780" y="110" width="210" height="94" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="780" y="110" width="8" height="94" rx="8" fill="#ea580c" opacity="0.9"/>
+<text x="885.0" y="134" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">受控工具层</text>
+<text x="794" y="156" fill="#6b7280" font-size="11" text-anchor="start">SafeAgentToolExecutor</text>
+<text x="794" y="172" fill="#6b7280" font-size="11" text-anchor="start">read/search/run/patch/web</text>
+<text x="794" y="188" fill="#6b7280" font-size="11" text-anchor="start">/image</text>
+<text x="794" y="204" fill="#6b7280" font-size="11" text-anchor="start">skill install/run</text>
+<rect x="1030" y="110" width="200" height="94" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="1030" y="110" width="8" height="94" rx="8" fill="#0f766e" opacity="0.9"/>
+<text x="1130.0" y="134" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">平台可观测</text>
+<text x="1044" y="156" fill="#6b7280" font-size="11" text-anchor="start">platform-status</text>
+<text x="1044" y="172" fill="#6b7280" font-size="11" text-anchor="start">gateway /status</text>
+<text x="1044" y="188" fill="#6b7280" font-size="11" text-anchor="start">session-search</text>
+<text x="1044" y="204" fill="#6b7280" font-size="11" text-anchor="start">skill-usage</text>
+<rect x="70" y="310" width="230" height="112" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="70" y="310" width="8" height="112" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="185.0" y="334" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">HSI 科研闭环</text>
+<text x="84" y="356" fill="#6b7280" font-size="11" text-anchor="start">dataset audit</text>
+<text x="84" y="372" fill="#6b7280" font-size="11" text-anchor="start">spectral diagnosis</text>
+<text x="84" y="388" fill="#6b7280" font-size="11" text-anchor="start">model recommendation</text>
+<text x="84" y="404" fill="#6b7280" font-size="11" text-anchor="start">experiment plan</text>
+<rect x="345" y="310" width="230" height="112" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="345" y="310" width="8" height="112" rx="8" fill="#2563eb" opacity="0.9"/>
+<text x="460.0" y="334" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">实验执行层</text>
+<text x="359" y="356" fill="#6b7280" font-size="11" text-anchor="start">training / evaluation</text>
+<text x="359" y="372" fill="#6b7280" font-size="11" text-anchor="start">experiment-cycle council</text>
+<text x="359" y="388" fill="#6b7280" font-size="11" text-anchor="start">paper-to-module-to-ablation</text>
+<text x="359" y="404" fill="#6b7280" font-size="11" text-anchor="start">reports &amp; artifacts</text>
+<rect x="620" y="310" width="230" height="112" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="620" y="310" width="8" height="112" rx="8" fill="#9333ea" opacity="0.9"/>
+<text x="735.0" y="334" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">可靠行动层</text>
+<text x="634" y="356" fill="#6b7280" font-size="11" text-anchor="start">AgentActionLoop</text>
+<text x="634" y="372" fill="#6b7280" font-size="11" text-anchor="start">tool-call normalization</text>
+<text x="634" y="388" fill="#6b7280" font-size="11" text-anchor="start">repair/scavenge events</text>
+<text x="634" y="404" fill="#6b7280" font-size="11" text-anchor="start">checkpoints</text>
+<rect x="895" y="310" width="230" height="112" rx="8" ry="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<rect x="895" y="310" width="8" height="112" rx="8" fill="#111827" opacity="0.9"/>
+<text x="1010.0" y="334" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">本地状态层</text>
+<text x="909" y="356" fill="#6b7280" font-size="11" text-anchor="start">.hyperagent/events</text>
+<text x="909" y="372" fill="#6b7280" font-size="11" text-anchor="start">.hyperagent/usage</text>
+<text x="909" y="388" fill="#6b7280" font-size="11" text-anchor="start">.hyperagent/sessions</text>
+<text x="909" y="404" fill="#6b7280" font-size="11" text-anchor="start">.hyperagent/skills</text>
+<rect x="150" y="560" width="245" height="105" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="150" y="560" width="8" height="105" rx="8" fill="#16a34a" opacity="0.9"/>
+<text x="272.5" y="584" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">科研证据资产</text>
+<text x="164" y="606" fill="#6b7280" font-size="11" text-anchor="start">audit/report/council JSON</text>
+<text x="164" y="622" fill="#6b7280" font-size="11" text-anchor="start">visual and markdown reports</text>
+<text x="164" y="638" fill="#6b7280" font-size="11" text-anchor="start">reproducible plans</text>
+<rect x="510" y="560" width="245" height="105" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="510" y="560" width="8" height="105" rx="8" fill="#9333ea" opacity="0.9"/>
+<text x="632.5" y="584" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">开发者体验资产</text>
+<text x="524" y="606" fill="#6b7280" font-size="11" text-anchor="start">remembered permissions</text>
+<text x="524" y="622" fill="#6b7280" font-size="11" text-anchor="start">TUI status/context meter</text>
+<text x="524" y="638" fill="#6b7280" font-size="11" text-anchor="start">TaskComplete hooks</text>
+<rect x="870" y="560" width="245" height="105" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="870" y="560" width="8" height="105" rx="8" fill="#0f766e" opacity="0.9"/>
+<text x="992.5" y="584" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">平台资产</text>
+<text x="884" y="606" fill="#6b7280" font-size="11" text-anchor="start">provider/channel health</text>
+<text x="884" y="622" fill="#6b7280" font-size="11" text-anchor="start">session index snippets</text>
+<text x="884" y="638" fill="#6b7280" font-size="11" text-anchor="start">skill telemetry ledger</text>
+<rect x="22" y="780" width="430" height="48" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<line x1="34" y1="802" x2="62" y2="802" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="70" y="806" fill="#6b7280" font-size="11" text-anchor="start">科研流</text>
+<line x1="174" y1="802" x2="202" y2="802" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="210" y="806" fill="#6b7280" font-size="11" text-anchor="start">工具流</text>
+<line x1="314" y1="802" x2="342" y2="802" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<text x="350" y="806" fill="#6b7280" font-size="11" text-anchor="start">可观测</text>
+<rect x="890" y="772" width="350" height="58" rx="8" fill="#f8fafc" stroke="#e5e7eb"/>
+<text x="904" y="794" fill="#6b7280" font-size="11" text-anchor="start"><tspan x="904" dy="0">更新：Reasonix + Claude + Hermes 第一轮已纳</tspan><tspan x="904" dy="15">入</tspan></text>
+<text x="904" y="810" fill="#6b7280" font-size="11" text-anchor="start">外部 channel 仍保持 chat/query only</text>
+</svg>
