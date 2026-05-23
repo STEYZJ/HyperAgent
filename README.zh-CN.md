@@ -169,9 +169,10 @@ HyperAgent doctor
 
 HyperAgent 参考 DeepSeek-Reasonix 的架构思想重新用 Python 实现，不复制其 TypeScript 源码。当前阶段已经补上：
 
-- `--loop-mode cache-first`：ActionLoop 记录稳定前缀 hash，把稳定规则放在动态工具输出之前，便于后续利用 DeepSeek prefix cache。
-- native `tool_calls` 解析、JSON/reasoning-content 修复，以及重复工具调用 storm breaker。
-- `.hyperagent/events/runtime_events.jsonl` 事件日志，可用 `HyperAgent events`、`HyperAgent replay`、`HyperAgent stats` 查看。
+- `--loop-mode cache-first`：ActionLoop 只对稳定 system/cache guidance 前缀记录 hash，把 repo、task、session 和 tool 输出放到后续 volatile 消息，便于后续利用 DeepSeek prefix cache。
+- native `tool_calls` 解析、JSON list/actions/tool_calls 修复、reasoning-content 修复、直接工具 action 归一化，以及重复工具调用 storm breaker。
+- `.hyperagent/events/runtime_events.jsonl` 事件日志，可用 `HyperAgent events`、`HyperAgent replay`、`HyperAgent stats` 查看；replay 会展示 response、repair、tool step、final、paused 和 max-step 里程碑。
+- `action_run.json` 记录单次 action run 的累计 token budget、usage event id、cache hit/miss token 和 cache-hit ratio。
 - `.hyperagent/checkpoints` 可恢复文件检查点，可用 `HyperAgent checkpoint`、`HyperAgent restore`、`/checkpoint`、`/restore`。
 - 内置 HSI skills：`review-experiment`、`spectral-critic`、`paper-method-extractor` 等。
 - `HyperAgent index` 轻量词法索引，作为后续 embedding 语义检索的稳定接口。

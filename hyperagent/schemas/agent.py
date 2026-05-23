@@ -205,6 +205,11 @@ class AgentActionRun:
     stable_prefix_hash: str = ""
     token_budget: Optional[int] = None
     budget_exhausted: bool = False
+    usage_event_ids: List[str] = field(default_factory=list)
+    budget_used_tokens: int = 0
+    prompt_cache_hit_tokens: int = 0
+    prompt_cache_miss_tokens: int = 0
+    cache_hit_ratio: Optional[float] = None
     event_log_path: str = ""
     final_response: str = ""
     steps: List[AgentActionStep] = field(default_factory=list)
@@ -231,6 +236,13 @@ class AgentActionRun:
                 None if data.get("token_budget") is None else int(data.get("token_budget"))
             ),
             budget_exhausted=bool(data.get("budget_exhausted", False)),
+            usage_event_ids=[str(v) for v in data.get("usage_event_ids", [])],
+            budget_used_tokens=int(data.get("budget_used_tokens") or 0),
+            prompt_cache_hit_tokens=int(data.get("prompt_cache_hit_tokens") or 0),
+            prompt_cache_miss_tokens=int(data.get("prompt_cache_miss_tokens") or 0),
+            cache_hit_ratio=(
+                None if data.get("cache_hit_ratio") is None else float(data.get("cache_hit_ratio"))
+            ),
             event_log_path=str(data.get("event_log_path", "")),
             final_response=str(data.get("final_response", "")),
             steps=[

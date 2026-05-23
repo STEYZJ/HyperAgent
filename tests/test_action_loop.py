@@ -186,6 +186,62 @@ class AgentActionLoopTest(unittest.TestCase):
             self.assertIn("Normalized direct tool action", run.steps[0].warnings[-1])
             self.assertIn('"fetch_available": true', run.steps[0].tool_result.content)
 
+    def test_action_loop_parses_multi_tool_json_shapes(self):
+        payloads = [
+            (
+                "json-list",
+                (
+                    '[{"action": "tool", "tool_name": "read_file", '
+                    '"args": {"path": "a.md", "max_lines": 1}}, '
+                    '{"action": "tool", "tool_name": "read_file", '
+                    '"args": {"path": "b.md", "max_lines": 1}}]'
+                ),
+                2,
+            ),
+            (
+                "actions-object",
+                (
+                    '{"actions": [{"action": "tool", "tool_name": "read_file", '
+                    '"args": {"path": "a.md", "max_lines": 1}}]}'
+                ),
+                1,
+            ),
+            (
+                "tool-calls-object",
+                (
+                    '{"tool_calls": [{"function": {"name": "read_file", '
+                    '"arguments": {"path": "b.md", "max_lines": 1}}}]}'
+                ),
+                1,
+            ),
+        ]
+        for title, payload, expected_tool_steps in payloads:
+            with self.subTest(title=title), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                workspace = HyperAgentWorkspace(root)
+                workspace.init(root / "datasets")
+                (root / "a.md").write_text("alpha\n", encoding="utf-8")
+                (root / "b.md").write_text("beta\n", encoding="utf-8")
+                session_store = ConversationStore(workspace.workspace_dir)
+                session = session_store.new(title)
+                llm_store = LLMProviderStore(workspace.workspace_dir)
+                run = AgentActionLoop(
+                    session_store,
+                    llm_store,
+                    workspace,
+                    llm_client=FakeLLMClient([payload]),
+                ).run(
+                    session.session_id,
+                    provider="deepseek",
+                    instruction="Inspect multiple files.",
+                    max_steps=1,
+                )
+
+                tool_steps = [step for step in run.steps if step.action == "tool"]
+                self.assertEqual(len(tool_steps), expected_tool_steps)
+                self.assertTrue(all(step.tool_name == "read_file" for step in tool_steps))
+                self.assertTrue(all(step.tool_result.status == "ok" for step in tool_steps))
+
     def test_action_loop_run_skill_can_find_codex_home_skills(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

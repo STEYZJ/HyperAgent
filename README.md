@@ -264,9 +264,10 @@ Project commands can be added under `.hyperagent/commands/*.md`; project agents 
 
 HyperAgent reimplements selected DeepSeek-Reasonix ideas in Python without copying its TypeScript source. The current slice adds:
 
-- `--loop-mode cache-first` for action-loop runs, which records a stable prefix hash and keeps Reasonix cache guidance ahead of volatile tool output.
-- Native `tool_calls` parsing plus JSON/reasoning-content repair and a repeated tool-call storm breaker.
-- Runtime event logs under `.hyperagent/events/runtime_events.jsonl`, inspectable with `HyperAgent events`, `HyperAgent replay`, and `HyperAgent stats`.
+- `--loop-mode cache-first` for action-loop runs, which records a stable prefix hash over the stable system/cache guidance prefix while keeping repo, task, session, and tool output in later volatile messages.
+- Native `tool_calls` parsing plus JSON list/actions/tool_calls repair, reasoning-content repair, direct tool-action normalization, and a repeated tool-call storm breaker.
+- Runtime event logs under `.hyperagent/events/runtime_events.jsonl`, inspectable with `HyperAgent events`, `HyperAgent replay`, and `HyperAgent stats`; replay now shows response, repair, tool step, final, paused, and max-step milestones.
+- Cumulative action-run token budgets, usage event ids, cache-hit/miss token totals, and cache-hit ratio metadata in `action_run.json`.
 - Reversible file checkpoints under `.hyperagent/checkpoints`, usable through `HyperAgent checkpoint`, `HyperAgent restore`, `/checkpoint`, and `/restore`.
 - Built-in HSI skills under `hyperagent/skills`, including `review-experiment`, `spectral-critic`, and `paper-method-extractor`.
 - A lightweight lexical `HyperAgent index` command as the placeholder interface for later embedding-backed semantic retrieval.

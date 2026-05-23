@@ -2433,11 +2433,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             run_id=args.run_id,
         )
         if args.json:
-            print_json({"events": [event.to_dict() for event in events]})
+            print_json({"events": [event.to_dict() for event in events], "summary": log.summarize(events)})
         else:
             for index, event in enumerate(events, start=1):
                 subject = event.tool_name or event.source
                 print(f"{index}. {event.timestamp} {event.event_type} [{event.status}] {subject}")
+                detail = _runtime_event_detail(event)
+                if detail:
+                    print(f"   {detail}")
                 if event.message:
                     print(f"   {event.message}")
         return 0
@@ -2465,10 +2468,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "stats":
         event_log = RuntimeEventLog(workspace.workspace_dir)
+        event_summary = event_log.summarize()
         payload = {
-            "events": event_log.summarize(),
+            "events": event_summary,
             "llm_usage": LLMUsageLedger(workspace.workspace_dir).summarize(),
             "tools": tool_catalog(),
+            "by_tool": event_summary["by_tool"],
+            "by_source": event_summary["by_source"],
+            "run_count": event_summary["run_count"],
         }
         if args.json:
             print_json(payload)
@@ -3450,6 +3457,38 @@ def confirm_tool_permission(request) -> bool:
     )
     answer = input(_txt(translator, "cli.output.allow_prompt", "allow? [y/N] ")).strip().lower()
     return answer in {"y", "yes"}
+
+
+def _runtime_event_detail(event) -> str:
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    if event.event_type == "action_loop.response":
+        return (
+            f"step={payload.get('step_index')} "
+            f"action={payload.get('parsed_action')} "
+            f"parse={payload.get('parse_source')} "
+            f"tokens={payload.get('budget_used_tokens')}/{payload.get('token_budget')} "
+            f"cache_hit={payload.get('cache_hit_ratio')}"
+        )
+    if event.event_type == "action_loop.repair":
+        return (
+            f"step={payload.get('step_index')} "
+            f"source={payload.get('parse_source')} repaired=true"
+        )
+    if event.event_type == "action_loop.step":
+        return (
+            f"step={payload.get('step_index')} "
+            f"risk={payload.get('tool_risk_level')} "
+            f"exit={payload.get('exit_code')} "
+            f"artifact={payload.get('artifact_path') or ''}"
+        )
+    if event.event_type in {"action_loop.completed", "action_loop.paused", "action_loop.max_steps"}:
+        usage = payload.get("usage_summary", {})
+        if isinstance(usage, dict):
+            return (
+                f"tokens={usage.get('budget_used_tokens')}/{usage.get('token_budget')} "
+                f"cache_hit={usage.get('cache_hit_ratio')}"
+            )
+    return ""
 
 
 def print_json(value) -> None:

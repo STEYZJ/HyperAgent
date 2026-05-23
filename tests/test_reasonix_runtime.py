@@ -1,7 +1,12 @@
+import io
+import json
+import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
+from hyperagent.cli import main
 from hyperagent.core.io import read_json
 from hyperagent.runtime.action_loop import AgentActionLoop
 from hyperagent.runtime.action_repair import ActionRepairPipeline
@@ -58,7 +63,7 @@ class ReasonixRuntimeTest(unittest.TestCase):
                             {
                                 "function": {
                                     "name": "read_file",
-                                    "arguments": '{"path": "other.md", "max_lines": 1}',
+                                    "arguments": {"path": "other.md", "max_lines": 1},
                                 }
                             }
                         ],
@@ -90,8 +95,84 @@ class ReasonixRuntimeTest(unittest.TestCase):
             self.assertTrue(Path(run.event_log_path).exists())
             loaded = AgentActionRun.from_dict(read_json(Path(run.run_dir) / "action_run.json"))
             self.assertEqual(loaded.loop_mode, "cache-first")
+            self.assertEqual(loaded.usage_event_ids, run.usage_event_ids)
+            self.assertEqual(loaded.budget_used_tokens, 12)
+            self.assertEqual(loaded.prompt_cache_hit_tokens, 5)
+            self.assertEqual(loaded.prompt_cache_miss_tokens, 5)
+            self.assertEqual(loaded.cache_hit_ratio, 0.5)
             events = RuntimeEventLog(workspace.workspace_dir).records(run_id=run.run_id)
+            self.assertTrue(any(event.event_type == "action_loop.response" for event in events))
             self.assertTrue(any(event.event_type == "action_loop.step" for event in events))
+
+    def test_cumulative_token_budget_pauses_action_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            sessions = ConversationStore(workspace.workspace_dir)
+            session = sessions.new("budget")
+            providers = LLMProviderStore(workspace.workspace_dir)
+            fake = FakeLLMClient(
+                [
+                    LLMResponse(
+                        provider="deepseek",
+                        model="deepseek-v4-flash",
+                        content='{"action": "tool", "tool_name": "search_code", "args": {"query": "missing"}}',
+                        usage={"total_tokens": 6},
+                    ),
+                    LLMResponse(
+                        provider="deepseek",
+                        model="deepseek-v4-flash",
+                        content='{"action": "final", "final": "done"}',
+                        usage={"total_tokens": 6},
+                    ),
+                ]
+            )
+            run = AgentActionLoop(sessions, providers, workspace, llm_client=fake).run(
+                session.session_id,
+                "deepseek",
+                "inspect budget",
+                max_steps=2,
+                token_budget=10,
+            )
+
+            self.assertEqual(run.status, "paused")
+            self.assertTrue(run.budget_exhausted)
+            self.assertEqual(run.budget_used_tokens, 12)
+            self.assertEqual(len(run.usage_event_ids), 2)
+            events = RuntimeEventLog(workspace.workspace_dir).records(run_id=run.run_id)
+            self.assertTrue(any(event.event_type == "action_loop.paused" for event in events))
+
+    def test_cache_first_stable_prefix_hash_ignores_instruction_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            sessions = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            fake = FakeLLMClient(
+                [
+                    '{"action": "final", "final": "first"}',
+                    '{"action": "final", "final": "second"}',
+                ]
+            )
+            first = AgentActionLoop(sessions, providers, workspace, llm_client=fake).run(
+                sessions.new("first").session_id,
+                "deepseek",
+                "inspect file A",
+                max_steps=1,
+                loop_mode="cache-first",
+            )
+            second = AgentActionLoop(sessions, providers, workspace, llm_client=fake).run(
+                sessions.new("second").session_id,
+                "deepseek",
+                "inspect file B with different words",
+                max_steps=1,
+                loop_mode="cache-first",
+            )
+
+            self.assertTrue(first.stable_prefix_hash)
+            self.assertEqual(first.stable_prefix_hash, second.stable_prefix_hash)
 
     def test_reasoning_scavenge_and_storm_breaker(self):
         response = LLMResponse(
@@ -122,6 +203,75 @@ class ReasonixRuntimeTest(unittest.TestCase):
             )
             self.assertEqual(run.steps[1].tool_result.status, "blocked")
             self.assertIn("storm", " ".join(run.steps[1].tool_result.warnings))
+
+    def test_repair_events_for_reasoning_and_direct_tool_normalization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            sessions = ConversationStore(workspace.workspace_dir)
+            providers = LLMProviderStore(workspace.workspace_dir)
+            fake = FakeLLMClient(
+                [
+                    LLMResponse(
+                        provider="deepseek",
+                        model="deepseek-v4-flash",
+                        content="I will use a tool.",
+                        reasoning_content='{"action": "tool", "tool_name": "search_code", "args": {"query": "abc"}}',
+                    ),
+                    '{"action": "framework_command", "command": "status"}',
+                ]
+            )
+            reasoning_run = AgentActionLoop(sessions, providers, workspace, llm_client=fake).run(
+                sessions.new("reasoning").session_id,
+                "deepseek",
+                "use reasoning tool",
+                max_steps=1,
+            )
+            direct_run = AgentActionLoop(sessions, providers, workspace, llm_client=fake).run(
+                sessions.new("direct").session_id,
+                "deepseek",
+                "check status",
+                max_steps=1,
+            )
+
+            reasoning_events = RuntimeEventLog(workspace.workspace_dir).records(run_id=reasoning_run.run_id)
+            direct_events = RuntimeEventLog(workspace.workspace_dir).records(run_id=direct_run.run_id)
+            self.assertTrue(any(event.event_type == "action_loop.repair" and "scavenged" in event.message for event in reasoning_events))
+            self.assertTrue(any(event.event_type == "action_loop.repair" and "Normalized direct tool action" in event.message for event in direct_events))
+
+    def test_cli_replay_and_stats_json_include_runtime_summaries(self):
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = HyperAgentWorkspace(root)
+            workspace.init(root / "datasets")
+            RuntimeEventLog(workspace.workspace_dir).append(
+                "action_loop.step",
+                source="action_loop",
+                run_id="run-1",
+                tool_name="read_file",
+                status="ok",
+                payload={"step_index": 1, "tool_risk_level": "read"},
+            )
+            os.chdir(root)
+            try:
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    self.assertEqual(main(["replay", "--run-id", "run-1", "--json"]), 0)
+                replay = json.loads(buffer.getvalue())
+                self.assertEqual(replay["summary"]["run_count"], 1)
+                self.assertEqual(replay["summary"]["by_tool"]["read_file"], 1)
+
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    self.assertEqual(main(["stats", "--json"]), 0)
+                stats = json.loads(buffer.getvalue())
+                self.assertEqual(stats["run_count"], 1)
+                self.assertEqual(stats["by_tool"]["read_file"], 1)
+                self.assertEqual(stats["by_source"]["action_loop"], 1)
+            finally:
+                os.chdir(old_cwd)
 
     def test_skill_frontmatter_and_checkpoint_and_index(self):
         with tempfile.TemporaryDirectory() as tmp:

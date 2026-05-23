@@ -205,11 +205,22 @@ class AgentActionLoop:
                     "parse_capable": True,
                 },
             )
-            if token_budget is not None and int(usage_record.get("total_tokens") or 0) > token_budget:
+            self._apply_usage_record(run, usage_record)
+            if token_budget is not None and run.budget_used_tokens > token_budget:
                 run.status = "paused"
                 run.budget_exhausted = True
                 run.warnings.append(
-                    f"Token budget exhausted: used {usage_record.get('total_tokens')} > budget {token_budget}."
+                    f"Token budget exhausted: used {run.budget_used_tokens} > budget {token_budget}."
+                )
+                self._append_response_event(
+                    run,
+                    step_index=step_index,
+                    usage_record=usage_record,
+                    parse_source="not_parsed",
+                    parsed_action="paused",
+                    tool_count=0,
+                    status="paused",
+                    message=run.warnings[-1],
                 )
                 self.event_log.append(
                     "action_loop.paused",
@@ -218,12 +229,23 @@ class AgentActionLoop:
                     run_id=run_id,
                     status="paused",
                     message=run.warnings[-1],
+                    payload={"usage_summary": self._usage_summary(run)},
                 )
                 self._persist(run)
                 return run
             if response.warnings:
                 run.status = "failed"
                 run.warnings.extend(response.warnings)
+                self._append_response_event(
+                    run,
+                    step_index=step_index,
+                    usage_record=usage_record,
+                    parse_source="not_parsed",
+                    parsed_action="failed",
+                    tool_count=0,
+                    status="failed",
+                    message="; ".join(response.warnings)[:500],
+                )
                 self._persist(run)
                 return run
 
@@ -234,6 +256,23 @@ class AgentActionLoop:
             if normalization_warning:
                 warnings.append(normalization_warning)
             action = str(parsed.get("action", "final"))
+            self._append_response_event(
+                run,
+                step_index=step_index,
+                usage_record=usage_record,
+                parse_source=parsed_result.source,
+                parsed_action=action,
+                tool_count=len(parsed_results),
+                status="parsed",
+            )
+            if action != "tool":
+                self._append_repair_events(
+                    run,
+                    step_index=step_index,
+                    parsed_result=parsed_result,
+                    normalization_warning=normalization_warning,
+                    warnings=warnings,
+                )
             if action == "final":
                 final = str(parsed.get("final", response.content))
                 run.final_response = final
@@ -256,7 +295,7 @@ class AgentActionLoop:
                     run_id=run_id,
                     status="completed",
                     message=final[:500],
-                    payload={"steps": len(run.steps)},
+                    payload={"steps": len(run.steps), "usage_summary": self._usage_summary(run)},
                 )
                 self._persist(run)
                 return run
@@ -287,6 +326,13 @@ class AgentActionLoop:
                 item_warnings = list(item.warnings)
                 if normalization_warning:
                     item_warnings.append(normalization_warning)
+                self._append_repair_events(
+                    run,
+                    step_index=step_index,
+                    parsed_result=item,
+                    normalization_warning=normalization_warning,
+                    warnings=item_warnings,
+                )
                 tool_actions.append(
                     (
                         item,
@@ -334,6 +380,12 @@ class AgentActionLoop:
                         "args": args,
                         "parallel_dispatch": parallel,
                         "warnings": item_warnings + result.warnings,
+                        "tool_risk_level": tool_metadata(tool_name).risk_level,
+                        "tool_mutating": tool_metadata(tool_name).mutating,
+                        "tool_parallel_safe": tool_metadata(tool_name).parallel_safe,
+                        "artifact_path": result.artifact_path,
+                        "exit_code": result.exit_code,
+                        "usage_summary": self._usage_summary(run),
                     },
                 )
                 tool_summary_lines.append(
@@ -366,6 +418,7 @@ class AgentActionLoop:
             run_id=run_id,
             status=run.status,
             message=run.warnings[-1],
+            payload={"steps": len(run.steps), "usage_summary": self._usage_summary(run)},
         )
         self._persist(run)
         return run
@@ -389,23 +442,11 @@ class AgentActionLoop:
             )
         )
         context_parts = ["Repository context:\n" + repo_context]
-        if loop_mode == "cache-first":
-            guidance = reasonix_cache_guidance()
-            context_parts.insert(
-                0,
-                (
-                    "Reasonix cache-first partition:\n"
-                    f"- stable_prefix: {', '.join(guidance['stable_prefix'])}\n"
-                    f"- semi_stable_context: {', '.join(guidance['semi_stable_context'])}\n"
-                    f"- volatile_suffix: {', '.join(guidance['volatile_suffix'])}\n"
-                    f"- rule: {guidance['rule']}"
-                ),
-            )
         task_context = self._task_context(task_id)
         if task_context:
             context_parts.append("Task/artifact context:\n" + task_context)
         messages = [
-            LLMMessage(role="system", content=ACTION_SYSTEM_PROMPT),
+            LLMMessage(role="system", content=self._system_prompt(loop_mode)),
             LLMMessage(role="user", content="\n\n".join(context_parts)),
         ]
         for summary in session.summaries:
@@ -423,8 +464,118 @@ class AgentActionLoop:
     def _stable_prefix_hash(self, messages: List[LLMMessage], loop_mode: str) -> str:
         if loop_mode != "cache-first":
             return ""
-        stable = "\n\n".join(message.content for message in messages[:2])
+        stable = messages[0].content if messages else ""
         return hashlib.sha256(stable.encode("utf-8")).hexdigest()[:16]
+
+    def _system_prompt(self, loop_mode: str) -> str:
+        if loop_mode != "cache-first":
+            return ACTION_SYSTEM_PROMPT
+        guidance = reasonix_cache_guidance()
+        cache_prefix = (
+            "Reasonix cache-first partition:\n"
+            f"- stable_prefix: {', '.join(guidance['stable_prefix'])}\n"
+            f"- semi_stable_context: {', '.join(guidance['semi_stable_context'])}\n"
+            f"- volatile_suffix: {', '.join(guidance['volatile_suffix'])}\n"
+            f"- rule: {guidance['rule']}"
+        )
+        return ACTION_SYSTEM_PROMPT + "\n\n" + cache_prefix
+
+    def _apply_usage_record(self, run: AgentActionRun, usage_record: Dict[str, Any]) -> None:
+        event_id = str(usage_record.get("event_id", ""))
+        if event_id:
+            run.usage_event_ids.append(event_id)
+        run.budget_used_tokens += int(usage_record.get("total_tokens") or 0)
+        run.prompt_cache_hit_tokens += int(usage_record.get("prompt_cache_hit_tokens") or 0)
+        run.prompt_cache_miss_tokens += int(usage_record.get("prompt_cache_miss_tokens") or 0)
+        total_cache = run.prompt_cache_hit_tokens + run.prompt_cache_miss_tokens
+        run.cache_hit_ratio = (
+            round(run.prompt_cache_hit_tokens / total_cache, 4)
+            if total_cache > 0
+            else None
+        )
+
+    def _usage_summary(self, run: AgentActionRun) -> Dict[str, Any]:
+        return {
+            "usage_event_ids": list(run.usage_event_ids),
+            "budget_used_tokens": run.budget_used_tokens,
+            "token_budget": run.token_budget,
+            "budget_exhausted": run.budget_exhausted,
+            "prompt_cache_hit_tokens": run.prompt_cache_hit_tokens,
+            "prompt_cache_miss_tokens": run.prompt_cache_miss_tokens,
+            "cache_hit_ratio": run.cache_hit_ratio,
+        }
+
+    def _append_response_event(
+        self,
+        run: AgentActionRun,
+        *,
+        step_index: int,
+        usage_record: Dict[str, Any],
+        parse_source: str,
+        parsed_action: str,
+        tool_count: int,
+        status: str = "ok",
+        message: str = "",
+    ) -> None:
+        self.event_log.append(
+            "action_loop.response",
+            source="action_loop",
+            session_id=run.session_id,
+            run_id=run.run_id,
+            status=status,
+            message=message or f"step={step_index} action={parsed_action} source={parse_source}",
+            payload={
+                "step_index": step_index,
+                "usage_event_id": usage_record.get("event_id"),
+                "step_total_tokens": usage_record.get("total_tokens"),
+                "budget_used_tokens": run.budget_used_tokens,
+                "token_budget": run.token_budget,
+                "prompt_cache_hit_tokens": run.prompt_cache_hit_tokens,
+                "prompt_cache_miss_tokens": run.prompt_cache_miss_tokens,
+                "cache_hit_ratio": run.cache_hit_ratio,
+                "parse_source": parse_source,
+                "parsed_action": parsed_action,
+                "tool_count": tool_count,
+                "stable_prefix_hash": run.stable_prefix_hash,
+            },
+        )
+
+    def _append_repair_events(
+        self,
+        run: AgentActionRun,
+        *,
+        step_index: int,
+        parsed_result: Any,
+        normalization_warning: str,
+        warnings: List[str],
+    ) -> None:
+        repair_warnings = [
+            warning
+            for warning in warnings
+            if (
+                "scavenged" in warning
+                or "Repaired truncated JSON action" in warning
+                or "Normalized direct tool action" in warning
+            )
+        ]
+        if normalization_warning and normalization_warning not in repair_warnings:
+            repair_warnings.append(normalization_warning)
+        if not repair_warnings:
+            return
+        for warning in repair_warnings:
+            self.event_log.append(
+                "action_loop.repair",
+                source="action_loop",
+                session_id=run.session_id,
+                run_id=run.run_id,
+                status="repaired",
+                message=warning,
+                payload={
+                    "step_index": step_index,
+                    "parse_source": getattr(parsed_result, "source", ""),
+                    "action": getattr(parsed_result, "action", {}),
+                },
+            )
 
     def _task_context(self, task_id: Optional[str]) -> str:
         if not task_id:

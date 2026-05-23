@@ -57,19 +57,20 @@ class ActionRepairPipeline:
         if native:
             return native
 
-        content_result = self._parse_text(response.content, source="content")
-        if content_result is not None:
-            return [content_result]
+        content_result = self._parse_text_many(response.content, source="content")
+        if content_result:
+            return content_result
 
-        reasoning_result = self._parse_text(
+        reasoning_result = self._parse_text_many(
             response.reasoning_content,
             source="reasoning_content",
         )
-        if reasoning_result is not None:
-            reasoning_result.warnings.append(
-                "Tool call was scavenged from reasoning_content; ask the model to emit tool calls in content or native tool_calls."
-            )
-            return [reasoning_result]
+        if reasoning_result:
+            for result in reasoning_result:
+                result.warnings.append(
+                    "Tool call was scavenged from reasoning_content; ask the model to emit tool calls in content or native tool_calls."
+                )
+            return reasoning_result
 
         return [
             ActionParseResult(
@@ -94,7 +95,14 @@ class ActionRepairPipeline:
             if not name:
                 continue
             raw_args = function.get("arguments", "{}")
-            args, warning = self._loads_object(str(raw_args))
+            if isinstance(raw_args, dict):
+                args = dict(raw_args)
+                warning = ""
+            elif isinstance(raw_args, str):
+                args, warning = self._loads_object(raw_args)
+            else:
+                args = {}
+                warning = "Native tool-call arguments were not an object and were replaced with empty args."
             warnings = [warning] if warning else []
             results.append(
                 ActionParseResult(
@@ -111,20 +119,21 @@ class ActionRepairPipeline:
         return results
 
     def _parse_text(self, text: str, *, source: str) -> Optional[ActionParseResult]:
+        many = self._parse_text_many(text, source=source)
+        return many[0] if many else None
+
+    def _parse_text_many(self, text: str, *, source: str) -> List[ActionParseResult]:
         stripped = (text or "").strip()
         if not stripped:
-            return None
+            return []
         candidates = [self._strip_fence(stripped)]
         candidates.extend(self._scavenge_json_candidates(stripped))
         for candidate in candidates:
-            parsed, warning = self._loads_object(candidate)
-            if not parsed:
+            parsed, warning = self._loads_json(candidate)
+            results = self._results_from_loaded(parsed, source=source, warning=warning)
+            if not results:
                 continue
-            if "action" not in parsed and "tool_name" in parsed:
-                parsed = {"action": "tool", **parsed}
-            if "action" in parsed:
-                warnings = [warning] if warning else []
-                return ActionParseResult(action=parsed, warnings=warnings, source=source)
+            return results
         repaired = self._repair_truncated_json(stripped)
         if repaired:
             parsed, warning = self._loads_object(repaired)
@@ -132,14 +141,50 @@ class ActionRepairPipeline:
                 warnings = ["Repaired truncated JSON action."]
                 if warning:
                     warnings.append(warning)
-                return ActionParseResult(action=parsed, warnings=warnings, source=source)
-        return None
+                return [ActionParseResult(action=parsed, warnings=warnings, source=source)]
+        return []
+
+    def _results_from_loaded(
+        self,
+        parsed: Any,
+        *,
+        source: str,
+        warning: str = "",
+    ) -> List[ActionParseResult]:
+        if isinstance(parsed, list):
+            results: List[ActionParseResult] = []
+            for item in parsed:
+                results.extend(self._results_from_loaded(item, source=source, warning=warning))
+            return results
+        if not isinstance(parsed, dict):
+            return []
+        if isinstance(parsed.get("actions"), list):
+            return self._results_from_loaded(parsed["actions"], source=source, warning=warning)
+        if isinstance(parsed.get("tool_calls"), list):
+            native = self._parse_native_tool_calls(parsed["tool_calls"])
+            if native:
+                for result in native:
+                    if warning:
+                        result.warnings.append(warning)
+                return native
+            return self._results_from_loaded(parsed["tool_calls"], source=source, warning=warning)
+        if "action" not in parsed and "tool_name" in parsed:
+            parsed = {"action": "tool", **parsed}
+        if "action" not in parsed:
+            return []
+        warnings = [warning] if warning else []
+        return [ActionParseResult(action=parsed, warnings=warnings, source=source)]
+
+    def _loads_json(self, text: str) -> Tuple[Any, str]:
+        try:
+            return json.loads(text), ""
+        except json.JSONDecodeError as exc:
+            return None, f"JSON parse failed: {exc}"
 
     def _loads_object(self, text: str) -> Tuple[Dict[str, Any], str]:
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError as exc:
-            return {}, f"JSON parse failed: {exc}"
+        parsed, warning = self._loads_json(text)
+        if warning:
+            return {}, warning
         if not isinstance(parsed, dict):
             return {}, "JSON root was not an object."
         return parsed, ""

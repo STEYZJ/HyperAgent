@@ -121,13 +121,25 @@ class RuntimeEventLog:
         selected = list(events) if events is not None else self.records()
         by_type: Dict[str, int] = {}
         by_status: Dict[str, int] = {}
+        by_tool: Dict[str, int] = {}
+        by_source: Dict[str, int] = {}
+        run_ids = set()
         for event in selected:
             by_type[event.event_type] = by_type.get(event.event_type, 0) + 1
             status = event.status or "none"
             by_status[status] = by_status.get(status, 0) + 1
+            source = event.source or "runtime"
+            by_source[source] = by_source.get(source, 0) + 1
+            if event.tool_name:
+                by_tool[event.tool_name] = by_tool.get(event.tool_name, 0) + 1
+            if event.run_id:
+                run_ids.add(event.run_id)
         return {
             "event_count": len(selected),
             "by_type": dict(sorted(by_type.items())),
             "by_status": dict(sorted(by_status.items())),
+            "by_tool": dict(sorted(by_tool.items())),
+            "by_source": dict(sorted(by_source.items())),
+            "run_count": len(run_ids),
             "path": str(self.path),
         }
