@@ -142,6 +142,8 @@ HyperAgent plan --audit reports/audit.json --output configs/experiment.yaml
 HyperAgent run-baseline --config configs/experiment.yaml
 HyperAgent run-suite --config configs/experiment.yaml --seeds 42,43,44 --output-dir experiments/suite
 HyperAgent benchmark-list --catalog dataset/datasets.yaml
+HyperAgent benchmark-protocol --catalog dataset/datasets.yaml --datasets Indian_pines,PaviaU --seeds 42,43 --baselines svm,mlp,random_forest,knn
+HyperAgent benchmark-matrix --protocol reports/benchmark_protocol/benchmark_protocol.json --run-suite
 HyperAgent benchmark-matrix --catalog dataset/datasets.yaml --datasets Indian_pines,PaviaU --run-suite --seeds 42,43
 HyperAgent report --experiment <experiment_dir>
 HyperAgent demo --synthetic
@@ -305,6 +307,13 @@ This is not a full Reasonix clone yet: live MCP clients, rich dashboard/desktop 
 writes `council_run.json` plus the compatible `council_decision.json`; pass
 `--council-mode static` to use the older fixed-rule council. The command only
 runs the next experiment when `--run-next` is explicit.
+
+`benchmark-protocol` turns the benchmark catalog into a paper-style empirical
+plan: multiple datasets, multiple seeds, fixed split fingerprints, and a
+baseline list. `benchmark-matrix --protocol ...` then expands the protocol into
+dataset x baseline rows and can optionally run each row as a multi-seed suite.
+The protocol records split hashes and sample counts, not full train/test index
+lists.
 
 ## MVP Limits
 

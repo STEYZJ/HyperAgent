@@ -88,6 +88,7 @@ from hyperagent.schemas import (
 )
 from hyperagent.runtime.subagents import SubagentRuntimeRegistry
 from hyperagent.tools.module_materializer import ModuleMaterializer
+from hyperagent.training.benchmark_protocol import BenchmarkProtocolStore
 from hyperagent.training.experiment_suite import ExperimentSuiteRunner
 
 
@@ -245,11 +246,23 @@ def _build_parser(translator: Optional[Translator] = None) -> argparse.ArgumentP
     benchmark_list.add_argument("--catalog", default="dataset/datasets.yaml")
     benchmark_list.add_argument("--json", action="store_true")
 
+    benchmark_protocol = subparsers.add_parser(
+        "benchmark-protocol",
+        help="Create a reproducible multi-dataset, multi-seed, multi-baseline protocol",
+    )
+    benchmark_protocol.add_argument("--catalog", default="dataset/datasets.yaml")
+    benchmark_protocol.add_argument("--datasets", default="")
+    benchmark_protocol.add_argument("--reports-root", default="reports/benchmark_protocol")
+    benchmark_protocol.add_argument("--seeds", default="42,43")
+    benchmark_protocol.add_argument("--baselines", default="svm,mlp,random_forest,knn")
+    benchmark_protocol.add_argument("--json", action="store_true")
+
     benchmark_matrix = subparsers.add_parser(
         "benchmark-matrix",
         help="Audit, plan, and optionally run multi-seed suites for catalogued benchmarks",
     )
     benchmark_matrix.add_argument("--catalog", default="dataset/datasets.yaml")
+    benchmark_matrix.add_argument("--protocol", default="")
     benchmark_matrix.add_argument("--datasets", default="")
     benchmark_matrix.add_argument("--reports-root", default="reports/benchmark_matrix")
     benchmark_matrix.add_argument("--experiments-root", default="experiments/benchmark_matrix")
@@ -1514,6 +1527,35 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
         return 0
 
+    if args.command == "benchmark-protocol":
+        seeds = parse_int_list(args.seeds)
+        dataset_names = parse_keywords(args.datasets) or None
+        baselines = parse_keywords(args.baselines)
+        store = BenchmarkProtocolStore(Path(args.reports_root))
+        protocol = store.create(
+            catalog_path=Path(args.catalog),
+            dataset_names=dataset_names,
+            seeds=seeds,
+            baselines=baselines,
+        )
+        append_worklog(
+            "生成 Benchmark Protocol",
+            "benchmark-matrix 和 run-suite 已支持多数据集与多 seed，但固定 split 和 baseline 矩阵还需要协议化。",
+            f"基于 {args.catalog} 生成 datasets={len(protocol['datasets'])}, seeds={seeds}, baselines={protocol['baselines']} 的协议。",
+            "protocol 记录 split fingerprint、样本数和 baseline 列表，不输出完整样本索引，便于论文式公平比较。",
+            f"协议已写入 {store.path}。",
+            "Benchmark protocol 已生成。",
+            "下一步可用 benchmark-matrix --protocol 规划或运行实证矩阵。",
+        )
+        if args.json:
+            print_json(protocol)
+        else:
+            print(_kv(translator, "protocol", "protocol", store.path))
+            print(_kv(translator, "report", "report", Path(args.reports_root) / "benchmark_protocol.md"))
+            print(_kv(translator, "datasets", "datasets", len(protocol["datasets"])))
+            print(_kv(translator, "baselines", "baselines", ", ".join(protocol["baselines"])))
+        return 0
+
     if args.command == "benchmark-matrix":
         seeds = parse_int_list(args.seeds)
         dataset_names = parse_keywords(args.datasets) or None
@@ -1524,6 +1566,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             experiments_root=Path(args.experiments_root),
             seeds=seeds,
             run_suite=args.run_suite,
+            protocol_path=Path(args.protocol) if args.protocol else None,
         )
         completed = sum(1 for row in matrix["datasets"] if row["status"] == "completed")
         planned = sum(1 for row in matrix["datasets"] if row["status"] == "planned")

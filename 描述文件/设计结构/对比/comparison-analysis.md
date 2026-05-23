@@ -42,7 +42,7 @@ HyperAgent 的 skill 生态仍处在早期。当前已有 list/search/run/instal
 
 HyperAgent 的开发者体验仍需补齐。命令、权限、TUI 和 hooks 已有两轮增强，已补 command palette、权限详情和 plugin bundle 只读视图；但与 Claude Code 相比，命令模板生态、插件安装/版本治理和更精细的权限过期策略仍不完整。
 
-HyperAgent 的科研评估还需要更强的实证支撑。当前框架能够组织证据链，但论文级声称仍需要多数据集、多 seed、固定 split、强 baseline、消融和公平对比来支撑。
+HyperAgent 的科研评估开始具备论文式实证协议。当前已能生成多数据集、多 seed、固定 split fingerprint 和强 baseline 矩阵，但消融、公平训练预算、跨论文 baseline 复现和大规模真实数据跑通仍需要继续补齐。
 
 ## HyperAgent 的创新性
 

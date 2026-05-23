@@ -19,6 +19,7 @@ def bootstrap_default_components() -> None:
     import hyperagent.literature.arxiv_provider  # noqa: F401
     import hyperagent.literature.semantic_scholar_provider  # noqa: F401
     import hyperagent.models.mlp  # noqa: F401
+    import hyperagent.models.sklearn_baselines  # noqa: F401
     import hyperagent.models.svm  # noqa: F401
     import hyperagent.tools.model_recommender  # noqa: F401
     import hyperagent.tools.spectral_analyzer  # noqa: F401
