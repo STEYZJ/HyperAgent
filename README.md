@@ -30,6 +30,9 @@ HyperAgent.
 The feature design summary in `docs/hyperagent_feature_design_summary.md`
 describes the planned product capabilities, implementation phases, acceptance
 criteria, and repository governance rules.
+The production potential analysis in `docs/hyperagent_production_potential.md`
+maps the framework to concrete lab ResearchOps, reproducible benchmarking,
+team bot, and controlled-agent runtime deployment paths.
 
 ## Quick Start
 

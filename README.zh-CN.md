@@ -14,6 +14,8 @@ DeepSeek prefix cache、append-only log、tool-call repair 和 telemetry 是如�
 支撑高命中率的，以及哪些策略可迁移到 HyperAgent。
 `docs/hyperagent_feature_design_summary.md` 汇总了计划设计实现的功能、阶段路线、
 验收标准和仓库治理规则。
+`docs/hyperagent_production_potential.md` 进一步分析了框架作用、还能扩展成什么，
+以及如何落到课题组 ResearchOps、可复现实验、团队机器人和受控 Agent Runtime。
 
 ## 快速开始
 
