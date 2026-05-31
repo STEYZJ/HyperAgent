@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 880" width="1280" height="880">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
+
+<defs>
+  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
+  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
+  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
+  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
+</defs>
+
+<rect width="1280" height="880" fill="#ffffff"/>
+<text x="640.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">HyperAgent 用例图</text>
+<rect x="205" y="90" width="870" height="720" rx="12" ry="12" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="225" y="120" fill="#111827" font-size="14" font-weight="600">系统边界：HyperAgent</text>
+<circle cx="100" cy="170" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="100" y1="182" x2="100" y2="218" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="78" y1="194" x2="122" y2="194" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="218" x2="80" y2="244" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="218" x2="120" y2="244" stroke="#2563eb" stroke-width="1.8"/>
+<text x="100" y="270" fill="#111827" font-size="12" text-anchor="middle">研究人员</text>
+<text x="100" y="286" fill="#111827" font-size="12" text-anchor="middle">CLI/TUI/REPL</text>
+<circle cx="100" cy="410" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="100" y1="422" x2="100" y2="458" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="78" y1="434" x2="122" y2="434" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="458" x2="80" y2="484" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="458" x2="120" y2="484" stroke="#2563eb" stroke-width="1.8"/>
+<text x="100" y="510" fill="#111827" font-size="12" text-anchor="middle">实验负责人</text>
+<text x="100" y="526" fill="#111827" font-size="12" text-anchor="middle">PI/课题组</text>
+<circle cx="100" cy="640" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="100" y1="652" x2="100" y2="688" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="78" y1="664" x2="122" y2="664" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="688" x2="80" y2="714" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="100" y1="688" x2="120" y2="714" stroke="#2563eb" stroke-width="1.8"/>
+<text x="100" y="740" fill="#111827" font-size="12" text-anchor="middle">远程团队成员</text>
+<text x="100" y="756" fill="#111827" font-size="12" text-anchor="middle">Feishu/QQ</text>
+<circle cx="1165" cy="170" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="1165" y1="182" x2="1165" y2="218" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1143" y1="194" x2="1187" y2="194" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="218" x2="1145" y2="244" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="218" x2="1185" y2="244" stroke="#2563eb" stroke-width="1.8"/>
+<text x="1165" y="270" fill="#111827" font-size="12" text-anchor="middle">LLM Provider</text>
+<text x="1165" y="286" fill="#111827" font-size="12" text-anchor="middle">DeepSeek/OpenAI</text>
+<circle cx="1165" cy="410" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="1165" y1="422" x2="1165" y2="458" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1143" y1="434" x2="1187" y2="434" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="458" x2="1145" y2="484" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="458" x2="1185" y2="484" stroke="#2563eb" stroke-width="1.8"/>
+<text x="1165" y="510" fill="#111827" font-size="12" text-anchor="middle">HyperVault</text>
+<text x="1165" y="526" fill="#111827" font-size="12" text-anchor="middle">知识/RAG 后端</text>
+<circle cx="1165" cy="640" r="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<line x1="1165" y1="652" x2="1165" y2="688" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1143" y1="664" x2="1187" y2="664" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="688" x2="1145" y2="714" stroke="#2563eb" stroke-width="1.8"/>
+<line x1="1165" y1="688" x2="1185" y2="714" stroke="#2563eb" stroke-width="1.8"/>
+<text x="1165" y="740" fill="#111827" font-size="12" text-anchor="middle">数据/实验环境</text>
+<text x="1165" y="756" fill="#111827" font-size="12" text-anchor="middle">dataset + GPU</text>
+<ellipse cx="380" cy="170" rx="96" ry="29" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="380" y="175" fill="#111827" font-size="13" text-anchor="middle">论文经验学习</text>
+<ellipse cx="380" cy="270" rx="96" ry="29" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="380" y="275" fill="#111827" font-size="13" text-anchor="middle">数据审计/诊断</text>
+<ellipse cx="380" cy="370" rx="96" ry="29" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="380" y="375" fill="#111827" font-size="13" text-anchor="middle">实验计划</text>
+<ellipse cx="380" cy="470" rx="96" ry="29" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="380" y="475" fill="#111827" font-size="13" text-anchor="middle">基准协议</text>
+<ellipse cx="380" cy="570" rx="96" ry="29" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="380" y="575" fill="#111827" font-size="13" text-anchor="middle">多 seed 训练</text>
+<ellipse cx="665" cy="170" rx="105" ry="29" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="665" y="175" fill="#111827" font-size="13" text-anchor="middle">受控工具执行</text>
+<ellipse cx="665" cy="270" rx="105" ry="29" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="665" y="275" fill="#111827" font-size="13" text-anchor="middle">安全权限审计</text>
+<ellipse cx="665" cy="370" rx="105" ry="29" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="665" y="375" fill="#111827" font-size="13" text-anchor="middle">会话检索</text>
+<ellipse cx="665" cy="470" rx="105" ry="29" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="665" y="475" fill="#111827" font-size="13" text-anchor="middle">平台状态查询</text>
+<ellipse cx="665" cy="570" rx="105" ry="29" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="665" y="575" fill="#111827" font-size="13" text-anchor="middle">报告/下一假设</text>
+<ellipse cx="910" cy="250" rx="94" ry="29" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="910" y="255" fill="#111827" font-size="13" text-anchor="middle">Channel 问答</text>
+<ellipse cx="910" cy="370" rx="94" ry="29" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="910" y="375" fill="#111827" font-size="13" text-anchor="middle">研究经验库</text>
+<ellipse cx="910" cy="490" rx="94" ry="29" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="910" y="495" fill="#111827" font-size="13" text-anchor="middle">事件回放/成本</text>
+<line x1="155" y1="190" x2="285" y2="170" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="155" y1="190" x2="285" y2="270" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="155" y1="190" x2="560" y2="170" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="155" y1="430" x2="285" y2="470" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="155" y1="430" x2="560" y2="470" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="155" y1="660" x2="816" y2="250" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="1115" y1="190" x2="770" y2="170" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="1115" y1="430" x2="1004" y2="370" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="1115" y1="660" x2="476" y2="570" stroke="#6b7280" stroke-width="1.5"/>
+<line x1="380" y1="170" x2="910" y2="370" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" stroke-dasharray="6,4"/>
+<rect x="593.0" y="250.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="645.0" y="266.0" fill="#9333ea" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<line x1="380" y1="370" x2="665" y2="170" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" stroke-dasharray="6,4"/>
+<rect x="470.5" y="250.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="522.5" y="266.0" fill="#9333ea" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<line x1="380" y1="570" x2="665" y2="270" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)" stroke-dasharray="6,4"/>
+<rect x="470.5" y="400.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="522.5" y="416.0" fill="#f97316" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<line x1="665" y1="570" x2="910" y2="490" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)" stroke-dasharray="6,4"/>
+<rect x="735.5" y="510.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="787.5" y="526.0" fill="#0f766e" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<line x1="910" y1="250" x2="665" y2="370" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" stroke-dasharray="6,4"/>
+<rect x="735.5" y="290.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="787.5" y="306.0" fill="#2563eb" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<line x1="665" y1="470" x2="910" y2="490" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)" stroke-dasharray="6,4"/>
+<rect x="735.5" y="460.0" width="104" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="787.5" y="476.0" fill="#0f766e" font-size="11" text-anchor="middle">&lt;&lt;include&gt;&gt;</text>
+<rect x="230" y="695" width="270" height="144" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="242" y="715" fill="#111827" font-size="12" font-weight="600">图例</text>
+<line x1="244" y1="733" x2="280" y2="733" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="290" y="737" fill="#6b7280" font-size="11">入口/查询</text>
+<line x1="244" y1="755" x2="280" y2="755" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="290" y="759" fill="#6b7280" font-size="11">科研实验能力</text>
+<line x1="244" y1="777" x2="280" y2="777" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="290" y="781" fill="#6b7280" font-size="11">Agent/知识能力</text>
+<line x1="244" y1="799" x2="280" y2="799" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="290" y="803" fill="#6b7280" font-size="11">安全/协议</text>
+<line x1="244" y1="821" x2="280" y2="821" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<text x="290" y="825" fill="#6b7280" font-size="11">观测/复盘</text>
+</svg>

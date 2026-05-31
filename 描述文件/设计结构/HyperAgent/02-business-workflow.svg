@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 840" width="1280" height="840">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
+
+<defs>
+  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
+  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
+  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
+  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
+</defs>
+
+<rect width="1280" height="840" fill="#ffffff"/>
+<text x="640.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">HyperAgent 业务流程图</text>
+<rect x="80" y="105" width="180" height="68" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="80" y="105" width="8" height="68" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="96" y="130" fill="#111827" font-size="14" font-weight="600">研究目标</text>
+<text x="96" y="150" fill="#6b7280" font-size="11">任务/数据集/约束</text>
+<text x="96" y="164" fill="#6b7280" font-size="11">来自用户或团队</text>
+<rect x="320" y="105" width="180" height="68" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="320" y="105" width="8" height="68" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="336" y="130" fill="#111827" font-size="14" font-weight="600">论文经验</text>
+<text x="336" y="150" fill="#6b7280" font-size="11">strategy lesson</text>
+<text x="336" y="164" fill="#6b7280" font-size="11">可迁移模板</text>
+<rect x="560" y="105" width="180" height="68" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="560" y="105" width="8" height="68" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="576" y="130" fill="#111827" font-size="14" font-weight="600">数据审计</text>
+<text x="576" y="150" fill="#6b7280" font-size="11">shape/class/split</text>
+<text x="576" y="164" fill="#6b7280" font-size="11">泄漏风险</text>
+<rect x="800" y="105" width="180" height="68" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="800" y="105" width="8" height="68" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="816" y="130" fill="#111827" font-size="14" font-weight="600">光谱诊断</text>
+<text x="816" y="150" fill="#6b7280" font-size="11">band/noise/texture</text>
+<text x="816" y="164" fill="#6b7280" font-size="11">混淆来源</text>
+<rect x="1040" y="105" width="180" height="68" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="1040" y="105" width="8" height="68" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1056" y="130" fill="#111827" font-size="14" font-weight="600">实验计划</text>
+<text x="1056" y="150" fill="#6b7280" font-size="11">seed/split/metric</text>
+<text x="1056" y="164" fill="#6b7280" font-size="11">YAML config</text>
+<rect x="1040" y="270" width="180" height="68" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1040" y="270" width="8" height="68" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1056" y="295" fill="#111827" font-size="14" font-weight="600">Benchmark 协议</text>
+<text x="1056" y="315" fill="#6b7280" font-size="11">dataset x seed x baseline</text>
+<text x="1056" y="329" fill="#6b7280" font-size="11">fixed split hash</text>
+<rect x="800" y="270" width="180" height="68" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="800" y="270" width="8" height="68" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="816" y="295" fill="#111827" font-size="14" font-weight="600">Run Suite</text>
+<text x="816" y="315" fill="#6b7280" font-size="11">多 seed baseline</text>
+<text x="816" y="329" fill="#6b7280" font-size="11">mean/std 汇总</text>
+<rect x="560" y="270" width="180" height="68" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="560" y="270" width="8" height="68" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="576" y="295" fill="#111827" font-size="14" font-weight="600">Council 评审</text>
+<text x="576" y="315" fill="#6b7280" font-size="11">指标/公平/消融</text>
+<text x="576" y="329" fill="#6b7280" font-size="11">下一步建议</text>
+<rect x="320" y="270" width="180" height="68" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="320" y="270" width="8" height="68" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="336" y="295" fill="#111827" font-size="14" font-weight="600">报告生成</text>
+<text x="336" y="315" fill="#6b7280" font-size="11">evidence report</text>
+<text x="336" y="329" fill="#6b7280" font-size="11">论文叙事材料</text>
+<rect x="80" y="270" width="180" height="68" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="80" y="270" width="8" height="68" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="96" y="295" fill="#111827" font-size="14" font-weight="600">工作日志/Git</text>
+<text x="96" y="315" fill="#6b7280" font-size="11">上一步/本步/原因</text>
+<text x="96" y="329" fill="#6b7280" font-size="11">commit/push 阶段化</text>
+<polygon points="445,403 550,465 445,527 340,465" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+<text x="445" y="470" fill="#111827" font-size="13" font-weight="600" text-anchor="middle">证据充分?</text>
+<rect x="690" y="520" width="210" height="72" rx="9" ry="9" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+<rect x="690" y="520" width="8" height="72" rx="4" ry="4" fill="#dc2626" stroke="#dc2626" stroke-width="1.5"/>
+<text x="706" y="545" fill="#111827" font-size="14" font-weight="600">生产入口</text>
+<text x="706" y="565" fill="#6b7280" font-size="11">platform-status / channel</text>
+<text x="706" y="579" fill="#6b7280" font-size="11">只读问答与看板</text>
+<rect x="370" y="615" width="210" height="72" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="370" y="615" width="8" height="72" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="386" y="640" fill="#111827" font-size="14" font-weight="600">下一轮假设</text>
+<text x="386" y="660" fill="#6b7280" font-size="11">调参/补消融/换 baseline</text>
+<text x="386" y="674" fill="#6b7280" font-size="11">回到实验计划</text>
+<rect x="770" y="675" width="230" height="72" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="770" y="675" width="8" height="72" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="786" y="700" fill="#111827" font-size="14" font-weight="600">安全审计边界</text>
+<text x="786" y="720" fill="#6b7280" font-size="11">权限、事件、usage、replay</text>
+<text x="786" y="734" fill="#6b7280" font-size="11">外部渠道不开放 shell</text>
+<line x1="260" y1="139" x2="320" y2="139" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="500" y1="139" x2="560" y2="139" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<line x1="740" y1="139" x2="800" y2="139" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<line x1="980" y1="139" x2="1040" y2="139" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<line x1="1130" y1="173" x2="1130" y2="270" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="1082.0" y="201.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1130.0" y="217.5" fill="#f97316" font-size="11" text-anchor="middle">协议化</text>
+<line x1="1040" y1="304" x2="980" y2="304" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<line x1="800" y1="304" x2="740" y2="304" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<line x1="560" y1="304" x2="500" y2="304" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<line x1="320" y1="304" x2="260" y2="304" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="170" y1="338" x2="340" y2="465" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="207.0" y="381.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="255.0" y="397.5" fill="#2563eb" font-size="11" text-anchor="middle">记录证据</text>
+<line x1="550" y1="465" x2="690" y2="555" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+<rect x="572.0" y="490.0" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="620.0" y="506.0" fill="#dc2626" font-size="11" text-anchor="middle">可交付</text>
+<line x1="445" y1="527" x2="475" y2="615" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<rect x="412.0" y="551.0" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="460.0" y="567.0" fill="#0f766e" font-size="11" text-anchor="middle">继续迭代</text>
+<polyline points="475,615 475,585 1130,585 1130,173" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)" stroke-dasharray="6,4"/>
+<rect x="1074.0" y="565" width="112" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1130" y="581" fill="#0f766e" font-size="11" text-anchor="middle">闭环回流</text>
+<line x1="795" y1="592" x2="885" y2="675" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="792.0" y="613.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="840.0" y="629.5" fill="#f97316" font-size="11" text-anchor="middle">审计</text>
+<rect x="82" y="665" width="270" height="144" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="94" y="685" fill="#111827" font-size="12" font-weight="600">图例</text>
+<line x1="96" y1="703" x2="132" y2="703" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="142" y="707" fill="#6b7280" font-size="11">输入/报告</text>
+<line x1="96" y1="725" x2="132" y2="725" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="142" y="729" fill="#6b7280" font-size="11">论文经验</text>
+<line x1="96" y1="747" x2="132" y2="747" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="142" y="751" fill="#6b7280" font-size="11">数据与训练</text>
+<line x1="96" y1="769" x2="132" y2="769" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="142" y="773" fill="#6b7280" font-size="11">协议/治理</text>
+<line x1="96" y1="791" x2="132" y2="791" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+<text x="142" y="795" fill="#6b7280" font-size="11">生产暴露面</text>
+</svg>

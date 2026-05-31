@@ -1,0 +1,27 @@
+{
+  "project": "HyperAgent",
+  "generated_at": "2026-05-31",
+  "style": "fireworks-tech-graph style-1 flat icon, aligned with DeepSeek-Reasonix direct SVG + Pillow PNG",
+  "files": [
+    {
+      "title": "结构拓扑图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/01-project-topology.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/01-project-topology.png"
+    },
+    {
+      "title": "业务流程图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/02-business-workflow.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/02-business-workflow.png"
+    },
+    {
+      "title": "用例图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/03-use-case.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/03-use-case.png"
+    },
+    {
+      "title": "模块通信图",
+      "svg": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/04-module-communication.svg",
+      "png": "/data2/lzj/HyperAgent/描述文件/设计结构/HyperAgent/04-module-communication.png"
+    }
+  ]
+}

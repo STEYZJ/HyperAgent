@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 1040" width="1360" height="1040">
+<style>text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }</style>
+
+<defs>
+  <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+  <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#16a34a"/></marker>
+  <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#9333ea"/></marker>
+  <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#f97316"/></marker>
+  <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+  <marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+  <marker id="arrow-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#0f766e"/></marker>
+</defs>
+
+<rect width="1360" height="1040" fill="#ffffff"/>
+<text x="680.0" y="32" fill="#111827" font-size="22" font-weight="600" text-anchor="middle">HyperAgent 结构拓扑图</text>
+<rect x="40" y="70" width="1280" height="110" rx="10" ry="10" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="54" y="92" fill="#2563eb" font-size="12" font-weight="600">入口与交互</text>
+<rect x="40" y="205" width="1280" height="145" rx="10" ry="10" fill="#ffffff" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="54" y="227" fill="#16a34a" font-size="12" font-weight="600">高光谱科研闭环</text>
+<rect x="40" y="375" width="1280" height="145" rx="10" ry="10" fill="#ffffff" stroke="#9333ea" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="54" y="397" fill="#9333ea" font-size="12" font-weight="600">Agent Runtime / 安全执行</text>
+<rect x="40" y="545" width="1280" height="135" rx="10" ry="10" fill="#ffffff" stroke="#0f766e" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="54" y="567" fill="#0f766e" font-size="12" font-weight="600">论文经验、知识与扩展</text>
+<rect x="40" y="710" width="1280" height="140" rx="10" ry="10" fill="#ffffff" stroke="#f97316" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="54" y="732" fill="#f97316" font-size="12" font-weight="600">实证协议、治理与生产交付</text>
+<rect x="75" y="105" width="188" height="58" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="75" y="105" width="8" height="58" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="91" y="130" fill="#111827" font-size="14" font-weight="600">CLI</text>
+<text x="91" y="150" fill="#6b7280" font-size="11">HyperAgent 命令入口</text>
+<text x="91" y="164" fill="#6b7280" font-size="11">audit/plan/run/research</text>
+<rect x="311" y="105" width="188" height="58" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="311" y="105" width="8" height="58" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="327" y="130" fill="#111827" font-size="14" font-weight="600">REPL / TUI</text>
+<text x="327" y="150" fill="#6b7280" font-size="11">slash commands</text>
+<text x="327" y="164" fill="#6b7280" font-size="11">状态、权限、上下文</text>
+<rect x="547" y="105" width="188" height="58" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="547" y="105" width="8" height="58" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="563" y="130" fill="#111827" font-size="14" font-weight="600">Channel Gateway</text>
+<text x="563" y="150" fill="#6b7280" font-size="11">Feishu/QQ webhook</text>
+<text x="563" y="164" fill="#6b7280" font-size="11">chat/query only</text>
+<rect x="783" y="105" width="188" height="58" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="783" y="105" width="8" height="58" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="799" y="130" fill="#111827" font-size="14" font-weight="600">Platform Status</text>
+<text x="799" y="150" fill="#6b7280" font-size="11">provider/channel/session</text>
+<text x="799" y="164" fill="#6b7280" font-size="11">skill usage / delivery</text>
+<rect x="1019" y="105" width="188" height="58" rx="9" ry="9" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="1019" y="105" width="8" height="58" rx="4" ry="4" fill="#2563eb" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1035" y="130" fill="#111827" font-size="14" font-weight="600">Research MCP</text>
+<text x="1035" y="150" fill="#6b7280" font-size="11">research-mcp-serve</text>
+<text x="1035" y="164" fill="#6b7280" font-size="11">外部工具只读接入</text>
+<rect x="75" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="75" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="91" y="270" fill="#111827" font-size="14" font-weight="600">CoordinatorAgent</text>
+<text x="91" y="290" fill="#6b7280" font-size="11">编排审计/计划/训练</text>
+<text x="91" y="304" fill="#6b7280" font-size="11">不拥有模型逻辑</text>
+<rect x="283" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="283" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="299" y="270" fill="#111827" font-size="14" font-weight="600">Dataset Audit</text>
+<text x="299" y="290" fill="#6b7280" font-size="11">shape/class/split</text>
+<text x="299" y="304" fill="#6b7280" font-size="11">泄漏与样本风险</text>
+<rect x="491" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="491" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="507" y="270" fill="#111827" font-size="14" font-weight="600">Spectral Diagnosis</text>
+<text x="507" y="290" fill="#6b7280" font-size="11">band redundancy/noise</text>
+<text x="507" y="304" fill="#6b7280" font-size="11">光谱-空间需求</text>
+<rect x="699" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="699" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="715" y="270" fill="#111827" font-size="14" font-weight="600">Model Recommend</text>
+<text x="715" y="290" fill="#6b7280" font-size="11">baseline / module</text>
+<text x="715" y="304" fill="#6b7280" font-size="11">约束驱动选择</text>
+<rect x="907" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="907" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="923" y="270" fill="#111827" font-size="14" font-weight="600">Experiment Plan</text>
+<text x="923" y="290" fill="#6b7280" font-size="11">seed/split/metric</text>
+<text x="923" y="304" fill="#6b7280" font-size="11">结构化 YAML</text>
+<rect x="1115" y="245" width="170" height="66" rx="9" ry="9" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<rect x="1115" y="245" width="8" height="66" rx="4" ry="4" fill="#16a34a" stroke="#16a34a" stroke-width="1.5"/>
+<text x="1131" y="270" fill="#111827" font-size="14" font-weight="600">Report Builder</text>
+<text x="1131" y="290" fill="#6b7280" font-size="11">result markdown</text>
+<text x="1131" y="304" fill="#6b7280" font-size="11">证据链输出</text>
+<rect x="75" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="75" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="91" y="445" fill="#111827" font-size="14" font-weight="600">AgentLoop</text>
+<text x="91" y="465" fill="#6b7280" font-size="11">会话压缩</text>
+<text x="91" y="479" fill="#6b7280" font-size="11">provider fallback</text>
+<rect x="283" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="283" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="299" y="445" fill="#111827" font-size="14" font-weight="600">ActionLoop</text>
+<text x="299" y="465" fill="#6b7280" font-size="11">cache-first option</text>
+<text x="299" y="479" fill="#6b7280" font-size="11">token budget</text>
+<rect x="491" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="491" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="507" y="445" fill="#111827" font-size="14" font-weight="600">LLM Runtime</text>
+<text x="507" y="465" fill="#6b7280" font-size="11">OpenAI-compatible</text>
+<text x="507" y="479" fill="#6b7280" font-size="11">DeepSeek profiles</text>
+<rect x="699" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="699" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="715" y="445" fill="#111827" font-size="14" font-weight="600">Tool Repair</text>
+<text x="715" y="465" fill="#6b7280" font-size="11">parse_many / storm</text>
+<text x="715" y="479" fill="#6b7280" font-size="11">tool-call normalization</text>
+<rect x="907" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="907" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="923" y="445" fill="#111827" font-size="14" font-weight="600">Safe Tools</text>
+<text x="923" y="465" fill="#6b7280" font-size="11">read/search/run/skill</text>
+<text x="923" y="479" fill="#6b7280" font-size="11">path + allowlist</text>
+<rect x="1115" y="420" width="170" height="66" rx="9" ry="9" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<rect x="1115" y="420" width="8" height="66" rx="4" ry="4" fill="#9333ea" stroke="#9333ea" stroke-width="1.5"/>
+<text x="1131" y="445" fill="#111827" font-size="14" font-weight="600">Permissions</text>
+<text x="1131" y="465" fill="#6b7280" font-size="11">session-ask</text>
+<text x="1131" y="479" fill="#6b7280" font-size="11">risk-aware gate</text>
+<rect x="75" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="75" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="91" y="610" fill="#111827" font-size="14" font-weight="600">ResearchExperience</text>
+<text x="91" y="630" fill="#6b7280" font-size="11">claim/why/evidence</text>
+<text x="91" y="644" fill="#6b7280" font-size="11">template/risk/conf</text>
+<rect x="283" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="283" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="299" y="610" fill="#111827" font-size="14" font-weight="600">HyperVault</text>
+<text x="299" y="630" fill="#6b7280" font-size="11">storage / RAG backend</text>
+<text x="299" y="644" fill="#6b7280" font-size="11">strategy cards</text>
+<rect x="491" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="491" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="507" y="610" fill="#111827" font-size="14" font-weight="600">Literature</text>
+<text x="507" y="630" fill="#6b7280" font-size="11">arXiv / Semantic Scholar</text>
+<text x="507" y="644" fill="#6b7280" font-size="11">paper context</text>
+<rect x="699" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="699" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="715" y="610" fill="#111827" font-size="14" font-weight="600">Semantic Index</text>
+<text x="715" y="630" fill="#6b7280" font-size="11">repo/session search</text>
+<text x="715" y="644" fill="#6b7280" font-size="11">local/OAI embeddings</text>
+<rect x="907" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="907" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="923" y="610" fill="#111827" font-size="14" font-weight="600">Skills/Subagents</text>
+<text x="923" y="630" fill="#6b7280" font-size="11">review/spectral/explore</text>
+<text x="923" y="644" fill="#6b7280" font-size="11">multi-agent review</text>
+<rect x="1115" y="585" width="170" height="64" rx="9" ry="9" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="1115" y="585" width="8" height="64" rx="4" ry="4" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+<text x="1131" y="610" fill="#111827" font-size="14" font-weight="600">Prompt Library</text>
+<text x="1131" y="630" fill="#6b7280" font-size="11">HSI copilot</text>
+<text x="1131" y="644" fill="#6b7280" font-size="11">module materialization</text>
+<rect x="75" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="75" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="91" y="775" fill="#111827" font-size="14" font-weight="600">BenchmarkProtocol</text>
+<text x="91" y="795" fill="#6b7280" font-size="11">dataset x seed x baseline</text>
+<text x="91" y="809" fill="#6b7280" font-size="11">fixed split fingerprint</text>
+<rect x="283" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="283" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="299" y="775" fill="#111827" font-size="14" font-weight="600">ExperimentSuite</text>
+<text x="299" y="795" fill="#6b7280" font-size="11">multi-seed summary</text>
+<text x="299" y="809" fill="#6b7280" font-size="11">mean/std/fail reason</text>
+<rect x="491" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="491" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="507" y="775" fill="#111827" font-size="14" font-weight="600">Autopilot/Council</text>
+<text x="507" y="795" fill="#6b7280" font-size="11">diagnosis -&gt; proposal</text>
+<text x="507" y="809" fill="#6b7280" font-size="11">review -&gt; next run</text>
+<rect x="699" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="699" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="715" y="775" fill="#111827" font-size="14" font-weight="600">Events/Usage</text>
+<text x="715" y="795" fill="#6b7280" font-size="11">replay/stats/cache</text>
+<text x="715" y="809" fill="#6b7280" font-size="11">runtime event log</text>
+<rect x="907" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="907" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="923" y="775" fill="#111827" font-size="14" font-weight="600">Worklog / Git</text>
+<text x="923" y="795" fill="#6b7280" font-size="11">阶段提交</text>
+<text x="923" y="809" fill="#6b7280" font-size="11">每次工作可复盘</text>
+<rect x="1115" y="750" width="170" height="66" rx="9" ry="9" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<rect x="1115" y="750" width="8" height="66" rx="4" ry="4" fill="#f97316" stroke="#f97316" stroke-width="1.5"/>
+<text x="1131" y="775" fill="#111827" font-size="14" font-weight="600">Env / Secrets</text>
+<text x="1131" y="795" fill="#6b7280" font-size="11">environment.txt</text>
+<text x="1131" y="809" fill="#6b7280" font-size="11">.env 不提交</text>
+<line x1="1290" y1="180" x2="1290" y2="205" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="1242.0" y="172.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1290.0" y="188.5" fill="#2563eb" font-size="11" text-anchor="middle">进入科研流</text>
+<line x1="1290" y1="350" x2="1290" y2="375" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="1242.0" y="342.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1290.0" y="358.5" fill="#16a34a" font-size="11" text-anchor="middle">调用 Agent</text>
+<line x1="1290" y1="520" x2="1290" y2="545" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="1242.0" y="512.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1290.0" y="528.5" fill="#9333ea" font-size="11" text-anchor="middle">检索/扩展</text>
+<line x1="1290" y1="680" x2="1290" y2="710" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<rect x="1242.0" y="675.0" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="1290.0" y="691.0" fill="#0f766e" font-size="11" text-anchor="middle">治理交付</text>
+<line x1="170" y1="163" x2="170" y2="245" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="122.0" y="184.0" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="170.0" y="200.0" fill="#2563eb" font-size="11" text-anchor="middle">命令入口</text>
+<line x1="575" y1="311" x2="575" y2="420" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="527.0" y="345.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="575.0" y="361.5" fill="#16a34a" font-size="11" text-anchor="middle">需要工具</text>
+<line x1="784" y1="486" x2="784" y2="585" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="736.0" y="515.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="784.0" y="531.5" fill="#9333ea" font-size="11" text-anchor="middle">运行 skill</text>
+<line x1="365" y1="649" x2="365" y2="750" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<rect x="317.0" y="679.5" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="365.0" y="695.5" fill="#0f766e" font-size="11" text-anchor="middle">沉淀协议</text>
+<polyline points="992,486 992,520 885,520 885,710 784,710 784,750" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="837.0" y="500" width="96" height="22" rx="4" ry="4" fill="#ffffff" stroke="#ffffff" stroke-width="0"/>
+<text x="885" y="516" fill="#9333ea" font-size="11" text-anchor="middle">事件统计</text>
+<rect x="62" y="875" width="270" height="144" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="74" y="895" fill="#111827" font-size="12" font-weight="600">图例</text>
+<line x1="76" y1="913" x2="112" y2="913" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="122" y="917" fill="#6b7280" font-size="11">入口与团队交互</text>
+<line x1="76" y1="935" x2="112" y2="935" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="122" y="939" fill="#6b7280" font-size="11">科研数据/实验流</text>
+<line x1="76" y1="957" x2="112" y2="957" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="122" y="961" fill="#6b7280" font-size="11">Agent 调度与工具执行</text>
+<line x1="76" y1="979" x2="112" y2="979" stroke="#0f766e" stroke-width="2" marker-end="url(#arrow-teal)"/>
+<text x="122" y="983" fill="#6b7280" font-size="11">知识与检索</text>
+<line x1="76" y1="1001" x2="112" y2="1001" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="122" y="1005" fill="#6b7280" font-size="11">治理/交付</text>
+</svg>
